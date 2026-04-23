@@ -518,12 +518,7 @@ export default function VerifyPage() {
                 Retry Camera
               </button>
             ) : null}
-            <button
-              onClick={() => router.push("/exam")}
-              className="text-sm text-zinc-600 hover:text-zinc-400 transition-colors"
-            >
-              Skip Face Scan
-            </button>
+          
           </>
         )}
       </div>

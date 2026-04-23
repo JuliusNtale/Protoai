@@ -250,7 +250,7 @@ export default function RegisterPage() {
                     type="text"
                     value={form.regNum}
                     onChange={e => setForm(f => ({ ...f, regNum: e.target.value }))}
-                    placeholder="CS/2021/0042"
+                    placeholder="T22-03-92323"
                     required
                     className="w-full rounded-md border border-gray-300 bg-white px-3 py-2.5 pl-9 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all"
                   />
@@ -285,7 +285,7 @@ export default function RegisterPage() {
               </div>
             </div>
 
-            <div className="flex h-full flex-col gap-5 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+            <div className="flex h-full flex-col gap-5 p-6 shadow-sm">
               <h3 className="text-base font-semibold text-gray-900">Face Registration</h3>
               <p className="text-xs leading-relaxed text-gray-500">
                 Position your face inside the frame and make sure the room is well lit. This profile is used for exam verification.

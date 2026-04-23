@@ -53,7 +53,7 @@ type Tab = "overview" | "exams" | "results" | "warnings" | "settings"
 const STUDENT = {
   name: "Bernard Mwakanjuki",
   initials: "BM",
-  regNo: "2021-04-00123",
+  regNo: "T22-03-92323",
   email: "b.mwakanjuki@udom.ac.tz",
   phone: "+255 712 345 678",
   programme: "Bachelor of Computer Science",
@@ -879,21 +879,10 @@ export default function StudentDashboard() {
               {/* Danger zone */}
               <div className="rounded-2xl border border-red-200 bg-white overflow-hidden">
                 <div className="px-5 py-4 border-b border-red-100">
-                  <h3 className="text-sm font-semibold text-red-700">Account Actions</h3>
+                  <h3 className="text-sm font-semibold text-black">Account Actions</h3>
                 </div>
                 <div className="px-5 py-5 flex flex-col gap-3">
-                  <div className="flex items-center justify-between rounded-lg border border-gray-200 px-4 py-3">
-                    <div>
-                      <p className="text-sm font-medium text-gray-800">Re-verify Face ID</p>
-                      <p className="text-xs text-gray-400 mt-0.5">Update your biometric profile before your next exam</p>
-                    </div>
-                    <button
-                      onClick={() => router.push("/verify")}
-                      className="rounded-lg border border-[#1a2d5a] px-3 py-1.5 text-xs font-semibold text-[#1a2d5a] hover:bg-[#1a2d5a] hover:text-white transition-colors"
-                    >
-                      Verify Now
-                    </button>
-                  </div>
+                 
                   <div className="flex items-center justify-between rounded-lg border border-red-100 bg-red-50 px-4 py-3">
                     <div>
                       <p className="text-sm font-medium text-red-700">Sign Out</p>

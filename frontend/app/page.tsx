@@ -13,7 +13,7 @@ const features = [
 
 export default function LoginPage() {
   const router = useRouter()
-  const [regNum, setRegNum] = useState("CS/2021/0042")
+  const [regNum, setRegNum] = useState("T22-03-92323")
   const [password, setPassword] = useState("••••••••••")
   const [showPass, setShowPass] = useState(false)
   const [keepSignedIn, setKeepSignedIn] = useState(true)
@@ -107,7 +107,7 @@ export default function LoginPage() {
                 type="text"
                 value={regNum}
                 onChange={e => setRegNum(e.target.value)}
-                placeholder="CS/2021/0042"
+                placeholder="T22-03-92323"
                 required
                 className="w-full rounded-md border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all"
               />
