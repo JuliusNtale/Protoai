@@ -230,6 +230,89 @@ export default function StudentDashboard() {
     setShowExamRules(true)
   }
 
+  function escapePdfText(text: string) {
+    return text.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)")
+  }
+
+  function buildRulesPdf(examTitle: string) {
+    const generatedAt = new Date().toLocaleString()
+    const lines = [
+      "UNIVERSITY OF DODOMA - AI PROCTORING SYSTEM",
+      "EXAM ORIENTATION AND RULES",
+      "",
+      `Exam: ${examTitle || "Selected Exam"}`,
+      `Generated: ${generatedAt}`,
+      "",
+      "ORIENTATION",
+      "1. Complete face verification before attempting exam questions.",
+      "2. Confirm camera, network, and power stability before starting.",
+      "3. Read all instructions and marking scheme carefully.",
+      "",
+      "RULES AND REGULATIONS",
+      "1. Keep your face visible to camera throughout the exam.",
+      "2. Do not switch tabs, applications, or browser windows.",
+      "3. Do not communicate with any other person during the exam.",
+      "4. Use only approved materials stated by the instructor.",
+      "5. Suspicious behavior is logged for academic review.",
+      "",
+      "PROCTORING ACTIONS",
+      "- Webcam monitoring",
+      "- Screen activity tracking",
+      "- Gaze and tab-switch analysis",
+      "",
+      "DECLARATION",
+      "By proceeding, you agree to comply with these rules and",
+      "accept academic penalties for misconduct.",
+    ]
+
+    const lineHeight = 14
+    const startX = 50
+    const startY = 790
+    const contentLines: string[] = ["BT", "/F1 11 Tf", `${lineHeight} TL`, `${startX} ${startY} Td`]
+
+    lines.forEach((line, index) => {
+      if (index > 0) contentLines.push("T*")
+      contentLines.push(`(${escapePdfText(line)}) Tj`)
+    })
+    contentLines.push("ET")
+
+    const stream = contentLines.join("\n")
+    const objects = [
+      "1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n",
+      "2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n",
+      "3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>\nendobj\n",
+      `4 0 obj\n<< /Length ${stream.length} >>\nstream\n${stream}\nendstream\nendobj\n`,
+      "5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n",
+    ]
+
+    let pdf = "%PDF-1.4\n"
+    const offsets: number[] = [0]
+    objects.forEach(obj => {
+      offsets.push(pdf.length)
+      pdf += obj
+    })
+
+    const xrefStart = pdf.length
+    pdf += `xref\n0 ${objects.length + 1}\n`
+    pdf += "0000000000 65535 f \n"
+    for (let i = 1; i <= objects.length; i += 1) {
+      pdf += `${String(offsets[i]).padStart(10, "0")} 00000 n \n`
+    }
+    pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`
+
+    return new Blob([pdf], { type: "application/pdf" })
+  }
+
+  function handleDownloadRulesPdf() {
+    const blob = buildRulesPdf(selectedExamTitle)
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement("a")
+    anchor.href = url
+    anchor.download = `exam-orientation-rules-${(selectedExamTitle || "exam").replace(/\s+/g, "-").toLowerCase()}.pdf`
+    anchor.click()
+    URL.revokeObjectURL(url)
+  }
+
   function handleStartExam() {
     if (!agreedRules) return
     setStartingExam(true)
@@ -906,22 +989,49 @@ export default function StudentDashboard() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-xl rounded-2xl bg-white shadow-2xl border border-gray-200">
             <div className="border-b border-gray-100 px-6 py-4">
-              <h2 className="text-lg font-semibold text-gray-900">Exam Orientation and Rules</h2>
-              <p className="mt-1 text-sm text-gray-500">
-                {selectedExamTitle || "Selected exam"}
-              </p>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">Exam Orientation and Rules</h2>
+                  <p className="mt-1 text-sm text-gray-500">
+                    {selectedExamTitle || "Selected exam"}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleDownloadRulesPdf}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Download Full PDF
+                </button>
+              </div>
             </div>
 
             <div className="px-6 py-5 space-y-4">
               <p className="text-sm text-gray-600">
                 After you agree, you will continue to face scan before the exam starts.
               </p>
-              <ul className="space-y-2 text-sm text-gray-700">
-                <li className="flex items-start gap-2"><span className="text-blue-600">•</span><span>Stay visible on camera for the full exam.</span></li>
-                <li className="flex items-start gap-2"><span className="text-blue-600">•</span><span>Do not switch tabs, windows, or use unauthorized apps.</span></li>
-                <li className="flex items-start gap-2"><span className="text-blue-600">•</span><span>Suspicious activity is logged and reviewed by invigilators.</span></li>
-                <li className="flex items-start gap-2"><span className="text-blue-600">•</span><span>Ensure stable internet and camera access before proceeding.</span></li>
-              </ul>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5">
+                  <p className="text-[11px] font-semibold tracking-widest text-blue-700 uppercase">Before Start</p>
+                  <p className="mt-1 text-xs text-blue-800">Verify face, camera, network, and device power before continuing.</p>
+                </div>
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5">
+                  <p className="text-[11px] font-semibold tracking-widest text-amber-700 uppercase">Violation Notice</p>
+                  <p className="mt-1 text-xs text-amber-800">Suspicious activity is logged and reviewed by invigilators.</p>
+                </div>
+              </div>
+
+              <div>
+                <h3 className="text-xs font-semibold tracking-widest text-gray-500 uppercase mb-2">Rules and Regulations</h3>
+                <ul className="space-y-2 text-sm text-gray-700">
+                  <li className="flex items-start gap-2"><span className="text-blue-600">•</span><span>Stay visible on camera for the full exam.</span></li>
+                  <li className="flex items-start gap-2"><span className="text-blue-600">•</span><span>Do not switch tabs, windows, or use unauthorized apps.</span></li>
+                  <li className="flex items-start gap-2"><span className="text-blue-600">•</span><span>Do not communicate with any person during active exam time.</span></li>
+                  <li className="flex items-start gap-2"><span className="text-blue-600">•</span><span>Ensure stable internet and camera access before proceeding.</span></li>
+                </ul>
+              </div>
 
               <label className="flex items-start gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 cursor-pointer">
                 <input
