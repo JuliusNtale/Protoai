@@ -236,21 +236,13 @@ export default function ExamPage() {
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [showCongrats, setShowCongrats] = useState(false)
+  const [leavingExam, setLeavingExam] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [fullscreenError, setFullscreenError] = useState<string | null>(null)
   const [examCameraReady, setExamCameraReady] = useState(false)
   const [examCameraError, setExamCameraError] = useState<string | null>(null)
   const maxWarnings = 3
   const stats = useProctoringStats()
-
-  async function exitFullscreenMode() {
-    if (!document.fullscreenElement) return
-    try {
-      await document.exitFullscreen()
-    } catch {
-      // Ignore exit failures and keep exam flow moving.
-    }
-  }
 
   async function requestFullscreenMode() {
     const element = document.documentElement
@@ -277,6 +269,18 @@ export default function ExamPage() {
     } catch {
       setFullscreenError("Fullscreen is required during the exam. Click the button below to continue.")
     }
+  }
+
+  async function goToDashboard() {
+    setLeavingExam(true)
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen()
+      }
+    } catch {
+      // Ignore fullscreen exit errors and continue navigation.
+    }
+    router.push("/dashboard")
   }
 
   function stopExamCameraStream() {
@@ -352,12 +356,6 @@ export default function ExamPage() {
     stats.setTabSwitches(s => s + 1)
     setWarningModal(next >= maxWarnings ? "final" : "warning")
   }, [warnings, stats])
-
-  useEffect(() => {
-    if (showCongrats || warningModal === "final") {
-      void exitFullscreenMode()
-    }
-  }, [showCongrats, warningModal])
 
   function handleAnswer(optIdx: number) {
     setAnswers(a => ({ ...a, [current]: optIdx }))
@@ -714,10 +712,7 @@ export default function ExamPage() {
                   <p className="text-2xl font-bold text-red-500">{warnings} / {maxWarnings}</p>
                 </div>
                 <button
-                  onClick={async () => {
-                    await exitFullscreenMode()
-                    router.push("/dashboard")
-                  }}
+                  onClick={() => void goToDashboard()}
                   className="w-full rounded bg-red-500 py-2.5 text-sm font-semibold text-white hover:bg-red-600 transition-colors"
                 >
                   Return to Dashboard
@@ -769,10 +764,7 @@ export default function ExamPage() {
             </p>
             <button
               type="button"
-              onClick={async () => {
-                await exitFullscreenMode()
-                router.push("/dashboard")
-              }}
+              onClick={() => void goToDashboard()}
               className="mt-5 w-full rounded bg-emerald-600 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700"
             >
               Go to Dashboard
@@ -781,7 +773,7 @@ export default function ExamPage() {
         </div>
       )}
 
-      {!isFullscreen && (
+      {!isFullscreen && !leavingExam && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4">
           <div className="w-full max-w-md rounded-2xl border border-zinc-700 bg-zinc-900 px-6 py-6 text-center">
             <p className="text-base font-semibold text-white">Fullscreen Required</p>
