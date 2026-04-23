@@ -1,0 +1,237 @@
+{
+  "info": {
+    "name": "Mock Flask — AI Proctoring",
+    "description": "Simulates calls that Kweka's Flask AI service makes to the Express backend. Use this for demo and testing when the real Flask service is not running.\n\nHow to use:\n1. Import this collection into Postman\n2. Set the 'base_url' and 'internal_token' variables in the collection\n3. Run the requests in order for the full demo flow",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:5000", "type": "string" },
+    { "key": "internal_token", "value": "dev-internal-secret-change-in-prod", "type": "string" },
+    { "key": "session_id", "value": "1", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "STEP 1 — Login as Student (get JWT)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": { "raw": "{{base_url}}/api/auth/login", "host": ["{{base_url}}"], "path": ["api", "auth", "login"] },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"registration_number\": \"T22-03-04321\",\n  \"password\": \"Password123!\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const r = pm.response.json();",
+              "if (r.token) {",
+              "  pm.collectionVariables.set('student_token', r.token);",
+              "  pm.collectionVariables.set('student_id', r.user.user_id);",
+              "  console.log('Token saved. User:', r.user.name);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "STEP 2 — Start Exam Session (as Student)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{student_token}}" }
+        ],
+        "url": { "raw": "{{base_url}}/api/sessions/start", "host": ["{{base_url}}"], "path": ["api", "sessions", "start"] },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"exam_id\": 1\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const r = pm.response.json();",
+              "if (r.session_id) {",
+              "  pm.collectionVariables.set('session_id', r.session_id);",
+              "  console.log('Session started. ID:', r.session_id);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "STEP 3 — [Mock Flask] Verify Identity (face match success)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Internal-Token", "value": "{{internal_token}}" }
+        ],
+        "url": { "raw": "{{base_url}}/api/sessions/verify", "host": ["{{base_url}}"], "path": ["api", "sessions", "verify"] },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"session_id\": {{session_id}},\n  \"match\": true,\n  \"confidence_score\": 0.87\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const r = pm.response.json();",
+              "console.log('Identity verified:', r.identity_verified, '| Score:', r.verification_score);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "STEP 4a — [Mock Flask] Log Anomaly #1 (gaze_away)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Internal-Token", "value": "{{internal_token}}" }
+        ],
+        "url": { "raw": "{{base_url}}/api/sessions/log", "host": ["{{base_url}}"], "path": ["api", "sessions", "log"] },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"session_id\": {{session_id}},\n  \"event_type\": \"gaze_away\",\n  \"metadata\": { \"gaze_x\": -0.45, \"gaze_y\": 0.12, \"duration_sec\": 6 }\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const r = pm.response.json();",
+              "console.log('Warning count after anomaly #1:', r.warning_count);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "STEP 4b — [Mock Flask] Log Anomaly #2 (tab_switch)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Internal-Token", "value": "{{internal_token}}" }
+        ],
+        "url": { "raw": "{{base_url}}/api/sessions/log", "host": ["{{base_url}}"], "path": ["api", "sessions", "log"] },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"session_id\": {{session_id}},\n  \"event_type\": \"tab_switch\",\n  \"metadata\": { \"switched_to\": \"about:blank\", \"duration_sec\": 3 }\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const r = pm.response.json();",
+              "console.log('Warning count after anomaly #2:', r.warning_count);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "STEP 4c — [Mock Flask] Log Anomaly #3 (face_absent) → AUTO-LOCK + EMAIL",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Internal-Token", "value": "{{internal_token}}" }
+        ],
+        "url": { "raw": "{{base_url}}/api/sessions/log", "host": ["{{base_url}}"], "path": ["api", "sessions", "log"] },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"session_id\": {{session_id}},\n  \"event_type\": \"face_absent\",\n  \"metadata\": { \"duration_sec\": 8, \"last_seen\": \"2026-04-24T10:00:00Z\" }\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const r = pm.response.json();",
+              "console.log('Warning count:', r.warning_count, '| Escalated:', r.escalated);",
+              "if (r.escalated) console.log('SESSION LOCKED — email sent to lecturer');"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "STEP 5 — View Report (as Admin)",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+        "url": { "raw": "{{base_url}}/api/reports/{{session_id}}", "host": ["{{base_url}}"], "path": ["api", "reports", "{{session_id}}"] }
+      }
+    },
+    {
+      "name": "— Login as Admin (get admin JWT)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": { "raw": "{{base_url}}/api/auth/login", "host": ["{{base_url}}"], "path": ["api", "auth", "login"] },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"registration_number\": \"T22-03-00001\",\n  \"password\": \"Password123!\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const r = pm.response.json();",
+              "if (r.token) {",
+              "  pm.collectionVariables.set('admin_token', r.token);",
+              "  console.log('Admin token saved');",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "— [Race Condition Test] Send 3 Anomalies to session with count=2",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Internal-Token", "value": "{{internal_token}}" }
+        ],
+        "url": { "raw": "{{base_url}}/api/sessions/log", "host": ["{{base_url}}"], "path": ["api", "sessions", "log"] },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"session_id\": {{session_id}},\n  \"event_type\": \"head_movement\",\n  \"metadata\": { \"yaw_deg\": 35, \"pitch_deg\": 22 }\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "// Use Postman Runner with 3 iterations to test race condition.",
+              "// Expected: final warning_count = 3 (not 4 or 5), session locked exactly once.",
+              "const r = pm.response.json();",
+              "console.log('warning_count:', r.warning_count, '| escalated:', r.escalated);"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

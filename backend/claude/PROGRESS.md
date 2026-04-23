@@ -30,15 +30,16 @@
 
 ## 📊 Progress Summary
 
-- **Overall:** 7 / 38 tasks completed
-- **Critical tasks:** 5 / 16 completed
-- **Days complete:** 2 / 9 (including Day 0)
+- **Overall:** 11 / 38 tasks completed
+- **Critical tasks:** 7 / 16 completed
+- **Days complete:** 3 / 9 (including Day 0)
 - **PRs merged:** 0
 
 **Day-by-day:**
 - [ ] Day 0 — Warm-up (0/4)
 - [x] Day 1 — Database Migrations (4/4)
 - [x] Day 2 — Authentication (3/4) ← Task 2.4 (open PRs) pending
+- [x] Day 3 — Exams + Sessions + Mock Flask (4/5) ← Task 3.5 (open PRs) pending
 - [ ] Day 2 — Authentication (0/4)
 - [ ] Day 3 — Exams + Sessions + Mock Flask (0/5)
 - [ ] Day 4 — Warning Escalation (0/5) ⭐ CRITICAL
@@ -144,29 +145,22 @@
 
 **Time:** ~5 hrs · **Goal:** Session lifecycle + Postman simulation of Flask
 
-- [ ] **3.1** Build 3 minimal exam endpoints `[high · 1.5h]` `feat/derick-exam-endpoints`
+- [x] **3.1** Build 3 minimal exam endpoints `[high · 1.5h]` `feat/derick-exam-endpoints`
   - GET /api/exams · GET /api/exams/:id · POST /api/exams (lecturer only)
-  - **Prompt:** _"Build 3 exam endpoints in /routes/exams.js. GET /api/exams: list all exams with status='active' — uses verifyToken only. GET /api/exams/:id: return exam with questions array embedded using Sequelize include. POST /api/exams: requires verifyToken + requireRole(['lecturer']), accepts { title, duration_minutes, scheduled_start, scheduled_end }. Set created_by = req.user.user_id, status = 'draft'. Return 201 with exam_id."_
   - **Done when:** Student can list/fetch · lecturer can create · student POST → 403
-  - → _note when done_
+  - → 2026-04-24: Built controllers/examController.js + routes/exams.js. GET /api/exams filters by role (student=active only, lecturer=own, admin=all). GET /api/exams/:id includes questions array. POST/PUT/PATCH /publish all wired. Also added updateExam + publishExam. Tested: student lists exam ✓, questions included ✓, student POST → 403 ✓.
 
-- [ ] **3.2** Build POST /api/sessions/start `[CRITICAL · 1h]` `feat/derick-session-endpoints`
-  - **Prompt:** _"Build POST /api/sessions/start in /routes/sessions.js. Require verifyToken + requireRole(['student']). Accept { exam_id }. Verify exam exists and status='active'. Check student doesn't already have an active session for this exam. Create ExamSession with student_id=req.user.user_id, exam_id, identity_verified=false, warning_count=0, session_status='active', start_time=now. Return 201 { session_id, exam }."_
+- [x] **3.2** Build POST /api/sessions/start `[CRITICAL · 1h]` `feat/derick-session-endpoints`
   - **Done when:** Student starts → new session row · session_id returned · warning_count=0
-  - → _note when done_
+  - → 2026-04-24: Built in controllers/sessionController.js. Checks exam exists + active, prevents duplicate active sessions (returns 409 + existing session_id if duplicate). Creates session with warning_count=0, identity_verified=false. Returns { session_id, exam: { id, title, duration_minutes, total_questions } }. Tested: session_id=1 returned ✓.
 
-- [ ] **3.3** Build POST /api/sessions/verify (internal from Flask) `[CRITICAL · 1h]` `feat/derick-session-endpoints`
-  - **Prompt:** _"Build POST /api/sessions/verify. Do NOT use verifyToken — use a custom middleware that checks header X-Internal-Token matches process.env.AI_SERVICE_TOKEN. If not, return 401. Accept { session_id, match (bool), confidence_score (float) }. Fetch the session. If match === true && confidence_score > 0.6, update identity_verified=true, verification_score=confidence_score. Return 200 { ok: true }. Add AI_SERVICE_TOKEN=dev-internal-secret-change-in-prod to .env."_
+- [x] **3.3** Build POST /api/sessions/verify (internal from Flask) `[CRITICAL · 1h]` `feat/derick-session-endpoints`
   - **Done when:** With X-Internal-Token → updates · without → 401 · score>0.6+match → identity_verified=true
-  - → _note when done_
+  - → 2026-04-24: Built in same controller using verifyInternalToken middleware (X-Internal-Token header). match=true + confidence_score>0.6 → identity_verified=true. Wrong token → 401 ✓, correct + score 0.87 → identity_verified=true ✓. Also built submitSession (POST /api/sessions/:id/submit) + services/reportService.js.
 
-- [ ] **3.4** Create "Mock Flask" Postman collection `[high · 1h]` ⭐ DEMO-CRITICAL
-  - Postman folder called "Mock Flask" with 2 requests:
-    - Verify Identity (simulates successful face match)
-    - Log Anomaly (simulates gaze_away event)
-  - Both send X-Internal-Token header
+- [x] **3.4** Create "Mock Flask" Postman collection `[high · 1h]` ⭐ DEMO-CRITICAL
   - **Done when:** Collection saved · you can trigger /sessions/verify + /sessions/log as if you were Kweka
-  - → _note when done_
+  - → 2026-04-24: Created docs/Mock-Flask.postman_collection.json with 8 requests: login as student, start session, verify identity, log 3 anomalies (gaze_away → tab_switch → face_absent = auto-lock), login as admin, view report, race condition test. Import into Postman → set base_url=`http://localhost:5000`. Auto-saves tokens between steps via test scripts.
 
 - [ ] **3.5** Open PRs `[normal · 30m]`
   - **Done when:** exam-endpoints + session-endpoints PRs merged
@@ -363,6 +357,7 @@ If time runs out, drop these **in this order**:
 
 2026-04-24 01:14 — Built full Express scaffold from scratch (Kweka's scaffold wasn't ready): package.json, server.js, all route stubs, middleware, 7 migrations, 7 models with associations, seed file. Server starts on :5000. Ready for Day 2 (auth) once MySQL is installed and migrations are run.
 2026-04-24 02:00 — Day 2 complete (Tasks 2.1–2.3). POST /api/auth/register (bcrypt + transaction + base64 image), POST /api/auth/login (JWT 8h + rate limit 5/15min), verifyToken + requireRole all tested and verified. All 8 test cases pass.
+2026-04-24 02:27 — Day 3 complete (Tasks 3.1–3.4). Exam endpoints (list/get/create/update/publish), session start + verify, submitSession + reportService stub. Mock Flask Postman collection created at docs/Mock-Flask.postman_collection.json with 8 requests including race condition test. All 6 test cases pass.
 
 ---
 
