@@ -5,15 +5,6 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Eye, EyeOff, ScanFace, CheckCircle } from "lucide-react"
 
-const roles = ["Student", "Lecturer", "Administrator"] as const
-type Role = typeof roles[number]
-
-const roleRoutes: Record<Role, string> = {
-  Student: "/dashboard",
-  Lecturer: "/lecturer",
-  Administrator: "/admin",
-}
-
 const features = [
   { label: "Face verification before every exam session" },
   { label: "Real-time gaze and behaviour monitoring" },
@@ -22,9 +13,8 @@ const features = [
 
 export default function LoginPage() {
   const router = useRouter()
-  const [email, setEmail] = useState("b.mwakanjuki@udom.ac.tz")
+  const [regNum, setRegNum] = useState("CS/2021/0042")
   const [password, setPassword] = useState("••••••••••")
-  const [role, setRole] = useState<Role>("Student")
   const [showPass, setShowPass] = useState(false)
   const [keepSignedIn, setKeepSignedIn] = useState(true)
   const [loading, setLoading] = useState(false)
@@ -34,7 +24,7 @@ export default function LoginPage() {
     setLoading(true)
     setTimeout(() => {
       setLoading(false)
-      router.push(roleRoutes[role])
+      router.push("/dashboard")
     }, 1200)
   }
 
@@ -43,7 +33,7 @@ export default function LoginPage() {
 
       {/* ── Left sidebar ── */}
       <aside
-        className="relative hidden lg:flex flex-col justify-between w-72 xl:w-80 flex-shrink-0 overflow-hidden px-8 py-10"
+        className="relative hidden lg:flex flex-col justify-between w-72 xl:w-80 shrink-0 overflow-hidden px-8 py-10"
         style={{ background: "linear-gradient(175deg, #1a2d5a 0%, #162550 60%, #0f1c3d 100%)" }}
       >
         {/* Decorative circles */}
@@ -76,7 +66,7 @@ export default function LoginPage() {
           {features.map((f, i) => (
             <li key={i} className="flex items-start gap-3">
               <span
-                className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full"
+                className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full"
                 style={{ background: "rgba(99,130,220,0.25)", border: "1px solid rgba(99,130,220,0.4)" }}
               >
                 <CheckCircle className="h-3 w-3 text-blue-300" />
@@ -94,7 +84,7 @@ export default function LoginPage() {
 
       {/* ── Right panel ── */}
       <main className="flex flex-1 flex-col items-center justify-center bg-[#f4f5f7] px-6 py-12">
-        <div className="w-full max-w-[420px]">
+        <div className="w-full max-w-105">
 
           {/* Heading */}
           <div className="mb-7">
@@ -102,39 +92,22 @@ export default function LoginPage() {
             <p className="mt-1 text-sm text-gray-500">Access your examination portal</p>
           </div>
 
-          {/* Role tabs */}
-          <div className="mb-6 flex items-center gap-0 rounded-md overflow-hidden border border-gray-200 bg-white w-fit">
-            {roles.map((r) => (
-              <button
-                key={r}
-                type="button"
-                onClick={() => setRole(r)}
-                className={`px-4 py-1.5 text-sm font-medium transition-all focus:outline-none ${
-                  role === r
-                    ? "bg-gray-100 text-gray-900 shadow-inner"
-                    : "text-gray-500 hover:text-gray-700 bg-white"
-                }`}
-              >
-                {r}
-              </button>
-            ))}
-          </div>
-
           <form onSubmit={handleLogin} className="flex flex-col gap-4">
 
-            {/* Email */}
+            {/* Registration number */}
             <div className="flex flex-col gap-1">
               <label
-                htmlFor="email"
+                htmlFor="regnum"
                 className="text-[11px] font-semibold tracking-widest text-gray-400 uppercase"
               >
-                Email Address
+                Registration Number
               </label>
               <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
+                id="regnum"
+                type="text"
+                value={regNum}
+                onChange={e => setRegNum(e.target.value)}
+                placeholder="CS/2021/0042"
                 required
                 className="w-full rounded-md border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all"
               />

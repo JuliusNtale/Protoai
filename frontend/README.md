@@ -10,7 +10,13 @@ This repository is linked to a [v0](https://v0.app) project. You can continue de
 
 ## Getting Started
 
-First, run the development server:
+Install dependencies and run the development server:
+
+```bash
+pnpm install
+```
+
+Then start the app:
 
 ```bash
 npm run dev
@@ -23,6 +29,30 @@ pnpm dev
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+
+## Current Auth UI (Frontend)
+
+The authentication pages currently behave as follows:
+
+- **Sign In (`/`)**
+	- Uses **Registration Number** and **Password**.
+	- Role selection (Student / Lecturer / Administrator) is removed.
+	- Successful sign-in routes directly to the student dashboard.
+
+- **Sign Up (`/register`)**
+	- Uses **Full Name**, **Registration Number**, and **Password**.
+	- Email field is removed.
+	- After successful registration, user is logged in and routed to the dashboard.
+
+## Face Capture & Camera Access
+
+On the sign-up page, face registration uses real browser camera access:
+
+- Click **Enable Camera** to request webcam permission.
+- Click **Capture Face** to take a snapshot from the live camera stream.
+- If camera permission is blocked, the UI shows an error message and prompts retry.
+
+Make sure your browser has camera permission enabled for `http://localhost:3000`.
 
 ## Learn More
 
