@@ -53,11 +53,14 @@ const SEGMENT_RANGES: Record<string, [number, number]> = {
 
 export default function VerifyPage() {
   const router = useRouter()
+  const pageRef = useRef<HTMLDivElement>(null)
   const [phaseIndex, setPhaseIndex] = useState(0)
   const [segmentsFilled, setSegmentsFilled] = useState<Set<string>>(new Set())
   const [scanProgress, setScanProgress] = useState(0)
   const [cameraReady, setCameraReady] = useState(false)
   const [cameraError, setCameraError] = useState<string | null>(null)
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const [fullscreenError, setFullscreenError] = useState<string | null>(null)
   const rafRef = useRef<number | null>(null)
   const startRef = useRef<number | null>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -66,41 +69,90 @@ export default function VerifyPage() {
   const phase = PHASE_SEQUENCE[phaseIndex]
   const isDone = phase === "done"
 
-  useEffect(() => {
-    async function startCamera() {
-      if (!navigator.mediaDevices?.getUserMedia) {
-        setCameraError("Camera is not supported in this browser.")
+  function stopCameraStream() {
+    if (!streamRef.current) return
+    streamRef.current.getTracks().forEach(track => track.stop())
+    streamRef.current = null
+  }
+
+  async function requestFullscreenMode() {
+    const element = pageRef.current
+    if (!element) return
+
+    try {
+      if (document.fullscreenElement) {
+        setIsFullscreen(true)
+        setFullscreenError(null)
         return
       }
 
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "user" },
-          audio: false,
-        })
-        streamRef.current = stream
-        setCameraError(null)
-        setCameraReady(true)
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream
-          await videoRef.current.play()
+      if (element.requestFullscreen) {
+        await element.requestFullscreen()
+      } else {
+        const anyElement = element as unknown as { webkitRequestFullscreen?: () => Promise<void> | void }
+        if (anyElement.webkitRequestFullscreen) {
+          await anyElement.webkitRequestFullscreen()
         }
-      } catch (error) {
-        if (error instanceof DOMException && error.name === "NotAllowedError") {
-          setCameraError("Camera permission denied. Allow access to continue face verification.")
-          return
-        }
-        setCameraError("Unable to access camera. Close other apps using webcam and try again.")
       }
+
+      setIsFullscreen(Boolean(document.fullscreenElement))
+      setFullscreenError(null)
+    } catch {
+      setFullscreenError("Fullscreen is required. Click the button below to continue in fullscreen mode.")
+    }
+  }
+
+  async function startCamera() {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraError("Camera is not supported in this browser.")
+      return
     }
 
+    stopCameraStream()
+    setCameraReady(false)
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user" },
+        audio: false,
+      })
+      streamRef.current = stream
+      setCameraError(null)
+      setCameraReady(true)
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream
+        await videoRef.current.play()
+      }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "NotAllowedError") {
+        setCameraError("Camera permission denied. Allow access to continue face verification.")
+        return
+      }
+      setCameraError("Unable to access camera. Close other apps using webcam and try again.")
+    }
+  }
+
+  useEffect(() => {
     void startCamera()
 
     return () => {
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop())
-        streamRef.current = null
-      }
+      stopCameraStream()
+    }
+  }, [])
+
+  useEffect(() => {
+    function handleFullscreenChange() {
+      const active = Boolean(document.fullscreenElement)
+      setIsFullscreen(active)
+      if (active) setFullscreenError(null)
+    }
+
+    document.addEventListener("fullscreenchange", handleFullscreenChange)
+    handleFullscreenChange()
+    void requestFullscreenMode()
+
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenChange)
     }
   }, [])
 
@@ -202,7 +254,7 @@ export default function VerifyPage() {
   const completedStepPhases = Array.from(segmentsFilled)
 
   return (
-    <div className="flex min-h-screen bg-black select-none">
+    <div ref={pageRef} className="flex min-h-screen bg-black select-none">
 
       {/* ── Left step sidebar ── */}
       <aside className="hidden lg:flex flex-col justify-between w-72 xl:w-80 shrink-0 border-r border-white/5 px-8 py-10">
@@ -458,12 +510,22 @@ export default function VerifyPage() {
             Continue to Exam
           </Button>
         ) : (
-          <button
-            onClick={() => router.push("/exam")}
-            className="text-sm text-zinc-600 hover:text-zinc-400 transition-colors"
-          >
-            Skip Face Scan
-          </button>
+          <>
+            {!cameraReady ? (
+              <button
+                onClick={() => void startCamera()}
+                className="rounded-md border border-zinc-600 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-800 transition-colors"
+              >
+                Retry Camera
+              </button>
+            ) : null}
+            <button
+              onClick={() => router.push("/exam")}
+              className="text-sm text-zinc-600 hover:text-zinc-400 transition-colors"
+            >
+              Skip Face Scan
+            </button>
+          </>
         )}
       </div>
 
@@ -479,6 +541,27 @@ export default function VerifyPage() {
         }
       `}</style>
       </main>
+
+      {!isFullscreen && (
+        <div className="fixed inset-0 z-70 flex items-center justify-center bg-black/90 p-4">
+          <div className="w-full max-w-md rounded-2xl border border-zinc-700 bg-zinc-900 px-6 py-6 text-center">
+            <p className="text-base font-semibold text-white">Fullscreen Required</p>
+            <p className="mt-2 text-sm text-zinc-300 leading-relaxed">
+              Face verification must run in fullscreen mode.
+            </p>
+            {fullscreenError ? (
+              <p className="mt-2 text-xs text-red-400">{fullscreenError}</p>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => void requestFullscreenMode()}
+              className="mt-5 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-zinc-200"
+            >
+              Enter Fullscreen
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

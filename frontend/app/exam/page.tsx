@@ -241,6 +241,42 @@ export default function ExamPage() {
   const maxWarnings = 3
   const stats = useProctoringStats()
 
+  function stopExamCameraStream() {
+    if (!examStreamRef.current) return
+    examStreamRef.current.getTracks().forEach(track => track.stop())
+    examStreamRef.current = null
+  }
+
+  async function startExamCamera() {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setExamCameraError("Camera not supported")
+      return
+    }
+
+    stopExamCameraStream()
+    setExamCameraReady(false)
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user" },
+        audio: false,
+      })
+      examStreamRef.current = stream
+      setExamCameraError(null)
+      setExamCameraReady(true)
+      if (examVideoRef.current) {
+        examVideoRef.current.srcObject = stream
+        await examVideoRef.current.play()
+      }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "NotAllowedError") {
+        setExamCameraError("Camera permission denied")
+        return
+      }
+      setExamCameraError("Camera unavailable")
+    }
+  }
+
   useEffect(() => {
     const id = setInterval(() => {
       setTimeLeft(t => (t <= 0 ? 0 : t - 1))
@@ -249,40 +285,10 @@ export default function ExamPage() {
   }, [])
 
   useEffect(() => {
-    async function startExamCamera() {
-      if (!navigator.mediaDevices?.getUserMedia) {
-        setExamCameraError("Camera not supported")
-        return
-      }
-
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "user" },
-          audio: false,
-        })
-        examStreamRef.current = stream
-        setExamCameraError(null)
-        setExamCameraReady(true)
-        if (examVideoRef.current) {
-          examVideoRef.current.srcObject = stream
-          await examVideoRef.current.play()
-        }
-      } catch (error) {
-        if (error instanceof DOMException && error.name === "NotAllowedError") {
-          setExamCameraError("Camera permission denied")
-          return
-        }
-        setExamCameraError("Camera unavailable")
-      }
-    }
-
     void startExamCamera()
 
     return () => {
-      if (examStreamRef.current) {
-        examStreamRef.current.getTracks().forEach(track => track.stop())
-        examStreamRef.current = null
-      }
+      stopExamCameraStream()
     }
   }, [])
 
@@ -569,6 +575,16 @@ export default function ExamPage() {
               </p>
             )}
           </div>
+
+          {!examCameraReady ? (
+            <button
+              type="button"
+              onClick={() => void startExamCamera()}
+              className="mx-4 mt-2 rounded-md border border-gray-300 px-2.5 py-1 text-[10px] font-medium text-gray-600 hover:bg-gray-50"
+            >
+              Retry Camera
+            </button>
+          ) : null}
 
           {/* Stats */}
           <div className="flex flex-col gap-0 mt-2 px-4 divide-y divide-gray-100">
