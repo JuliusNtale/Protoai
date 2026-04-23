@@ -36,6 +36,18 @@ app.get('/health', (req, res) => {
 
 app.use('/api/auth', authRoutes);
 app.use('/api/exams', examRoutes);
+
+// Middleware smoke-test route (dev only)
+if (process.env.NODE_ENV !== 'production') {
+  const { verifyToken } = require('./middleware/auth');
+  const { requireRole } = require('./middleware/role');
+  app.get('/api/test-admin', verifyToken, requireRole(['administrator']), (req, res) => {
+    res.json({ ok: true, user: req.user });
+  });
+  app.get('/api/test-auth', verifyToken, (req, res) => {
+    res.json({ ok: true, user: req.user });
+  });
+}
 app.use('/api/sessions', sessionRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/images', imageRoutes);
