@@ -32,8 +32,9 @@ export default function RegisterPage() {
       return
     }
 
+    setCameraError(null)
+
     if (streamRef.current) {
-      setCameraError(null)
       setCameraActive(true)
       return
     }
@@ -47,8 +48,13 @@ export default function RegisterPage() {
       streamRef.current = stream
       setCameraError(null)
       setCameraActive(true)
-    } catch {
-      setCameraError("Camera permission denied or unavailable. Please allow camera access and try again.")
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "NotAllowedError") {
+        setCameraError("Camera access was blocked. Click Enable Camera again. If no prompt appears, allow camera access in your browser site settings.")
+        return
+      }
+
+      setCameraError("Unable to access camera. Check that no other app is using it, then try again.")
     }
   }
 
@@ -168,8 +174,8 @@ export default function RegisterPage() {
             </div>
           </div>
 
-          <form onSubmit={handleSubmit} className="grid gap-6 lg:grid-cols-2">
-            <div className="flex flex-col gap-5 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+          <form onSubmit={handleSubmit} className="grid items-stretch gap-6 lg:grid-cols-2">
+            <div className="flex h-full flex-col gap-5 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
               <h3 className="text-base font-semibold text-gray-900">Personal Information</h3>
 
               <div className="flex flex-col gap-1">
@@ -236,7 +242,7 @@ export default function RegisterPage() {
               </div>
             </div>
 
-            <div className="flex flex-col gap-5 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+            <div className="flex h-full flex-col gap-5 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
               <h3 className="text-base font-semibold text-gray-900">Face Registration</h3>
               <p className="text-xs leading-relaxed text-gray-500">
                 Position your face inside the frame and make sure the room is well lit. This profile is used for exam verification.
@@ -339,6 +345,17 @@ export default function RegisterPage() {
                     <RefreshCw className="mr-2 h-4 w-4" /> Retake
                   </Button>
                 )}
+
+                {!captured && !cameraActive && cameraError ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={startCamera}
+                    className="whitespace-nowrap"
+                  >
+                    Try Again
+                  </Button>
+                ) : null}
               </div>
 
               <ul className="flex flex-col gap-1 text-xs text-gray-500">
@@ -348,7 +365,7 @@ export default function RegisterPage() {
               </ul>
             </div>
 
-            <div className="lg:col-span-2 flex items-center justify-end gap-4 rounded-2xl border border-gray-200 bg-white px-6 py-4 shadow-sm">
+            <div className="lg:col-span-2 flex flex-col items-start gap-3 rounded-2xl border border-gray-200 bg-white px-6 py-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm text-gray-500">
                 Already have an account?{" "}
                 <Link href="/" className="font-semibold text-blue-600 hover:underline">
