@@ -1014,12 +1014,12 @@ export default function StudentDashboard() {
 
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5">
-                  <p className="text-[11px] font-semibold tracking-widest text-blue-700 uppercase">Before Start</p>
-                  <p className="mt-1 text-xs text-blue-800">Verify face, camera, network, and device power before continuing.</p>
+                  <p className="text-[11px] font-semibold tracking-widest text-black uppercase">Before Start</p>
+                  <p className="mt-1 text-xs text-black">Verify face, camera, network, and device power before continuing.</p>
                 </div>
                 <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5">
-                  <p className="text-[11px] font-semibold tracking-widest text-amber-700 uppercase">Violation Notice</p>
-                  <p className="mt-1 text-xs text-amber-800">Suspicious activity is logged and reviewed by invigilators.</p>
+                  <p className="text-[11px] font-semibold tracking-widest text-black uppercase">Violation Notice</p>
+                  <p className="mt-1 text-xs text-black">Suspicious activity is logged and reviewed by invigilators.</p>
                 </div>
               </div>
 
