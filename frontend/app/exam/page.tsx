@@ -224,6 +224,7 @@ function useProctoringStats() {
 
 export default function ExamPage() {
   const router = useRouter()
+  const pageRef = useRef<HTMLDivElement>(null)
   const examVideoRef = useRef<HTMLVideoElement>(null)
   const examStreamRef = useRef<MediaStream | null>(null)
   const [current, setCurrent] = useState(0)
@@ -236,10 +237,39 @@ export default function ExamPage() {
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [showCongrats, setShowCongrats] = useState(false)
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const [fullscreenError, setFullscreenError] = useState<string | null>(null)
   const [examCameraReady, setExamCameraReady] = useState(false)
   const [examCameraError, setExamCameraError] = useState<string | null>(null)
   const maxWarnings = 3
   const stats = useProctoringStats()
+
+  async function requestFullscreenMode() {
+    const element = pageRef.current
+    if (!element) return
+
+    try {
+      if (document.fullscreenElement) {
+        setIsFullscreen(true)
+        setFullscreenError(null)
+        return
+      }
+
+      if (element.requestFullscreen) {
+        await element.requestFullscreen()
+      } else {
+        const anyElement = element as unknown as { webkitRequestFullscreen?: () => Promise<void> | void }
+        if (anyElement.webkitRequestFullscreen) {
+          await anyElement.webkitRequestFullscreen()
+        }
+      }
+
+      setIsFullscreen(Boolean(document.fullscreenElement))
+      setFullscreenError(null)
+    } catch {
+      setFullscreenError("Fullscreen is required during the exam. Click the button below to continue.")
+    }
+  }
 
   function stopExamCameraStream() {
     if (!examStreamRef.current) return
@@ -282,6 +312,22 @@ export default function ExamPage() {
       setTimeLeft(t => (t <= 0 ? 0 : t - 1))
     }, 1000)
     return () => clearInterval(id)
+  }, [])
+
+  useEffect(() => {
+    function handleFullscreenChange() {
+      const active = Boolean(document.fullscreenElement)
+      setIsFullscreen(active)
+      if (active) setFullscreenError(null)
+    }
+
+    document.addEventListener("fullscreenchange", handleFullscreenChange)
+    handleFullscreenChange()
+    void requestFullscreenMode()
+
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenChange)
+    }
   }, [])
 
   useEffect(() => {
@@ -352,7 +398,7 @@ export default function ExamPage() {
       : "text-red-500"
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-[#f4f5f7] text-gray-800" style={{ fontFamily: "var(--font-sans, system-ui, sans-serif)" }}>
+    <div ref={pageRef} className="flex h-screen flex-col overflow-hidden bg-[#f4f5f7] text-gray-800" style={{ fontFamily: "var(--font-sans, system-ui, sans-serif)" }}>
 
       {/* ── Top bar ── */}
       <header className="flex h-12 shrink-0 items-center justify-between border-b border-gray-200 bg-[#1a2d5a] px-4 text-white">
@@ -710,6 +756,27 @@ export default function ExamPage() {
               className="mt-5 w-full rounded bg-emerald-600 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700"
             >
               Go to Dashboard
+            </button>
+          </div>
+        </div>
+      )}
+
+      {!isFullscreen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4">
+          <div className="w-full max-w-md rounded-2xl border border-zinc-700 bg-zinc-900 px-6 py-6 text-center">
+            <p className="text-base font-semibold text-white">Fullscreen Required</p>
+            <p className="mt-2 text-sm text-zinc-300 leading-relaxed">
+              You must stay in fullscreen mode until exam completion.
+            </p>
+            {fullscreenError ? (
+              <p className="mt-2 text-xs text-red-400">{fullscreenError}</p>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => void requestFullscreenMode()}
+              className="mt-5 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-zinc-200"
+            >
+              Enter Fullscreen
             </button>
           </div>
         </div>
