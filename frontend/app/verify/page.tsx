@@ -53,7 +53,6 @@ const SEGMENT_RANGES: Record<string, [number, number]> = {
 
 export default function VerifyPage() {
   const router = useRouter()
-  const pageRef = useRef<HTMLDivElement>(null)
   const [phaseIndex, setPhaseIndex] = useState(0)
   const [segmentsFilled, setSegmentsFilled] = useState<Set<string>>(new Set())
   const [scanProgress, setScanProgress] = useState(0)
@@ -76,7 +75,7 @@ export default function VerifyPage() {
   }
 
   async function requestFullscreenMode() {
-    const element = pageRef.current
+    const element = document.documentElement
     if (!element) return
 
     try {
@@ -254,7 +253,7 @@ export default function VerifyPage() {
   const completedStepPhases = Array.from(segmentsFilled)
 
   return (
-    <div ref={pageRef} className="flex min-h-screen bg-black select-none">
+    <div className="flex min-h-screen bg-black select-none">
 
       {/* ── Left step sidebar ── */}
       <aside className="hidden lg:flex flex-col justify-between w-72 xl:w-80 shrink-0 border-r border-white/5 px-8 py-10">

@@ -224,7 +224,6 @@ function useProctoringStats() {
 
 export default function ExamPage() {
   const router = useRouter()
-  const pageRef = useRef<HTMLDivElement>(null)
   const examVideoRef = useRef<HTMLVideoElement>(null)
   const examStreamRef = useRef<MediaStream | null>(null)
   const [current, setCurrent] = useState(0)
@@ -244,8 +243,17 @@ export default function ExamPage() {
   const maxWarnings = 3
   const stats = useProctoringStats()
 
+  async function exitFullscreenMode() {
+    if (!document.fullscreenElement) return
+    try {
+      await document.exitFullscreen()
+    } catch {
+      // Ignore exit failures and keep exam flow moving.
+    }
+  }
+
   async function requestFullscreenMode() {
-    const element = pageRef.current
+    const element = document.documentElement
     if (!element) return
 
     try {
@@ -345,6 +353,12 @@ export default function ExamPage() {
     setWarningModal(next >= maxWarnings ? "final" : "warning")
   }, [warnings, stats])
 
+  useEffect(() => {
+    if (showCongrats || warningModal === "final") {
+      void exitFullscreenMode()
+    }
+  }, [showCongrats, warningModal])
+
   function handleAnswer(optIdx: number) {
     setAnswers(a => ({ ...a, [current]: optIdx }))
   }
@@ -398,7 +412,7 @@ export default function ExamPage() {
       : "text-red-500"
 
   return (
-    <div ref={pageRef} className="flex h-screen flex-col overflow-hidden bg-[#f4f5f7] text-gray-800" style={{ fontFamily: "var(--font-sans, system-ui, sans-serif)" }}>
+    <div className="flex h-screen flex-col overflow-hidden bg-[#f4f5f7] text-gray-800" style={{ fontFamily: "var(--font-sans, system-ui, sans-serif)" }}>
 
       {/* ── Top bar ── */}
       <header className="flex h-12 shrink-0 items-center justify-between border-b border-gray-200 bg-[#1a2d5a] px-4 text-white">
@@ -700,7 +714,10 @@ export default function ExamPage() {
                   <p className="text-2xl font-bold text-red-500">{warnings} / {maxWarnings}</p>
                 </div>
                 <button
-                  onClick={() => router.push("/dashboard")}
+                  onClick={async () => {
+                    await exitFullscreenMode()
+                    router.push("/dashboard")
+                  }}
                   className="w-full rounded bg-red-500 py-2.5 text-sm font-semibold text-white hover:bg-red-600 transition-colors"
                 >
                   Return to Dashboard
@@ -752,7 +769,10 @@ export default function ExamPage() {
             </p>
             <button
               type="button"
-              onClick={() => router.push("/dashboard")}
+              onClick={async () => {
+                await exitFullscreenMode()
+                router.push("/dashboard")
+              }}
               className="mt-5 w-full rounded bg-emerald-600 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700"
             >
               Go to Dashboard
