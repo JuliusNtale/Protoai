@@ -215,15 +215,29 @@ export default function StudentDashboard() {
   const router = useRouter()
   const [activeTab, setActiveTab] = useState<Tab>("overview")
   const [expandedExam, setExpandedExam] = useState<string | null>(null)
+  const [selectedExamTitle, setSelectedExamTitle] = useState("")
+  const [showExamRules, setShowExamRules] = useState(false)
+  const [agreedRules, setAgreedRules] = useState(false)
   const [startingExam, setStartingExam] = useState(false)
   const [showPass, setShowPass] = useState(false)
   const [searchResult, setSearchResult] = useState("")
   const [unreadCount, setUnreadCount] = useState(WARNINGS.filter(w => !w.read).length)
   const [warnings, setWarnings] = useState(WARNINGS)
 
+  function handleOpenStartExam(examTitle: string) {
+    setSelectedExamTitle(examTitle)
+    setAgreedRules(false)
+    setShowExamRules(true)
+  }
+
   function handleStartExam() {
+    if (!agreedRules) return
     setStartingExam(true)
-    setTimeout(() => router.push("/verify"), 1000)
+    setTimeout(() => {
+      setStartingExam(false)
+      setShowExamRules(false)
+      router.push("/verify")
+    }, 900)
   }
 
   function markAllRead() {
@@ -582,7 +596,7 @@ export default function StudentDashboard() {
                             </div>
                             {exam.status === "available" ? (
                               <button
-                                onClick={handleStartExam}
+                                onClick={() => handleOpenStartExam(exam.title)}
                                 disabled={startingExam}
                                 className="w-full rounded-lg py-2.5 text-sm font-semibold text-white transition-all disabled:opacity-70 flex items-center justify-center gap-2"
                                 style={{ background: "#1a2d5a" }}
@@ -898,6 +912,60 @@ export default function StudentDashboard() {
           )}
         </main>
       </div>
+
+      {showExamRules && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-xl rounded-2xl bg-white shadow-2xl border border-gray-200">
+            <div className="border-b border-gray-100 px-6 py-4">
+              <h2 className="text-lg font-semibold text-gray-900">Exam Orientation and Rules</h2>
+              <p className="mt-1 text-sm text-gray-500">
+                {selectedExamTitle || "Selected exam"}
+              </p>
+            </div>
+
+            <div className="px-6 py-5 space-y-4">
+              <p className="text-sm text-gray-600">
+                After you agree, you will continue to face scan before the exam starts.
+              </p>
+              <ul className="space-y-2 text-sm text-gray-700">
+                <li className="flex items-start gap-2"><span className="text-blue-600">•</span><span>Stay visible on camera for the full exam.</span></li>
+                <li className="flex items-start gap-2"><span className="text-blue-600">•</span><span>Do not switch tabs, windows, or use unauthorized apps.</span></li>
+                <li className="flex items-start gap-2"><span className="text-blue-600">•</span><span>Suspicious activity is logged and reviewed by invigilators.</span></li>
+                <li className="flex items-start gap-2"><span className="text-blue-600">•</span><span>Ensure stable internet and camera access before proceeding.</span></li>
+              </ul>
+
+              <label className="flex items-start gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={agreedRules}
+                  onChange={e => setAgreedRules(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-gray-300 accent-blue-600"
+                />
+                <span className="text-sm text-gray-700">I agree to the exam rules and regulations.</span>
+              </label>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 border-t border-gray-100 px-6 py-4">
+              <button
+                type="button"
+                onClick={() => setShowExamRules(false)}
+                className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleStartExam}
+                disabled={!agreedRules || startingExam}
+                className="rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                style={{ background: "#1a2d5a" }}
+              >
+                {startingExam ? "Opening Face Scan..." : "Agree and Continue"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

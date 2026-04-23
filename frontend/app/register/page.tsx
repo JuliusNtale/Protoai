@@ -33,6 +33,23 @@ export default function RegisterPage() {
     setCameraActive(false)
   }
 
+  async function requestCameraStream() {
+    try {
+      return await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user" },
+        audio: false,
+      })
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "OverconstrainedError") {
+        return navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false,
+        })
+      }
+      throw error
+    }
+  }
+
   async function startCamera() {
     if (!navigator.mediaDevices?.getUserMedia) {
       setCameraError("Camera is not supported in this browser.")
@@ -54,17 +71,29 @@ export default function RegisterPage() {
     }
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user" },
-        audio: false,
-      })
+      const stream = await requestCameraStream()
 
       streamRef.current = stream
       setCameraError(null)
       setCameraActive(true)
     } catch (error) {
       if (error instanceof DOMException && error.name === "NotAllowedError") {
-        setCameraError("Camera access was blocked. Click Enable Camera again. If no prompt appears, allow camera access in your browser site settings.")
+        setCameraError("No camera permission available. Click Enable Camera again. If no prompt appears, allow camera access in browser site settings for this page.")
+        return
+      }
+
+      if (error instanceof DOMException && error.name === "NotFoundError") {
+        setCameraError("No camera device was found. Connect a webcam and try again.")
+        return
+      }
+
+      if (error instanceof DOMException && error.name === "NotReadableError") {
+        setCameraError("Camera is busy in another app. Close the other app and try again.")
+        return
+      }
+
+      if (error instanceof DOMException && error.name === "SecurityError") {
+        setCameraError("Camera access is blocked by browser security settings.")
         return
       }
 
@@ -189,7 +218,7 @@ export default function RegisterPage() {
           </div>
 
           <form onSubmit={handleSubmit} className="grid items-stretch gap-6 lg:grid-cols-2">
-            <div className="flex h-full flex-col gap-5 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+            <div className="flex h-full flex-col gap-5 p-6">
               <h3 className="text-base font-semibold text-gray-900">Personal Information</h3>
 
               <div className="flex flex-col gap-1">

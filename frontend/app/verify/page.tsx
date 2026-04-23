@@ -56,11 +56,53 @@ export default function VerifyPage() {
   const [phaseIndex, setPhaseIndex] = useState(0)
   const [segmentsFilled, setSegmentsFilled] = useState<Set<string>>(new Set())
   const [scanProgress, setScanProgress] = useState(0)
+  const [cameraReady, setCameraReady] = useState(false)
+  const [cameraError, setCameraError] = useState<string | null>(null)
   const rafRef = useRef<number | null>(null)
   const startRef = useRef<number | null>(null)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const streamRef = useRef<MediaStream | null>(null)
 
   const phase = PHASE_SEQUENCE[phaseIndex]
   const isDone = phase === "done"
+
+  useEffect(() => {
+    async function startCamera() {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setCameraError("Camera is not supported in this browser.")
+        return
+      }
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "user" },
+          audio: false,
+        })
+        streamRef.current = stream
+        setCameraError(null)
+        setCameraReady(true)
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream
+          await videoRef.current.play()
+        }
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "NotAllowedError") {
+          setCameraError("Camera permission denied. Allow access to continue face verification.")
+          return
+        }
+        setCameraError("Unable to access camera. Close other apps using webcam and try again.")
+      }
+    }
+
+    void startCamera()
+
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop())
+        streamRef.current = null
+      }
+    }
+  }, [])
 
   // advance through phases
   useEffect(() => {
@@ -163,7 +205,7 @@ export default function VerifyPage() {
     <div className="flex min-h-screen bg-black select-none">
 
       {/* ── Left step sidebar ── */}
-      <aside className="hidden lg:flex flex-col justify-between w-72 xl:w-80 flex-shrink-0 border-r border-white/5 px-8 py-10">
+      <aside className="hidden lg:flex flex-col justify-between w-72 xl:w-80 shrink-0 border-r border-white/5 px-8 py-10">
         <div className="flex flex-col gap-2">
           <p className="text-[10px] font-semibold tracking-widest text-zinc-500 uppercase mb-1">ProctorAI</p>
           <h2 className="text-lg font-semibold text-white leading-snug">Identity Verification</h2>
@@ -184,7 +226,7 @@ export default function VerifyPage() {
                 {/* Connector line + icon */}
                 <div className="flex flex-col items-center">
                   <div className={cn(
-                    "flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full transition-all duration-500",
+                    "flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-all duration-500",
                     isCompleted && "bg-emerald-500/20",
                     isActive && "bg-white/10",
                     isPending && "bg-white/5",
@@ -320,27 +362,21 @@ export default function VerifyPage() {
               }}
             >
               {/* Simulated face silhouette */}
-              <svg
-                width="176"
-                height="208"
-                viewBox="0 0 176 208"
-                fill="none"
-                className="absolute inset-0"
-              >
-                {/* Head shape */}
-                <ellipse cx="88" cy="95" rx="52" ry="62" fill="rgba(255,255,255,0.07)" />
-                {/* Eyes */}
-                <ellipse cx="68" cy="85" rx="8" ry="5" fill="rgba(255,255,255,0.18)" />
-                <ellipse cx="108" cy="85" rx="8" ry="5" fill="rgba(255,255,255,0.18)" />
-                {/* Nose */}
-                <ellipse cx="88" cy="105" rx="5" ry="7" fill="rgba(255,255,255,0.1)" />
-                {/* Mouth */}
-                <path d="M72 122 Q88 132 104 122" stroke="rgba(255,255,255,0.18)" strokeWidth="2.5" fill="none" strokeLinecap="round" />
-                {/* Neck */}
-                <rect x="74" y="155" width="28" height="24" rx="10" fill="rgba(255,255,255,0.07)" />
-                {/* Shoulders */}
-                <path d="M20 195 Q50 168 88 168 Q126 168 156 195" stroke="rgba(255,255,255,0.07)" strokeWidth="16" fill="none" strokeLinecap="round" />
-              </svg>
+              {cameraReady ? (
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  muted
+                  playsInline
+                  className="absolute inset-0 h-full w-full object-cover"
+                />
+              ) : (
+                <div className="absolute inset-0 flex items-center justify-center px-3 text-center">
+                  <p className="text-xs text-zinc-300">
+                    {cameraError ?? "Starting camera..."}
+                  </p>
+                </div>
+              )}
 
               {/* Scan line — only during scanning phase */}
               {phase === "scanning" && (
@@ -390,8 +426,8 @@ export default function VerifyPage() {
           {isDone ? (
             <>
               <p className="text-2xl font-semibold text-white tracking-tight">Face ID Set Up</p>
-              <p className="text-sm text-zinc-400 max-w-[220px] leading-relaxed">
-                Your identity has been confirmed. You may now start your exam.
+              <p className="text-sm text-zinc-400 max-w-55 leading-relaxed">
+                Your identity has been confirmed. Click continue to enter your exam now.
               </p>
             </>
           ) : (
@@ -404,6 +440,9 @@ export default function VerifyPage() {
                     : "Move slowly until the ring fills"}
                 </p>
               )}
+              {cameraError ? (
+                <p className="text-xs text-red-400">{cameraError}</p>
+              ) : null}
             </>
           )}
         </div>
@@ -413,17 +452,17 @@ export default function VerifyPage() {
       <div className="flex w-full max-w-xs flex-col items-center gap-4">
         {isDone ? (
           <Button
-            onClick={() => router.push("/orient")}
+            onClick={() => router.push("/exam")}
             className="w-full h-14 rounded-2xl bg-white text-black font-semibold text-base hover:bg-zinc-100 transition-colors"
           >
-            Continue to Exam Orientation
+            Continue to Exam
           </Button>
         ) : (
           <button
-            onClick={() => router.push("/orient")}
+            onClick={() => router.push("/exam")}
             className="text-sm text-zinc-600 hover:text-zinc-400 transition-colors"
           >
-            Skip for now
+            Skip Face Scan
           </button>
         )}
       </div>

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Flag, ChevronLeft, ChevronRight, AlertTriangle, X, User } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -224,6 +224,8 @@ function useProctoringStats() {
 
 export default function ExamPage() {
   const router = useRouter()
+  const examVideoRef = useRef<HTMLVideoElement>(null)
+  const examStreamRef = useRef<MediaStream | null>(null)
   const [current, setCurrent] = useState(0)
   const [answers, setAnswers] = useState<Record<number, number>>({})
   const [flagged, setFlagged] = useState<Set<number>>(new Set())
@@ -231,6 +233,11 @@ export default function ExamPage() {
   const [timeLeft, setTimeLeft] = useState(1 * 60 * 60 + 45 * 60)
   const [warnings, setWarnings] = useState(0)
   const [warningModal, setWarningModal] = useState<WarningLevel | null>(null)
+  const [showSubmitConfirm, setShowSubmitConfirm] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [showCongrats, setShowCongrats] = useState(false)
+  const [examCameraReady, setExamCameraReady] = useState(false)
+  const [examCameraError, setExamCameraError] = useState<string | null>(null)
   const maxWarnings = 3
   const stats = useProctoringStats()
 
@@ -239,6 +246,44 @@ export default function ExamPage() {
       setTimeLeft(t => (t <= 0 ? 0 : t - 1))
     }, 1000)
     return () => clearInterval(id)
+  }, [])
+
+  useEffect(() => {
+    async function startExamCamera() {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setExamCameraError("Camera not supported")
+        return
+      }
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "user" },
+          audio: false,
+        })
+        examStreamRef.current = stream
+        setExamCameraError(null)
+        setExamCameraReady(true)
+        if (examVideoRef.current) {
+          examVideoRef.current.srcObject = stream
+          await examVideoRef.current.play()
+        }
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "NotAllowedError") {
+          setExamCameraError("Camera permission denied")
+          return
+        }
+        setExamCameraError("Camera unavailable")
+      }
+    }
+
+    void startExamCamera()
+
+    return () => {
+      if (examStreamRef.current) {
+        examStreamRef.current.getTracks().forEach(track => track.stop())
+        examStreamRef.current = null
+      }
+    }
   }, [])
 
   const triggerWarning = useCallback(() => {
@@ -272,6 +317,19 @@ export default function ExamPage() {
   const timerDanger = timeLeft < 5 * 60
   const q = questions[current]
 
+  function openSubmitConfirm() {
+    setShowSubmitConfirm(true)
+  }
+
+  function handleConfirmSubmit() {
+    setSubmitting(true)
+    setTimeout(() => {
+      setSubmitting(false)
+      setShowSubmitConfirm(false)
+      setShowCongrats(true)
+    }, 900)
+  }
+
   // Status for each question bubble
   function bubbleStatus(i: number) {
     if (i === current) return "current"
@@ -291,7 +349,7 @@ export default function ExamPage() {
     <div className="flex h-screen flex-col overflow-hidden bg-[#f4f5f7] text-gray-800" style={{ fontFamily: "var(--font-sans, system-ui, sans-serif)" }}>
 
       {/* ── Top bar ── */}
-      <header className="flex h-12 flex-shrink-0 items-center justify-between border-b border-gray-200 bg-[#1a2d5a] px-4 text-white">
+      <header className="flex h-12 shrink-0 items-center justify-between border-b border-gray-200 bg-[#1a2d5a] px-4 text-white">
         {/* Left: title */}
         <div className="flex flex-col justify-center leading-none">
           <span className="text-sm font-semibold text-white leading-tight">Advanced Algorithms in Computer Science</span>
@@ -319,7 +377,7 @@ export default function ExamPage() {
             Monitoring Active
           </button>
           <button
-            onClick={() => router.push("/exams")}
+            onClick={openSubmitConfirm}
             className="rounded bg-red-500 px-4 py-1.5 text-xs font-bold tracking-wide text-white hover:bg-red-600 transition-colors uppercase"
           >
             Submit
@@ -330,7 +388,7 @@ export default function ExamPage() {
       <div className="flex flex-1 overflow-hidden">
 
         {/* ── Left sidebar: question grid ── */}
-        <aside className="hidden w-44 flex-shrink-0 flex-col gap-4 overflow-y-auto border-r border-gray-200 bg-white p-3 md:flex">
+        <aside className="hidden w-44 shrink-0 flex-col gap-4 overflow-y-auto border-r border-gray-200 bg-white p-3 md:flex">
           <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Questions</p>
 
           {/* Grid */}
@@ -367,7 +425,7 @@ export default function ExamPage() {
               { cls: "bg-gray-100 border border-gray-300", label: "Not Attempted" },
             ].map(l => (
               <div key={l.label} className="flex items-center gap-2">
-                <div className={cn("h-3 w-3 flex-shrink-0 rounded-sm", l.cls)} />
+                <div className={cn("h-3 w-3 shrink-0 rounded-sm", l.cls)} />
                 <span className="text-[10px] text-gray-500 leading-none">{l.label}</span>
               </div>
             ))}
@@ -414,14 +472,14 @@ export default function ExamPage() {
                   >
                     {/* Radio */}
                     <span className={cn(
-                      "flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border-2 transition-all",
+                      "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-all",
                       selected ? "border-blue-500 bg-blue-500" : "border-gray-300 group-hover:border-blue-400"
                     )}>
                       {selected && <span className="h-2 w-2 rounded-full bg-white" />}
                     </span>
                     {/* Letter */}
                     <span className={cn(
-                      "w-5 flex-shrink-0 font-semibold text-xs",
+                      "w-5 shrink-0 font-semibold text-xs",
                       selected ? "text-blue-700" : "text-gray-400"
                     )}>
                       {letter}.
@@ -440,7 +498,7 @@ export default function ExamPage() {
           </div>
 
           {/* ── Bottom navigation ── */}
-          <div className="flex-shrink-0 border-t border-gray-200 bg-white px-8 py-3">
+          <div className="shrink-0 border-t border-gray-200 bg-white px-8 py-3">
             <div className="flex items-center justify-between max-w-2xl">
               <button
                 onClick={() => setCurrent(c => Math.max(0, c - 1))}
@@ -466,7 +524,7 @@ export default function ExamPage() {
 
               {isLast ? (
                 <button
-                  onClick={() => router.push("/exams")}
+                  onClick={openSubmitConfirm}
                   className="flex items-center gap-1.5 rounded bg-[#1a2d5a] px-5 py-2 text-xs font-semibold text-white hover:bg-[#243d73] transition-colors"
                 >
                   Submit Exam
@@ -485,7 +543,7 @@ export default function ExamPage() {
         </main>
 
         {/* ── Right sidebar: Live Monitor ── */}
-        <aside className="hidden w-48 flex-shrink-0 flex-col border-l border-gray-200 bg-white xl:flex">
+        <aside className="hidden w-48 shrink-0 flex-col border-l border-gray-200 bg-white xl:flex">
           <div className="border-b border-gray-100 px-4 py-2.5">
             <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Live Monitor</p>
           </div>
@@ -497,18 +555,19 @@ export default function ExamPage() {
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-500" />
               <span className="text-[8px] font-semibold uppercase text-white">Live</span>
             </div>
-            {/* Silhouette */}
-            <div className="flex flex-col items-center justify-end h-full w-full pb-1">
-              <div
-                className="relative flex items-end justify-center"
-                style={{ width: 56, height: 56 }}
-              >
-                {/* head */}
-                <div className="absolute top-0 left-1/2 -translate-x-1/2 h-7 w-7 rounded-full bg-zinc-600/80" />
-                {/* shoulders */}
-                <div className="w-14 h-5 rounded-t-full bg-zinc-600/60" />
-              </div>
-            </div>
+            {examCameraReady ? (
+              <video
+                ref={examVideoRef}
+                autoPlay
+                muted
+                playsInline
+                className="absolute inset-0 h-full w-full object-cover"
+              />
+            ) : (
+              <p className="px-2 text-center text-[10px] font-medium text-zinc-300">
+                {examCameraError ?? "Starting camera..."}
+              </p>
+            )}
           </div>
 
           {/* Stats */}
@@ -579,13 +638,63 @@ export default function ExamPage() {
                   <p className="text-2xl font-bold text-red-500">{warnings} / {maxWarnings}</p>
                 </div>
                 <button
-                  onClick={() => router.push("/exams")}
+                  onClick={() => router.push("/dashboard")}
                   className="w-full rounded bg-red-500 py-2.5 text-sm font-semibold text-white hover:bg-red-600 transition-colors"
                 >
                   Return to Dashboard
                 </button>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {showSubmitConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="w-full max-w-sm rounded-xl border border-gray-200 bg-white p-6 shadow-2xl">
+            <h3 className="text-base font-bold text-gray-900">Confirm Submission</h3>
+            <p className="mt-2 text-sm text-gray-600 leading-relaxed">
+              Are you sure you want to submit your exam? After submission, you cannot change your answers.
+            </p>
+            <div className="mt-5 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowSubmitConfirm(false)}
+                disabled={submitting}
+                className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmSubmit}
+                disabled={submitting}
+                className="rounded bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white hover:bg-[#243d73] disabled:opacity-60"
+              >
+                {submitting ? "Submitting..." : "Yes, Submit"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showCongrats && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="w-full max-w-sm rounded-xl border border-emerald-200 bg-white p-6 shadow-2xl">
+            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100">
+              <AlertTriangle className="h-6 w-6 text-emerald-600" />
+            </div>
+            <h3 className="text-base font-bold text-gray-900">Congratulations</h3>
+            <p className="mt-2 text-sm text-gray-600 leading-relaxed">
+              Your exam has been submitted successfully.
+            </p>
+            <button
+              type="button"
+              onClick={() => router.push("/dashboard")}
+              className="mt-5 w-full rounded bg-emerald-600 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700"
+            >
+              Go to Dashboard
+            </button>
           </div>
         </div>
       )}
