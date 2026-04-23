@@ -1,0 +1,980 @@
+"use client"
+
+import { useState } from "react"
+import { useRouter } from "next/navigation"
+import {
+  LayoutDashboard,
+  BookOpen,
+  ClipboardList,
+  Bell,
+  Settings,
+  LogOut,
+  ShieldCheck,
+  ChevronRight,
+  Clock,
+  CalendarDays,
+  CheckCircle2,
+  AlertTriangle,
+  XCircle,
+  TrendingUp,
+  FileText,
+  Users,
+  Monitor,
+  Wifi,
+  Camera,
+  User,
+  Mail,
+  Phone,
+  MapPin,
+  Lock,
+  Eye,
+  EyeOff,
+  Download,
+  Filter,
+  Search,
+  Info,
+} from "lucide-react"
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  RadialBarChart,
+  RadialBar,
+  Cell,
+} from "recharts"
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+type Tab = "overview" | "exams" | "results" | "warnings" | "settings"
+
+// ─── Mock data ────────────────────────────────────────────────────────────────
+const STUDENT = {
+  name: "Bernard Mwakanjuki",
+  initials: "BM",
+  regNo: "2021-04-00123",
+  email: "b.mwakanjuki@udom.ac.tz",
+  phone: "+255 712 345 678",
+  programme: "Bachelor of Computer Science",
+  year: "Year 3 — Semester 2",
+  college: "College of Information & Virtual Education",
+  photoVerified: true,
+  accountStatus: "Active",
+}
+
+const UPCOMING_EXAMS = [
+  {
+    id: "CS301",
+    code: "CS 301",
+    title: "Data Structures and Algorithms",
+    date: "Thursday, 24 April 2026",
+    startTime: "09:00 AM",
+    endTime: "12:00 PM",
+    duration: "3 hours",
+    totalMarks: 100,
+    questions: 50,
+    passMark: 40,
+    venue: "Online — Proctored",
+    registeredStudents: 142,
+    questionTypes: ["Multiple Choice (30)", "Short Answer (10)", "Essay (10)"],
+    instructions: [
+      "No electronic devices are allowed except the examination computer.",
+      "You must remain in front of the camera at all times.",
+      "Do not switch tabs or open other applications.",
+      "Read each question carefully before answering.",
+      "Answers cannot be changed once submitted.",
+      "The exam will auto-submit when the timer reaches zero.",
+    ],
+    proctoring: ["Webcam monitoring", "Screen recording", "Gaze tracking", "Tab-switch detection"],
+    status: "available" as const,
+  },
+  {
+    id: "MTH202",
+    code: "MTH 202",
+    title: "Calculus II",
+    date: "Friday, 25 April 2026",
+    startTime: "02:00 PM",
+    endTime: "05:00 PM",
+    duration: "3 hours",
+    totalMarks: 100,
+    questions: 40,
+    passMark: 40,
+    venue: "Online — Proctored",
+    registeredStudents: 198,
+    questionTypes: ["Multiple Choice (20)", "Problem Solving (20)"],
+    instructions: [
+      "Scientific calculators are permitted (built-in browser calculator only).",
+      "Show all workings clearly in the answer box.",
+      "Partial marks are awarded for correct method.",
+      "Do not switch tabs or open other applications.",
+    ],
+    proctoring: ["Webcam monitoring", "Screen recording", "Tab-switch detection"],
+    status: "upcoming" as const,
+  },
+  {
+    id: "NET410",
+    code: "NET 410",
+    title: "Computer Networks",
+    date: "Monday, 28 April 2026",
+    startTime: "10:00 AM",
+    endTime: "01:00 PM",
+    duration: "3 hours",
+    totalMarks: 100,
+    questions: 60,
+    passMark: 40,
+    venue: "Online — Proctored",
+    registeredStudents: 87,
+    questionTypes: ["Multiple Choice (40)", "Short Answer (20)"],
+    instructions: [
+      "No external resources are permitted.",
+      "You must remain in front of the camera at all times.",
+      "Do not switch tabs or open other applications.",
+    ],
+    proctoring: ["Webcam monitoring", "Screen recording", "Gaze tracking", "Tab-switch detection"],
+    status: "upcoming" as const,
+  },
+]
+
+const RESULTS = [
+  { id: "R1", code: "CS 201", title: "Object-Oriented Programming",    score: 82, grade: "B+", totalMarks: 100, date: "10 Jan 2026", status: "pass",  violations: 0 },
+  { id: "R2", code: "MTH 101", title: "Linear Algebra",               score: 74, grade: "B",  totalMarks: 100, date: "12 Jan 2026", status: "pass",  violations: 1 },
+  { id: "R3", code: "CS 102", title: "Introduction to Programming",   score: 91, grade: "A",  totalMarks: 100, date: "15 Jan 2026", status: "pass",  violations: 0 },
+  { id: "R4", code: "ENG 101", title: "Communication Skills",         score: 67, grade: "B-", totalMarks: 100, date: "17 Jan 2026", status: "pass",  violations: 0 },
+  { id: "R5", code: "CS 204", title: "Database Systems",              score: 38, grade: "F",  totalMarks: 100, date: "20 Jan 2026", status: "fail",  violations: 3 },
+  { id: "R6", code: "CS 211", title: "Operating Systems",             score: 77, grade: "B",  totalMarks: 100, date: "22 Jan 2026", status: "pass",  violations: 0 },
+]
+
+const CHART_DATA = RESULTS.map(r => ({ name: r.code.split(" ")[1], score: r.score, fill: r.score >= 40 ? "#1a2d5a" : "#ef4444" }))
+
+const WARNINGS = [
+  {
+    id: "W1",
+    type: "error" as const,
+    title: "Multiple Face Detected",
+    message: "During your Database Systems exam on 20 Jan 2026, another face was detected in the camera frame at 10:42 AM. This has been flagged for review by the exam coordinator.",
+    exam: "CS 204 — Database Systems",
+    date: "20 Jan 2026, 10:42 AM",
+    read: true,
+    action: "Under Review",
+  },
+  {
+    id: "W2",
+    type: "error" as const,
+    title: "Tab Switch Detected",
+    message: "3 tab-switch events were recorded during your Database Systems exam. This is considered a violation of examination policy.",
+    exam: "CS 204 — Database Systems",
+    date: "20 Jan 2026, 10:55 AM",
+    read: true,
+    action: "Resolved",
+  },
+  {
+    id: "W3",
+    type: "warning" as const,
+    title: "Gaze Off-Screen Warning",
+    message: "Your gaze was detected as off-screen for more than 10 seconds during Linear Algebra. One warning was issued.",
+    exam: "MTH 101 — Linear Algebra",
+    date: "12 Jan 2026, 09:18 AM",
+    read: true,
+    action: "Noted",
+  },
+  {
+    id: "W4",
+    type: "info" as const,
+    title: "Upcoming Exam Reminder",
+    message: "Your Data Structures and Algorithms exam is scheduled for tomorrow at 09:00 AM. Please ensure your camera and microphone are working.",
+    exam: "CS 301 — Data Structures and Algorithms",
+    date: "23 Apr 2026, 08:00 AM",
+    read: false,
+    action: null,
+  },
+  {
+    id: "W5",
+    type: "info" as const,
+    title: "Face Verification Required",
+    message: "Please complete your face verification before your next exam session. Visit the verification page at least 30 minutes before the exam starts.",
+    exam: "All upcoming exams",
+    date: "23 Apr 2026, 07:00 AM",
+    read: false,
+    action: null,
+  },
+]
+
+const STATUS_MAP = {
+  available: { bg: "bg-emerald-50", text: "text-emerald-700", dot: "bg-emerald-500", label: "Available Now" },
+  upcoming:  { bg: "bg-blue-50",    text: "text-blue-700",    dot: "bg-blue-500",    label: "Upcoming" },
+}
+
+const GRADE_COLOR: Record<string, string> = {
+  "A": "text-emerald-600", "B+": "text-emerald-500", "B": "text-blue-600",
+  "B-": "text-blue-500", "C": "text-amber-600", "F": "text-red-600",
+}
+
+// ─── Main dashboard ───────────────────────────────────────────────────────────
+export default function StudentDashboard() {
+  const router = useRouter()
+  const [activeTab, setActiveTab] = useState<Tab>("overview")
+  const [expandedExam, setExpandedExam] = useState<string | null>(null)
+  const [startingExam, setStartingExam] = useState(false)
+  const [showPass, setShowPass] = useState(false)
+  const [searchResult, setSearchResult] = useState("")
+  const [unreadCount, setUnreadCount] = useState(WARNINGS.filter(w => !w.read).length)
+  const [warnings, setWarnings] = useState(WARNINGS)
+
+  function handleStartExam() {
+    setStartingExam(true)
+    setTimeout(() => router.push("/verify"), 1000)
+  }
+
+  function markAllRead() {
+    setWarnings(prev => prev.map(w => ({ ...w, read: true })))
+    setUnreadCount(0)
+  }
+
+  const navItems: { tab: Tab; label: string; icon: React.ReactNode }[] = [
+    { tab: "overview",  label: "Overview",      icon: <LayoutDashboard className="h-4 w-4" /> },
+    { tab: "exams",     label: "My Exams",      icon: <BookOpen className="h-4 w-4" /> },
+    { tab: "results",   label: "Results",       icon: <ClipboardList className="h-4 w-4" /> },
+    { tab: "warnings",  label: "Notifications", icon: <Bell className="h-4 w-4" /> },
+    { tab: "settings",  label: "Settings",      icon: <Settings className="h-4 w-4" /> },
+  ]
+
+  const avgScore = Math.round(RESULTS.reduce((s, r) => s + r.score, 0) / RESULTS.length)
+  const passed   = RESULTS.filter(r => r.status === "pass").length
+  const failed   = RESULTS.filter(r => r.status === "fail").length
+
+  return (
+    <div className="flex min-h-screen bg-[#f0f2f5]" style={{ fontFamily: "var(--font-sans, system-ui, sans-serif)" }}>
+
+      {/* ── Sidebar ── */}
+      <aside
+        className="flex w-60 flex-shrink-0 flex-col justify-between py-6 px-4"
+        style={{ background: "#1a2d5a", minHeight: "100vh" }}
+      >
+        {/* Brand */}
+        <div className="flex flex-col gap-8">
+          <div className="flex items-center gap-2.5 px-2">
+            <ShieldCheck className="h-6 w-6 text-blue-300" />
+            <div>
+              <p className="text-sm font-bold text-white leading-none">ProctorAI</p>
+              <p className="text-[10px] text-blue-300/70 mt-0.5">University of Dodoma</p>
+            </div>
+          </div>
+
+          {/* Student mini-profile */}
+          <div className="flex items-center gap-3 rounded-xl bg-white/8 px-3 py-3 border border-white/10">
+            <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-blue-400/20 text-sm font-bold text-blue-200">
+              {STUDENT.initials}
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-white truncate leading-tight">{STUDENT.name.split(" ")[0]} {STUDENT.name.split(" ")[1]}</p>
+              <p className="text-[10px] text-blue-300/70 truncate mt-0.5">{STUDENT.regNo}</p>
+            </div>
+          </div>
+
+          {/* Nav */}
+          <nav className="flex flex-col gap-1">
+            {navItems.map(item => (
+              <button
+                key={item.tab}
+                onClick={() => setActiveTab(item.tab)}
+                className={`flex items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium transition-all group ${
+                  activeTab === item.tab
+                    ? "bg-white text-[#1a2d5a]"
+                    : "text-blue-200/80 hover:bg-white/10 hover:text-white"
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  {item.icon}
+                  {item.label}
+                </div>
+                {item.tab === "warnings" && unreadCount > 0 && (
+                  <span className="flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white">
+                    {unreadCount}
+                  </span>
+                )}
+              </button>
+            ))}
+          </nav>
+        </div>
+
+        {/* Logout */}
+        <button
+          onClick={() => router.push("/")}
+          className="flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium text-blue-200/60 hover:bg-white/8 hover:text-white transition-colors"
+        >
+          <LogOut className="h-4 w-4" />
+          Sign Out
+        </button>
+      </aside>
+
+      {/* ── Main content ── */}
+      <div className="flex flex-1 flex-col min-w-0">
+
+        {/* Top header bar */}
+        <header className="flex items-center justify-between border-b border-gray-200 bg-white px-6 py-3.5">
+          <div>
+            <h1 className="text-base font-semibold text-gray-900">
+              {navItems.find(n => n.tab === activeTab)?.label}
+            </h1>
+            <p className="text-xs text-gray-400 mt-0.5">{STUDENT.programme} — {STUDENT.year}</p>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="hidden md:flex items-center gap-3">
+              <SysCheck icon={<Camera className="h-3 w-3" />} label="Camera" ok />
+              <SysCheck icon={<Monitor className="h-3 w-3" />} label="Screen" ok />
+              <SysCheck icon={<Wifi className="h-3 w-3" />} label="Network" ok />
+            </div>
+            <button
+              onClick={() => setActiveTab("warnings")}
+              className="relative p-2 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors"
+              aria-label="Notifications"
+            >
+              <Bell className="h-4 w-4" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-red-500 text-[8px] font-bold text-white">
+                  {unreadCount}
+                </span>
+              )}
+            </button>
+          </div>
+        </header>
+
+        {/* Tab content */}
+        <main className="flex-1 overflow-auto p-6">
+
+          {/* ── OVERVIEW ── */}
+          {activeTab === "overview" && (
+            <div className="flex flex-col gap-6">
+
+              {/* Welcome banner */}
+              <div
+                className="flex flex-col md:flex-row md:items-center justify-between gap-4 rounded-2xl px-6 py-5"
+                style={{ background: "linear-gradient(120deg, #1a2d5a 0%, #243d77 100%)" }}
+              >
+                <div className="flex items-center gap-4">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white/15 text-xl font-bold text-white ring-2 ring-white/20">
+                    {STUDENT.initials}
+                  </div>
+                  <div>
+                    <p className="text-xs text-blue-200/70 font-medium">Welcome back,</p>
+                    <h2 className="text-xl font-bold text-white leading-tight">{STUDENT.name}</h2>
+                    <p className="text-xs text-blue-200/70 mt-0.5">{STUDENT.regNo} &middot; {STUDENT.college}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-medium text-emerald-300 border border-emerald-500/30">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                    {STUDENT.accountStatus}
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-400/20 px-3 py-1 text-xs font-medium text-blue-200 border border-blue-400/20">
+                    <CheckCircle2 className="h-3 w-3" />
+                    Face Verified
+                  </span>
+                </div>
+              </div>
+
+              {/* Stat cards */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <StatCard icon={<BookOpen className="h-5 w-5 text-blue-600" />}     label="Registered Exams"   value={UPCOMING_EXAMS.length}   sub="this semester"      bg="bg-blue-50"    />
+                <StatCard icon={<TrendingUp className="h-5 w-5 text-emerald-600" />} label="Average Score"      value={`${avgScore}%`}          sub="across all exams"   bg="bg-emerald-50" />
+                <StatCard icon={<CheckCircle2 className="h-5 w-5 text-green-600" />} label="Exams Passed"       value={passed}                  sub={`of ${RESULTS.length} completed`} bg="bg-green-50" />
+                <StatCard icon={<AlertTriangle className="h-5 w-5 text-amber-600" />} label="Active Warnings"  value={WARNINGS.filter(w => w.type !== "info").length} sub="requires attention" bg="bg-amber-50" />
+              </div>
+
+              {/* Two columns: upcoming + recent results */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+                {/* Upcoming exams */}
+                <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+                  <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+                    <h3 className="text-sm font-semibold text-gray-800">Upcoming Exams</h3>
+                    <button onClick={() => setActiveTab("exams")} className="text-xs font-medium text-blue-600 hover:underline flex items-center gap-1">
+                      View all <ChevronRight className="h-3 w-3" />
+                    </button>
+                  </div>
+                  <ul className="flex flex-col divide-y divide-gray-50">
+                    {UPCOMING_EXAMS.map(exam => {
+                      const s = STATUS_MAP[exam.status]
+                      return (
+                        <li key={exam.id} className="flex items-center justify-between px-5 py-3.5 hover:bg-gray-50 transition-colors">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div
+                              className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-white text-[10px] font-bold"
+                              style={{ background: "#1a2d5a" }}
+                            >
+                              {exam.code.split(" ")[0].slice(0, 3)}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-gray-800 truncate">{exam.title}</p>
+                              <p className="text-xs text-gray-400 mt-0.5">{exam.date} &middot; {exam.startTime}</p>
+                            </div>
+                          </div>
+                          <span className={`ml-3 flex-shrink-0 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${s.bg} ${s.text}`}>
+                            <span className={`h-1.5 w-1.5 rounded-full ${s.dot}`} />
+                            {s.label}
+                          </span>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </div>
+
+                {/* Recent results */}
+                <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+                  <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+                    <h3 className="text-sm font-semibold text-gray-800">Recent Results</h3>
+                    <button onClick={() => setActiveTab("results")} className="text-xs font-medium text-blue-600 hover:underline flex items-center gap-1">
+                      View all <ChevronRight className="h-3 w-3" />
+                    </button>
+                  </div>
+                  <ul className="flex flex-col divide-y divide-gray-50">
+                    {RESULTS.slice(0, 4).map(r => (
+                      <li key={r.id} className="flex items-center justify-between px-5 py-3.5">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-gray-800 truncate">{r.title}</p>
+                          <p className="text-xs text-gray-400 mt-0.5">{r.code} &middot; {r.date}</p>
+                        </div>
+                        <div className="ml-4 flex items-center gap-3 flex-shrink-0">
+                          <span className={`text-sm font-bold ${GRADE_COLOR[r.grade] ?? "text-gray-700"}`}>{r.grade}</span>
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${r.status === "pass" ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-600"}`}>
+                            {r.score}%
+                          </span>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+
+              {/* Score bar chart */}
+              <div className="rounded-2xl border border-gray-200 bg-white px-5 py-5">
+                <h3 className="text-sm font-semibold text-gray-800 mb-4">Score Overview — Semester 1</h3>
+                <ResponsiveContainer width="100%" height={180}>
+                  <BarChart data={CHART_DATA} barSize={28}>
+                    <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                    <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                    <Tooltip
+                      cursor={{ fill: "rgba(26,45,90,0.04)" }}
+                      contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e5e7eb" }}
+                    />
+                    <Bar dataKey="score" radius={[4, 4, 0, 0]}>
+                      {CHART_DATA.map((entry, i) => (
+                        <Cell key={i} fill={entry.fill} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+
+          {/* ── EXAMS TAB ── */}
+          {activeTab === "exams" && (
+            <div className="flex flex-col gap-5">
+              <p className="text-sm text-gray-500">
+                Click an exam to view its full details. Ensure your camera and network are ready before starting.
+              </p>
+
+              {UPCOMING_EXAMS.map(exam => {
+                const s = STATUS_MAP[exam.status]
+                const isExpanded = expandedExam === exam.id
+                return (
+                  <div
+                    key={exam.id}
+                    className={`rounded-2xl border bg-white overflow-hidden transition-all duration-200 ${
+                      isExpanded ? "border-[#1a2d5a] shadow-md" : "border-gray-200 hover:border-gray-300"
+                    }`}
+                  >
+                    {/* Header row */}
+                    <button
+                      type="button"
+                      onClick={() => setExpandedExam(isExpanded ? null : exam.id)}
+                      className="flex w-full items-center justify-between px-5 py-4 text-left"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div
+                          className="hidden sm:flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl text-white text-xs font-bold"
+                          style={{ background: "#1a2d5a" }}
+                        >
+                          {exam.code.split(" ")[0].slice(0, 3)}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-semibold text-gray-400 tracking-wide">{exam.code}</span>
+                            <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${s.bg} ${s.text}`}>
+                              <span className={`h-1.5 w-1.5 rounded-full ${s.dot}`} />
+                              {s.label}
+                            </span>
+                          </div>
+                          <p className="text-sm font-semibold text-gray-900 mt-0.5">{exam.title}</p>
+                          <div className="flex items-center gap-3 mt-1">
+                            <span className="flex items-center gap-1 text-xs text-gray-400">
+                              <CalendarDays className="h-3 w-3" />{exam.date}
+                            </span>
+                            <span className="flex items-center gap-1 text-xs text-gray-400">
+                              <Clock className="h-3 w-3" />{exam.startTime} – {exam.endTime}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      <ChevronRight className={`h-4 w-4 text-gray-400 flex-shrink-0 transition-transform duration-200 ${isExpanded ? "rotate-90" : ""}`} />
+                    </button>
+
+                    {/* Expanded detail */}
+                    {isExpanded && (
+                      <div className="border-t border-gray-100 px-5 py-5">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+                          {/* Column 1 */}
+                          <div className="flex flex-col gap-4">
+                            <SectionHeading>Exam Details</SectionHeading>
+                            <dl className="flex flex-col gap-2.5">
+                              <DetailRow icon={<Clock className="h-3.5 w-3.5" />}        label="Duration"    value={exam.duration} />
+                              <DetailRow icon={<FileText className="h-3.5 w-3.5" />}     label="Questions"   value={`${exam.questions} questions`} />
+                              <DetailRow icon={<BookOpen className="h-3.5 w-3.5" />}     label="Total Marks" value={`${exam.totalMarks} marks`} />
+                              <DetailRow icon={<CheckCircle2 className="h-3.5 w-3.5" />} label="Pass Mark"  value={`${exam.passMark}%`} />
+                              <DetailRow icon={<Users className="h-3.5 w-3.5" />}        label="Registered"  value={`${exam.registeredStudents} students`} />
+                              <DetailRow icon={<Monitor className="h-3.5 w-3.5" />}      label="Venue"       value={exam.venue} />
+                            </dl>
+                            <div className="flex flex-col gap-1 mt-1">
+                              <p className="text-xs font-medium text-gray-500">Question Breakdown</p>
+                              {exam.questionTypes.map(qt => (
+                                <p key={qt} className="text-xs text-gray-700 pl-2 border-l-2 border-[#1a2d5a]/20">{qt}</p>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Column 2 */}
+                          <div className="flex flex-col gap-4">
+                            <SectionHeading>Instructions</SectionHeading>
+                            <ol className="flex flex-col gap-2">
+                              {exam.instructions.map((ins, i) => (
+                                <li key={i} className="flex items-start gap-2">
+                                  <span
+                                    className="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full text-[9px] font-bold text-white mt-0.5"
+                                    style={{ background: "#1a2d5a" }}
+                                  >
+                                    {i + 1}
+                                  </span>
+                                  <span className="text-xs text-gray-600 leading-relaxed">{ins}</span>
+                                </li>
+                              ))}
+                            </ol>
+                          </div>
+
+                          {/* Column 3 */}
+                          <div className="flex flex-col gap-4">
+                            <SectionHeading>Proctoring</SectionHeading>
+                            <ul className="flex flex-col gap-2">
+                              {exam.proctoring.map(p => (
+                                <li key={p} className="flex items-center gap-2">
+                                  <ShieldCheck className="h-3.5 w-3.5 text-blue-500 flex-shrink-0" />
+                                  <span className="text-xs text-gray-600">{p}</span>
+                                </li>
+                              ))}
+                            </ul>
+                            <div className="flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5">
+                              <AlertTriangle className="h-3.5 w-3.5 text-amber-600 flex-shrink-0 mt-0.5" />
+                              <p className="text-xs text-amber-700 leading-relaxed">
+                                Your session will be recorded. Suspicious activity is flagged and reported automatically.
+                              </p>
+                            </div>
+                            {exam.status === "available" ? (
+                              <button
+                                onClick={handleStartExam}
+                                disabled={startingExam}
+                                className="w-full rounded-lg py-2.5 text-sm font-semibold text-white transition-all disabled:opacity-70 flex items-center justify-center gap-2"
+                                style={{ background: "#1a2d5a" }}
+                              >
+                                {startingExam ? (
+                                  <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" /> Starting...</>
+                                ) : (
+                                  <>Start Exam <ChevronRight className="h-4 w-4" /></>
+                                )}
+                              </button>
+                            ) : (
+                              <div className="flex items-center gap-2 rounded-lg bg-gray-100 px-4 py-3">
+                                <Clock className="h-4 w-4 text-gray-400" />
+                                <div>
+                                  <p className="text-xs font-semibold text-gray-600">Not yet open</p>
+                                  <p className="text-[10px] text-gray-400">{exam.date} at {exam.startTime}</p>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {/* ── RESULTS TAB ── */}
+          {activeTab === "results" && (
+            <div className="flex flex-col gap-6">
+              {/* Summary row */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <StatCard icon={<CheckCircle2 className="h-5 w-5 text-emerald-600" />} label="Passed"       value={passed}         sub="exams"           bg="bg-emerald-50" />
+                <StatCard icon={<XCircle className="h-5 w-5 text-red-500" />}          label="Failed"        value={failed}         sub="exams"           bg="bg-red-50" />
+                <StatCard icon={<TrendingUp className="h-5 w-5 text-blue-600" />}      label="Average Score" value={`${avgScore}%`} sub="overall"         bg="bg-blue-50" />
+                <StatCard icon={<AlertTriangle className="h-5 w-5 text-amber-600" />}  label="Violations"    value={RESULTS.reduce((s, r) => s + r.violations, 0)} sub="total flagged" bg="bg-amber-50" />
+              </div>
+
+              {/* Chart */}
+              <div className="rounded-2xl border border-gray-200 bg-white px-5 py-5">
+                <h3 className="text-sm font-semibold text-gray-800 mb-4">Score by Subject</h3>
+                <ResponsiveContainer width="100%" height={180}>
+                  <BarChart data={CHART_DATA} barSize={28}>
+                    <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                    <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                    <Tooltip
+                      cursor={{ fill: "rgba(26,45,90,0.04)" }}
+                      contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e5e7eb" }}
+                    />
+                    <Bar dataKey="score" radius={[4, 4, 0, 0]}>
+                      {CHART_DATA.map((entry, i) => (
+                        <Cell key={i} fill={entry.fill} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+                <div className="flex items-center gap-4 mt-2">
+                  <span className="flex items-center gap-1.5 text-xs text-gray-500"><span className="h-3 w-3 rounded-sm" style={{ background: "#1a2d5a" }} />Passed</span>
+                  <span className="flex items-center gap-1.5 text-xs text-gray-500"><span className="h-3 w-3 rounded-sm bg-red-500" />Failed</span>
+                  <span className="flex items-center gap-1.5 text-xs text-gray-500 ml-auto">Pass mark: 40%</span>
+                </div>
+              </div>
+
+              {/* Results table */}
+              <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+                <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+                  <h3 className="text-sm font-semibold text-gray-800">Examination Results</h3>
+                  <div className="flex items-center gap-2">
+                    <div className="relative">
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+                      <input
+                        value={searchResult}
+                        onChange={e => setSearchResult(e.target.value)}
+                        placeholder="Search..."
+                        className="rounded-lg border border-gray-200 bg-gray-50 pl-8 pr-3 py-1.5 text-xs focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-200 w-36"
+                      />
+                    </div>
+                    <button className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-100 transition-colors">
+                      <Download className="h-3.5 w-3.5" />
+                      Export
+                    </button>
+                  </div>
+                </div>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 text-left">
+                      <th className="px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Course</th>
+                      <th className="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden md:table-cell">Date</th>
+                      <th className="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Score</th>
+                      <th className="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Grade</th>
+                      <th className="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</th>
+                      <th className="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden lg:table-cell">Violations</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {RESULTS.filter(r =>
+                      r.title.toLowerCase().includes(searchResult.toLowerCase()) ||
+                      r.code.toLowerCase().includes(searchResult.toLowerCase())
+                    ).map(r => (
+                      <tr key={r.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-5 py-3.5">
+                          <p className="font-medium text-gray-800 text-sm">{r.title}</p>
+                          <p className="text-xs text-gray-400 mt-0.5">{r.code}</p>
+                        </td>
+                        <td className="px-4 py-3.5 text-xs text-gray-500 hidden md:table-cell">{r.date}</td>
+                        <td className="px-4 py-3.5">
+                          <div className="flex items-center gap-2">
+                            <div className="w-16 h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                              <div
+                                className="h-full rounded-full transition-all"
+                                style={{ width: `${r.score}%`, background: r.status === "pass" ? "#1a2d5a" : "#ef4444" }}
+                              />
+                            </div>
+                            <span className="text-xs font-semibold text-gray-700">{r.score}%</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <span className={`text-sm font-bold ${GRADE_COLOR[r.grade] ?? "text-gray-700"}`}>{r.grade}</span>
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                            r.status === "pass" ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-600"
+                          }`}>
+                            {r.status === "pass" ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                            {r.status === "pass" ? "Pass" : "Fail"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3.5 hidden lg:table-cell">
+                          {r.violations > 0 ? (
+                            <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold bg-red-50 text-red-600">
+                              <AlertTriangle className="h-3 w-3" />
+                              {r.violations} flagged
+                            </span>
+                          ) : (
+                            <span className="text-xs text-gray-400">None</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* ── WARNINGS TAB ── */}
+          {activeTab === "warnings" && (
+            <div className="flex flex-col gap-5">
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-gray-500">
+                  {unreadCount > 0 ? `You have ${unreadCount} unread notification${unreadCount > 1 ? "s" : ""}.` : "All notifications are read."}
+                </p>
+                <button
+                  onClick={markAllRead}
+                  className="text-xs font-medium text-blue-600 hover:underline"
+                >
+                  Mark all as read
+                </button>
+              </div>
+
+              <div className="flex flex-col gap-3">
+                {warnings.map(w => {
+                  const styles = {
+                    error:   { icon: <XCircle className="h-4 w-4 text-red-500 flex-shrink-0 mt-0.5" />,       border: "border-red-200",    bg: "bg-red-50",    badge: "bg-red-100 text-red-700" },
+                    warning: { icon: <AlertTriangle className="h-4 w-4 text-amber-500 flex-shrink-0 mt-0.5" />, border: "border-amber-200",  bg: "bg-amber-50",  badge: "bg-amber-100 text-amber-700" },
+                    info:    { icon: <Info className="h-4 w-4 text-blue-500 flex-shrink-0 mt-0.5" />,          border: "border-blue-200",   bg: "bg-blue-50",   badge: "bg-blue-100 text-blue-700" },
+                  }[w.type]
+
+                  return (
+                    <div
+                      key={w.id}
+                      className={`rounded-2xl border bg-white overflow-hidden transition-all ${!w.read ? "ring-2 ring-offset-0 ring-blue-100" : ""}`}
+                    >
+                      <div className="flex items-start gap-4 px-5 py-4">
+                        <div className={`mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full ${styles.bg} ${styles.border} border`}>
+                          {styles.icon}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <p className="text-sm font-semibold text-gray-900">{w.title}</p>
+                                {!w.read && (
+                                  <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-[9px] font-bold text-blue-700 uppercase tracking-wide">New</span>
+                                )}
+                                {w.action && (
+                                  <span className={`inline-flex rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ${styles.badge}`}>{w.action}</span>
+                                )}
+                              </div>
+                              <p className="text-xs text-gray-500 mt-0.5">{w.exam} &middot; {w.date}</p>
+                            </div>
+                          </div>
+                          <p className="text-sm text-gray-600 mt-2 leading-relaxed">{w.message}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* ── SETTINGS TAB ── */}
+          {activeTab === "settings" && (
+            <div className="flex flex-col gap-6 max-w-2xl">
+
+              {/* Profile info */}
+              <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+                <div className="px-5 py-4 border-b border-gray-100">
+                  <h3 className="text-sm font-semibold text-gray-800">Profile Information</h3>
+                  <p className="text-xs text-gray-400 mt-0.5">Your registered details as provided by the university</p>
+                </div>
+                <div className="px-5 py-5 flex flex-col gap-4">
+                  <div className="flex items-center gap-4 pb-4 border-b border-gray-100">
+                    <div className="flex h-16 w-16 items-center justify-center rounded-full text-2xl font-bold text-white" style={{ background: "#1a2d5a" }}>
+                      {STUDENT.initials}
+                    </div>
+                    <div>
+                      <p className="text-base font-semibold text-gray-900">{STUDENT.name}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">{STUDENT.regNo}</p>
+                      <span className="inline-flex items-center gap-1 mt-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 border border-emerald-200">
+                        <CheckCircle2 className="h-3 w-3" /> Face Verified
+                      </span>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <ProfileField icon={<Mail className="h-3.5 w-3.5" />}    label="Email"      value={STUDENT.email} />
+                    <ProfileField icon={<Phone className="h-3.5 w-3.5" />}   label="Phone"      value={STUDENT.phone} />
+                    <ProfileField icon={<BookOpen className="h-3.5 w-3.5" />} label="Programme" value={STUDENT.programme} />
+                    <ProfileField icon={<MapPin className="h-3.5 w-3.5" />}  label="Year"       value={STUDENT.year} />
+                    <ProfileField icon={<Users className="h-3.5 w-3.5" />}   label="College"    value={STUDENT.college} wideCol />
+                  </div>
+                </div>
+              </div>
+
+              {/* Change password */}
+              <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+                <div className="px-5 py-4 border-b border-gray-100">
+                  <h3 className="text-sm font-semibold text-gray-800">Change Password</h3>
+                  <p className="text-xs text-gray-400 mt-0.5">Use a strong password you do not use elsewhere</p>
+                </div>
+                <div className="px-5 py-5 flex flex-col gap-4">
+                  <SettingsInput label="Current Password"  type={showPass ? "text" : "password"} placeholder="••••••••"
+                    suffix={<button type="button" onClick={() => setShowPass(!showPass)} className="text-gray-400 hover:text-gray-600">{showPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button>}
+                  />
+                  <SettingsInput label="New Password"      type="password" placeholder="••••••••" />
+                  <SettingsInput label="Confirm Password"  type="password" placeholder="••••••••" />
+                  <button
+                    className="self-start rounded-lg px-5 py-2.5 text-sm font-semibold text-white transition-all hover:opacity-90"
+                    style={{ background: "#1a2d5a" }}
+                  >
+                    Update Password
+                  </button>
+                </div>
+              </div>
+
+              {/* Notification preferences */}
+              <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+                <div className="px-5 py-4 border-b border-gray-100">
+                  <h3 className="text-sm font-semibold text-gray-800">Notification Preferences</h3>
+                  <p className="text-xs text-gray-400 mt-0.5">Choose how you receive alerts and reminders</p>
+                </div>
+                <div className="px-5 py-5 flex flex-col gap-4">
+                  {[
+                    { label: "Exam reminders (24 hours before)", key: "reminders", defaultOn: true },
+                    { label: "Proctoring violation alerts",       key: "violations", defaultOn: true },
+                    { label: "Result notifications",              key: "results",   defaultOn: true },
+                    { label: "System announcements",              key: "system",    defaultOn: false },
+                  ].map(pref => (
+                    <div key={pref.key} className="flex items-center justify-between">
+                      <span className="text-sm text-gray-700">{pref.label}</span>
+                      <Toggle defaultOn={pref.defaultOn} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Danger zone */}
+              <div className="rounded-2xl border border-red-200 bg-white overflow-hidden">
+                <div className="px-5 py-4 border-b border-red-100">
+                  <h3 className="text-sm font-semibold text-red-700">Account Actions</h3>
+                </div>
+                <div className="px-5 py-5 flex flex-col gap-3">
+                  <div className="flex items-center justify-between rounded-lg border border-gray-200 px-4 py-3">
+                    <div>
+                      <p className="text-sm font-medium text-gray-800">Re-verify Face ID</p>
+                      <p className="text-xs text-gray-400 mt-0.5">Update your biometric profile before your next exam</p>
+                    </div>
+                    <button
+                      onClick={() => router.push("/verify")}
+                      className="rounded-lg border border-[#1a2d5a] px-3 py-1.5 text-xs font-semibold text-[#1a2d5a] hover:bg-[#1a2d5a] hover:text-white transition-colors"
+                    >
+                      Verify Now
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between rounded-lg border border-red-100 bg-red-50 px-4 py-3">
+                    <div>
+                      <p className="text-sm font-medium text-red-700">Sign Out</p>
+                      <p className="text-xs text-red-400 mt-0.5">End your current session securely</p>
+                    </div>
+                    <button
+                      onClick={() => router.push("/")}
+                      className="rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-600 hover:text-white transition-colors"
+                    >
+                      Sign Out
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </main>
+      </div>
+    </div>
+  )
+}
+
+// ─── Helper components ────────────────────────────────────────────────────────
+function SysCheck({ icon, label, ok }: { icon: React.ReactNode; label: string; ok: boolean }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className={ok ? "text-emerald-500" : "text-red-400"}>{icon}</span>
+      <span className="text-xs text-gray-500">{label}</span>
+      <span className={`h-1.5 w-1.5 rounded-full ${ok ? "bg-emerald-400" : "bg-red-400"}`} />
+    </div>
+  )
+}
+
+function StatCard({ icon, label, value, sub, bg }: { icon: React.ReactNode; label: string; value: string | number; sub: string; bg: string }) {
+  return (
+    <div className={`flex flex-col gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-4`}>
+      <div className={`flex h-9 w-9 items-center justify-center rounded-xl ${bg}`}>{icon}</div>
+      <div>
+        <p className="text-2xl font-bold text-gray-900 leading-none">{value}</p>
+        <p className="text-xs font-medium text-gray-600 mt-1">{label}</p>
+        <p className="text-[10px] text-gray-400 mt-0.5">{sub}</p>
+      </div>
+    </div>
+  )
+}
+
+function SectionHeading({ children }: { children: React.ReactNode }) {
+  return <h3 className="text-[10px] font-semibold tracking-widest text-gray-400 uppercase">{children}</h3>
+}
+
+function DetailRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center gap-1.5 text-gray-400">{icon}<span className="text-xs">{label}</span></div>
+      <span className="text-xs font-medium text-gray-800 text-right">{value}</span>
+    </div>
+  )
+}
+
+function ProfileField({ icon, label, value, wideCol }: { icon: React.ReactNode; label: string; value: string; wideCol?: boolean }) {
+  return (
+    <div className={wideCol ? "sm:col-span-2" : ""}>
+      <label className="flex items-center gap-1.5 text-[10px] font-semibold tracking-widest text-gray-400 uppercase mb-1">
+        {icon}{label}
+      </label>
+      <p className="text-sm text-gray-800 bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">{value}</p>
+    </div>
+  )
+}
+
+function SettingsInput({ label, type, placeholder, suffix }: { label: string; type: string; placeholder: string; suffix?: React.ReactNode }) {
+  return (
+    <div>
+      <label className="block text-xs font-semibold text-gray-500 mb-1">{label}</label>
+      <div className="relative">
+        <input
+          type={type}
+          placeholder={placeholder}
+          className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-200 pr-10"
+        />
+        {suffix && <div className="absolute right-3 top-1/2 -translate-y-1/2">{suffix}</div>}
+      </div>
+    </div>
+  )
+}
+
+function Toggle({ defaultOn }: { defaultOn: boolean }) {
+  const [on, setOn] = useState(defaultOn)
+  return (
+    <button
+      type="button"
+      onClick={() => setOn(!on)}
+      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${on ? "bg-[#1a2d5a]" : "bg-gray-300"}`}
+    >
+      <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform shadow-sm ${on ? "translate-x-4" : "translate-x-1"}`} />
+    </button>
+  )
+}
