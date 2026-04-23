@@ -26,6 +26,13 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false)
   const [form, setForm] = useState({ name: "", regNum: "", password: "" })
 
+  function stopCameraStream() {
+    if (!streamRef.current) return
+    streamRef.current.getTracks().forEach(track => track.stop())
+    streamRef.current = null
+    setCameraActive(false)
+  }
+
   async function startCamera() {
     if (!navigator.mediaDevices?.getUserMedia) {
       setCameraError("Camera is not supported in this browser.")
@@ -33,6 +40,13 @@ export default function RegisterPage() {
     }
 
     setCameraError(null)
+
+    if (streamRef.current) {
+      const hasLiveTrack = streamRef.current.getVideoTracks().some(track => track.readyState === "live")
+      if (!hasLiveTrack) {
+        stopCameraStream()
+      }
+    }
 
     if (streamRef.current) {
       setCameraActive(true)
@@ -67,11 +81,7 @@ export default function RegisterPage() {
 
   useEffect(() => {
     return () => {
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop())
-        streamRef.current = null
-        setCameraActive(false)
-      }
+      stopCameraStream()
     }
   }, [])
 
@@ -106,6 +116,10 @@ export default function RegisterPage() {
   function handleRetake() {
     setCaptured(false)
     setCapturedImage(null)
+    setCapturing(false)
+    setCameraError(null)
+    stopCameraStream()
+    void startCamera()
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -303,7 +317,7 @@ export default function RegisterPage() {
                 </div>
               </div>
 
-              {captured && (
+              {captured && capturedImage && (
                 <div className="flex items-center gap-2 rounded-lg border border-green-500/30 bg-green-500/10 px-4 py-3">
                   <CheckCircle className="h-5 w-5 shrink-0 text-green-500" />
                   <div>
