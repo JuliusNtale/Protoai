@@ -102,6 +102,11 @@ export default function VerifyPage() {
   }
 
   async function startCamera() {
+    if (!window.isSecureContext) {
+      setCameraError("Camera requires a secure origin. Use https://192.168.0.19:3000 or open the app on localhost.")
+      return
+    }
+
     if (!navigator.mediaDevices?.getUserMedia) {
       setCameraError("Camera is not supported in this browser.")
       return
