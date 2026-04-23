@@ -24,6 +24,7 @@ export default function RegisterPage() {
   const [cameraActive, setCameraActive] = useState(false)
   const [cameraError, setCameraError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [form, setForm] = useState({ name: "", regNum: "", password: "" })
 
   function stopCameraStream() {
@@ -156,13 +157,39 @@ export default function RegisterPage() {
     void startCamera()
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
-    setTimeout(() => {
-      setLoading(false)
+    setError(null)
+
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: form.name,
+          registration_number: form.regNum,
+          password: form.password,
+          face_image: capturedImage,
+        }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        setError(data?.error?.message || "Registration failed. Please try again.")
+        setLoading(false)
+        return
+      }
+
+      localStorage.setItem("token", data.token)
+      localStorage.setItem("user", JSON.stringify(data.user))
+
       router.push("/dashboard")
-    }, 1500)
+    } catch {
+      setError("Unable to connect to the server. Please try again.")
+      setLoading(false)
+    }
   }
 
   return (
@@ -420,6 +447,11 @@ export default function RegisterPage() {
                   Sign in
                 </Link>
               </p>
+              {error && (
+                <p className="rounded-md bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-600">
+                  {error}
+                </p>
+              )}
               <Button
                 type="submit"
                 disabled={!captured || loading}

@@ -13,19 +13,14 @@ async function register(req, res) {
     return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: errors.array()[0].msg } });
   }
 
-  const { full_name, registration_number, email, password, role, facial_image_base64 } = req.body;
+  // Accept both 'name' (Julius's field) and 'full_name' (fallback)
+  const full_name = req.body.name || req.body.full_name;
+  const { registration_number, email, password, role } = req.body;
+  // Accept both 'face_image' (Julius's field) and 'facial_image_base64' (fallback)
+  const facial_image_base64 = req.body.face_image || req.body.facial_image_base64;
 
   const t = await sequelize.transaction();
   try {
-    const existing = await User.scope('withPassword').findOne({
-      where: { email },
-      transaction: t
-    });
-    if (existing) {
-      await t.rollback();
-      return res.status(409).json({ error: { code: 'EMAIL_TAKEN', message: 'An account with this email already exists' } });
-    }
-
     const regExists = await User.scope('withPassword').findOne({
       where: { registration_number },
       transaction: t
@@ -35,12 +30,26 @@ async function register(req, res) {
       return res.status(409).json({ error: { code: 'REG_NUMBER_TAKEN', message: 'An account with this registration number already exists' } });
     }
 
+    if (email) {
+      const emailExists = await User.scope('withPassword').findOne({
+        where: { email },
+        transaction: t
+      });
+      if (emailExists) {
+        await t.rollback();
+        return res.status(409).json({ error: { code: 'EMAIL_TAKEN', message: 'An account with this email already exists' } });
+      }
+    }
+
     const password_hash = await bcrypt.hash(password, 12);
+
+    // If no email provided (Julius's form doesn't have one), derive a placeholder
+    const userEmail = email || `${registration_number.toLowerCase().replace(/[^a-z0-9]/g, '')}@student.udom.ac.tz`;
 
     const user = await User.create({
       full_name,
       registration_number,
-      email,
+      email: userEmail,
       password_hash,
       role: role || 'student',
       is_active: true
@@ -68,11 +77,19 @@ async function register(req, res) {
 
     await t.commit();
 
+    const token = jwt.sign(
+      { user_id: user.id, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRY || '8h' }
+    );
+
     return res.status(201).json({
+      token,
       user: {
         user_id: user.id,
+        name: user.full_name,
         registration_number: user.registration_number,
-        full_name: user.full_name,
+        regNo: user.registration_number,
         email: user.email,
         role: user.role
       }
@@ -90,12 +107,18 @@ async function login(req, res) {
     return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: errors.array()[0].msg } });
   }
 
-  const { email, password } = req.body;
+  // Accept registration_number (Julius's login) OR email (Postman/admin testing)
+  const { registration_number, email, password } = req.body;
 
   try {
-    const user = await User.scope('withPassword').findOne({ where: { email } });
+    let user;
+    if (registration_number) {
+      user = await User.scope('withPassword').findOne({ where: { registration_number } });
+    } else {
+      user = await User.scope('withPassword').findOne({ where: { email } });
+    }
 
-    const genericError = { error: { code: 'INVALID_CREDENTIALS', message: 'Invalid email or password' } };
+    const genericError = { error: { code: 'INVALID_CREDENTIALS', message: 'Invalid registration number or password' } };
 
     if (!user || !user.is_active) {
       return res.status(401).json(genericError);
@@ -116,8 +139,9 @@ async function login(req, res) {
       token,
       user: {
         user_id: user.id,
+        name: user.full_name,
         registration_number: user.registration_number,
-        full_name: user.full_name,
+        regNo: user.registration_number,
         email: user.email,
         role: user.role
       }

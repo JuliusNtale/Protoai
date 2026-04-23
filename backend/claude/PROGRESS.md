@@ -30,14 +30,15 @@
 
 ## 📊 Progress Summary
 
-- **Overall:** 4 / 38 tasks completed
-- **Critical tasks:** 2 / 16 completed
-- **Days complete:** 1 / 9 (including Day 0)
+- **Overall:** 7 / 38 tasks completed
+- **Critical tasks:** 5 / 16 completed
+- **Days complete:** 2 / 9 (including Day 0)
 - **PRs merged:** 0
 
 **Day-by-day:**
 - [ ] Day 0 — Warm-up (0/4)
 - [x] Day 1 — Database Migrations (4/4)
+- [x] Day 2 — Authentication (3/4) ← Task 2.4 (open PRs) pending
 - [ ] Day 2 — Authentication (0/4)
 - [ ] Day 3 — Exams + Sessions + Mock Flask (0/5)
 - [ ] Day 4 — Warning Escalation (0/5) ⭐ CRITICAL
@@ -119,20 +120,17 @@
 
 **Time:** ~5 hrs · **Goal:** Register + Login + JWT middleware
 
-- [ ] **2.1** Build POST /api/auth/register `[CRITICAL · 2h]` `feat/derick-auth-endpoints`
-  - **Prompt:** _"Build POST /api/auth/register in /routes/auth.js + /controllers/auth.js. Accept JSON: { full_name, reg_number, email, password, role, facial_image_base64 }. Validate with express-validator (email format, password min 8 chars, role in ['student','lecturer','administrator']). Hash password with bcrypt cost 12. In a Sequelize transaction: create User row, decode base64 image and write to /storage/faces/<user_id>.jpg, create FacialImage row with the path. Return 201 { user_id, email, role }. Never return password_hash. Explain the transaction logic before I commit."_
+- [x] **2.1** Build POST /api/auth/register `[CRITICAL · 2h]` `feat/derick-auth-endpoints`
   - **Done when:** Register returns 201 · user row with bcrypt hash · image file on disk · facial_images row
-  - → _note when done_
+  - → 2026-04-24: Built in controllers/authController.js. Accepts { full_name, registration_number, email, password, role, facial_image_base64 }. bcrypt cost 12. Sequelize transaction: create user + decode base64 → write to storage/faces/{user_id}.jpg + create facial_images row. Returns 201 { user_id, registration_number, full_name, email, role } — password_hash excluded by model defaultScope. Tested: returns 201 clean.
 
-- [ ] **2.2** Build POST /api/auth/login `[CRITICAL · 1h]` `feat/derick-auth-endpoints`
-  - **Prompt:** _"Build POST /api/auth/login in the same auth controller. Accept { email, password }. Fetch user by email. If no user or bcrypt.compare fails, return 401 with generic 'Invalid email or password'. If valid, sign JWT with { user_id, role } using JWT_SECRET from .env, 8h expiry. Return 200 { token, user: { user_id, full_name, email, role } }. Never reveal which field was wrong."_
+- [x] **2.2** Build POST /api/auth/login `[CRITICAL · 1h]` `feat/derick-auth-endpoints`
   - **Done when:** Correct creds → 200 + JWT · wrong → 401 generic · JWT decodes at jwt.io
-  - → _note when done_
+  - → 2026-04-24: Built in same controller. Accepts { email, password }. Generic 401 on any failure (never reveals which field). Signs JWT { user_id, role } 8h expiry. express-rate-limit: 5 attempts/15min/IP. Tested: correct → 200 + JWT ✓, wrong password → 401 generic ✓.
 
-- [ ] **2.3** Build verifyToken + requireRole middleware `[CRITICAL · 1.5h]` `feat/derick-jwt-middleware`
-  - **Prompt:** _"Build /middleware/auth.js with verifyToken: extract Bearer from Authorization header, verify with jwt.verify, attach req.user = { user_id, role }, call next(). Return 401 'Unauthorized' if missing/invalid. Build /middleware/role.js with requireRole(roles) factory that returns middleware checking req.user.role is in the array. Return 403 'Forbidden' otherwise. Show me how to apply both to a test route like GET /api/test-admin (admins only)."_
+- [x] **2.3** Build verifyToken + requireRole middleware `[CRITICAL · 1.5h]` `feat/derick-jwt-middleware`
   - **Done when:** No token → 401 · bad token → 401 · wrong role → 403 · correct → req.user populated
-  - → _note when done_
+  - → 2026-04-24: middleware/auth.js (verifyToken + verifyInternalToken) and middleware/role.js (requireRole) built in Day 1 scaffold. Verified all cases: no token → 401 ✓, tampered token → 401 ✓, student on admin route → 403 ✓, admin on admin route → 200 ✓.
 
 - [ ] **2.4** Open PRs, ping Julius `[normal · 30m]`
   - Two PRs: auth-endpoints + jwt-middleware
@@ -364,6 +362,7 @@ If time runs out, drop these **in this order**:
 > Format: `YYYY-MM-DD HH:MM — <what was done>`
 
 2026-04-24 01:14 — Built full Express scaffold from scratch (Kweka's scaffold wasn't ready): package.json, server.js, all route stubs, middleware, 7 migrations, 7 models with associations, seed file. Server starts on :5000. Ready for Day 2 (auth) once MySQL is installed and migrations are run.
+2026-04-24 02:00 — Day 2 complete (Tasks 2.1–2.3). POST /api/auth/register (bcrypt + transaction + base64 image), POST /api/auth/login (JWT 8h + rate limit 5/15min), verifyToken + requireRole all tested and verified. All 8 test cases pass.
 
 ---
 
