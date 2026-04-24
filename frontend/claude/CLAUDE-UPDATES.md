@@ -185,6 +185,29 @@ Failure: 409 { error: { code: "REG_NUMBER_TAKEN" | "EMAIL_TAKEN", message: "..."
          400 { error: { code: "VALIDATION_ERROR", message: "..." } }
 ```
 
+---
+
+### 2026-04-24 — Session 2
+
+---
+
+#### 4. `frontend/app/dashboard/page.tsx` — Replace hardcoded student data with real localStorage user
+
+**What changed:**
+
+- Removed hardcoded `STUDENT` constant (`Bernard Mwakanjuki`, `T22-03-92323`, etc.)
+- Added `StudentProfile` type
+- Added `STUDENT` as a `useState` (starts empty)
+- Added `useEffect` that reads `token` and `user` from `localStorage` on mount
+- Computes `initials` automatically from the real name (first + last letter of first/last word)
+- If no token or user found in localStorage → redirects to `/` (login page)
+- Both Sign Out buttons now call `localStorage.removeItem("token")` and `localStorage.removeItem("user")` before redirecting
+
+**Why:**
+The dashboard was always showing "Bernard Mwakanjuki / T22-03-92323" regardless of who was logged in. After login or registration, the backend returns `{ token, user: { name, registration_number, email, ... } }` which the login/register pages already save to `localStorage`. The dashboard now reads those saved values and displays the actual student's name and registration number.
+
+**Julius action needed:** None — this only reads from localStorage which login already writes to. Fields not returned by the API (`programme`, `year`, `college`, `phone`) still show static defaults — Julius can update these when the backend adds a `/api/users/profile` endpoint.
+
 ### All protected endpoints
 ```
 Header:  Authorization: Bearer <token>

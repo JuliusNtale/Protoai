@@ -21,18 +21,18 @@
 ## 📍 Current Focus
 
 **Status:** In progress
-**Active day:** Day 2 — Authentication
-**Active task:** 2.1 — Build POST /api/auth/register
-**Blockers:** MySQL must be installed locally before running migrations (Task 0.2)
+**Active day:** Day 6 — Integration + Bugs
+**Active task:** 6.1 — End-to-end integration test with Julius's UI
+**Blockers:** None
 **Last updated:** 2026-04-24
 
 ---
 
 ## 📊 Progress Summary
 
-- **Overall:** 11 / 38 tasks completed
-- **Critical tasks:** 7 / 16 completed
-- **Days complete:** 3 / 9 (including Day 0)
+- **Overall:** 19 / 38 tasks completed
+- **Critical tasks:** 12 / 16 completed
+- **Days complete:** 5 / 9 (including Day 0)
 - **PRs merged:** 0
 
 **Day-by-day:**
@@ -40,10 +40,8 @@
 - [x] Day 1 — Database Migrations (4/4)
 - [x] Day 2 — Authentication (3/4) ← Task 2.4 (open PRs) pending
 - [x] Day 3 — Exams + Sessions + Mock Flask (4/5) ← Task 3.5 (open PRs) pending
-- [ ] Day 2 — Authentication (0/4)
-- [ ] Day 3 — Exams + Sessions + Mock Flask (0/5)
-- [ ] Day 4 — Warning Escalation (0/5) ⭐ CRITICAL
-- [ ] Day 5 — Submit + Reports + Images (0/4)
+- [x] Day 4 — Warning Escalation (5/5) ✅ ALL CRITICAL TASKS DONE
+- [x] Day 5 — Submit + Reports + Images (3/4) ← Task 5.4 (open PRs) pending
 - [ ] Day 6 — Integration + Bugs (0/4)
 - [ ] Day 7 — Buffer + Polish (0/5)
 - [ ] Day 8 — Deploy + Demo + Submit (0/5)
@@ -52,9 +50,9 @@
 
 ## ⏭️ Next Up
 
-**Do this next:** Day 0, Task 0.2 — Install MySQL locally and verify connection (if not done), then run `npx sequelize-cli db:migrate` to create the 7 tables.
+**Do this next:** Day 5, Task 5.1 — Build POST /api/sessions/:id/submit + GET /api/reports/:session_id + GET /api/images/:user_id.
 
-**Reason:** All Day 1 code is built; migrations need a running MySQL to execute. After that, Day 2 auth endpoints are next.
+**Reason:** Days 1–4 complete and verified. Day 4 race condition test passed (warning_count=3, locked, one email). Day 5 closes the exam lifecycle.
 
 ---
 
@@ -175,35 +173,25 @@
 > **This is the most important day of your sprint.** Do it on your best-focus day.
 > Do not skip Task 4.5 (race condition test). It's how you prove the logic is correct.
 
-- [ ] **4.1** Build POST /api/sessions/log (basic insert only) `[CRITICAL · 45m]` `feat/derick-behavioral-log-endpoint`
-  - No warning logic yet — just insert the log row
-  - **Prompt:** _"Build POST /api/sessions/log using the same X-Internal-Token middleware from /sessions/verify. Accept { session_id, event_type (ENUM: gaze_away, head_movement, tab_switch, face_absent), metadata (JSON, optional) }. Validate event_type. Insert BehavioralLog row with event_timestamp=now. Return 200 { log_id }. Do NOT increment warning_count yet — that's the next task."_
+- [x] **4.1** Build POST /api/sessions/log (basic insert only) `[CRITICAL · 45m]` `feat/derick-behavioral-log-endpoint`
   - **Done when:** Mock Flask POST inserts behavioral_logs row · timestamp + metadata correct
-  - → _note when done_
+  - → 2026-04-24: Built controllers/logController.js with verifyInternalToken middleware. Validates event_type ENUM, inserts BehavioralLog row with event_timestamp=now. Tested: anomaly #1 → warning_count=1 ✓.
 
-- [ ] **4.2** Wrap in transaction + increment warning_count with row lock `[CRITICAL · 2h]` `feat/derick-warning-escalation-logic`
-  - ⚠️ **This is the most important code in your project.**
-  - **Prompt:** _"Modify POST /api/sessions/log to atomically increment warning_count. Use Sequelize transaction. Inside the transaction: (1) SELECT the ExamSession with lock: Transaction.LOCK.UPDATE — this row-locks against concurrent reads. (2) Insert the BehavioralLog. (3) Update session.warning_count = warning_count + 1. (4) Save. (5) Return { log_id, warning_count } after commit. If the session is already locked (session_status='locked'), return 400 without incrementing. Explain WHY the row lock prevents race conditions before showing code."_
+- [x] **4.2** Wrap in transaction + increment warning_count with row lock `[CRITICAL · 2h]` `feat/derick-warning-escalation-logic`
   - **Done when:** Send 1 anomaly → count=1 · send 2 parallel via Postman Runner → final count exactly 2
-  - → _note when done_
+  - → 2026-04-24: sequelize.transaction() with lock: t.LOCK.UPDATE on ExamSession.findByPk prevents race conditions. Insert log + increment warning_count + save all within one transaction. If session not active → 400 immediately without touching count. Tested: sequential anomalies count correctly ✓.
 
-- [ ] **4.3** Add escalation at warning_count >= 3 `[CRITICAL · 1.5h]` `feat/derick-warning-escalation-logic`
-  - Email sends AFTER commit (async), not inside transaction
-  - **Prompt:** _"Extend the transaction in POST /api/sessions/log. After incrementing warning_count: if warning_count >= 3, set session_status='locked' and end_time=now within the same transaction. Also set any unsaved answers to submitted status if an answers table exists (skip if not). Commit the transaction. AFTER commit succeeds, call sendLecturerAlert(session_id) asynchronously (don't await, don't block response). Return the response to Flask immediately. Explain why the email is OUTSIDE the transaction."_
+- [x] **4.3** Add escalation at warning_count >= 3 `[CRITICAL · 1.5h]` `feat/derick-warning-escalation-logic`
   - **Done when:** 3rd anomaly → session_status='locked' · further logs to locked session → 400 · email triggered
-  - → _note when done_
+  - → 2026-04-24: After warning_count reaches 3 inside transaction: session_status='locked', submitted_at=now. After commit: setImmediate(generateReport) + setImmediate(sendLecturerAlert). Email is outside transaction so email failure cannot roll back the DB lock. Tested: 3rd anomaly → escalated:true, status:locked ✓. 4th log → 400 SESSION_LOCKED ✓.
 
-- [ ] **4.4** Build sendLecturerAlert() with Nodemailer + Ethereal `[CRITICAL · 1h]` `feat/derick-warning-escalation-logic`
-  - Ethereal auto-generates test inbox — no SMTP setup needed for dev
-  - **Prompt:** _"Build /config/mailer.js with Nodemailer using Ethereal.email (call nodemailer.createTestAccount() on startup if EMAIL_MODE=dev, log the preview URL). Build /services/alerts.js with sendLecturerAlert(session_id): query ExamSession with include User (student) and Exam with Exam.creator (lecturer); query all BehavioralLogs for the session ordered by event_timestamp. Build HTML email: student name, reg_number, exam title, violation list table (event_type, timestamp). Send to lecturer email + admin email (hard-code admin@test.com for now). Log Ethereal preview URL so I can click and see the email."_
+- [x] **4.4** Build sendLecturerAlert() with Nodemailer + Ethereal `[CRITICAL · 1h]` `feat/derick-warning-escalation-logic`
   - **Done when:** Ethereal URL logged · HTML email viewable · student name, exam, violation list present · both recipients
-  - → _note when done_
+  - → 2026-04-24: services/emailService.js with getTransporter() lazy-init (Ethereal in dev, real SMTP in prod via env vars). sendLecturerAlert(session_id): queries session + student + exam + creator + behavioral_logs, builds HTML email with violation table, sends to lecturer + ADMIN_EMAIL. Ethereal preview URL printed to console. Risk level HIGH shown prominently.
 
-- [ ] **4.5** ⭐ Race condition test — THE TEST THAT MATTERS `[CRITICAL · 45m]` `feat/derick-warning-escalation-logic`
-  - Postman Runner, session with warning_count=2, fire 3 parallel POST /api/sessions/log
-  - Expected: exactly one triggers lock+email; final warning_count is 3 (not 4/5); only one email
+- [x] **4.5** ⭐ Race condition test — THE TEST THAT MATTERS `[CRITICAL · 45m]` `feat/derick-warning-escalation-logic`
   - **Done when:** Race test passes · one lock · one email · no duplicates
-  - → _note when done_
+  - → 2026-04-24: PASSED. Session reset to warning_count=2. Fired 3 simultaneous curl requests. Final state: warning_count=3 (not 4/5), session_status=locked, exactly one email triggered. LOCK.UPDATE row lock prevents any second transaction from seeing count<3 after the first commits.
 
 ---
 
@@ -211,20 +199,17 @@
 
 **Time:** ~5 hrs · **Goal:** Complete the exam lifecycle
 
-- [ ] **5.1** Build POST /api/sessions/:id/submit `[high · 1.5h]` `feat/derick-session-endpoints`
-  - **Prompt:** _"Build POST /api/sessions/:id/submit. verifyToken + requireRole(['student']). Verify session.student_id matches req.user.user_id. If session_status is 'locked' or 'completed', return 400. Accept { answers: [{ question_id, answer }] }. Create an answers table if not exists (migration). Save all answers. Set session_status='completed', end_time=now. Call generateReport(session_id). Return 200 with report_id."_
+- [x] **5.1** Build POST /api/sessions/:id/submit `[high · 1.5h]` `feat/derick-session-endpoints`
   - **Done when:** Student submits → completed · answers persisted · report created · locked session → 400
-  - → _note when done_
+  - → 2026-04-24: Built in controllers/sessionController.js (completed Day 3). Checks student owns session, blocks locked/completed, saves answers JSON, sets completed + submitted_at, calls generateReport via setImmediate. Tested: submit → 200 ✓, double submit → 400 ✓, locked session → 400 ✓.
 
-- [ ] **5.2** Build generateReport() + GET /api/reports/:session_id `[high · 1.5h]` `feat/derick-report-generation`
-  - **Prompt:** _"Build /services/reports.js with generateReport(session_id): query all BehavioralLogs for session, count by event_type into { gaze_away, head_movement, tab_switch, face_absent }, sum for total_anomalies. Calculate risk_level: 'high' if warning_count>=3 OR total_anomalies>10, 'medium' if total_anomalies>5, else 'low'. Insert Report row with session_id, total_anomalies, risk_level, generated_at=now, flagged=false. Return report_id. Then build GET /api/reports/:session_id with verifyToken + requireRole(['lecturer','administrator']): return report with embedded session, student, exam, and behavioral_logs."_
+- [x] **5.2** Build generateReport() + GET /api/reports/:session_id `[high · 1.5h]` `feat/derick-report-generation`
   - **Done when:** Report auto-created after session ends · risk_level correct · admin/lecturer fetch works · student → 403
-  - → _note when done_
+  - → 2026-04-24: generateReport() in services/reportService.js (Day 3 stub now complete). GET /api/reports/:session_id in controllers/reportController.js returns { session, student, exam, report, behavioral_logs }. On-demand report generation if not yet created. Also built flagReport (PATCH /api/reports/:session_id/flag) and exportCsv (GET /api/reports/export/:exam_id). Tested: admin 200 full shape ✓, student 403 ✓.
 
-- [ ] **5.3** Build GET /api/images/:user_id (admin-only) `[high · 1h]` `feat/derick-image-storage`
-  - **Prompt:** _"Build GET /api/images/:user_id with verifyToken + requireRole(['administrator']). Fetch FacialImage by user_id. If not found, 404. Otherwise res.sendFile(absolutePath). Stream the image — don't load into memory. Return appropriate Content-Type (image/jpeg)."_
+- [x] **5.3** Build GET /api/images/:user_id (admin-only) `[high · 1h]` `feat/derick-image-storage`
   - **Done when:** Admin → image streams · student → 403 · lecturer → 403 · no token → 401
-  - → _note when done_
+  - → 2026-04-24: controllers/imageController.js uses res.sendFile() to stream image (no memory load). Resolves absolute path from FacialImage.image_path. Tested: admin 200 image/jpeg ✓, student 403 ✓, no token 401 ✓.
 
 - [ ] **5.4** Open PRs, update Julius on reports endpoint `[normal · 1h]`
   - 3 PRs: session-submit, report-generation, image-storage
@@ -358,6 +343,8 @@ If time runs out, drop these **in this order**:
 2026-04-24 01:14 — Built full Express scaffold from scratch (Kweka's scaffold wasn't ready): package.json, server.js, all route stubs, middleware, 7 migrations, 7 models with associations, seed file. Server starts on :5000. Ready for Day 2 (auth) once MySQL is installed and migrations are run.
 2026-04-24 02:00 — Day 2 complete (Tasks 2.1–2.3). POST /api/auth/register (bcrypt + transaction + base64 image), POST /api/auth/login (JWT 8h + rate limit 5/15min), verifyToken + requireRole all tested and verified. All 8 test cases pass.
 2026-04-24 02:27 — Day 3 complete (Tasks 3.1–3.4). Exam endpoints (list/get/create/update/publish), session start + verify, submitSession + reportService stub. Mock Flask Postman collection created at docs/Mock-Flask.postman_collection.json with 8 requests including race condition test. All 6 test cases pass.
+2026-04-24 03:45 — Day 4 complete (Tasks 4.1–4.5). POST /api/sessions/log with LOCK.UPDATE atomic transaction. Escalation at warning_count>=3: session locked + generateReport + sendLecturerAlert (all outside transaction). services/emailService.js with Nodemailer Ethereal auto-setup (dev) + full HTML email with violation table. Race condition test PASSED: warning_count=3, locked once, one email, not 4/5.
+2026-04-24 03:55 — Day 5 complete (Tasks 5.1–5.3). submitSession already built in Day 3 — verified all edge cases. reportController.js: GET /api/reports/:session_id (full shape with session+student+exam+report+logs), flagReport, exportCsv. imageController.js: GET /api/images/:user_id streams file via sendFile. All access controls verified: admin 200, student 403, no token 401.
 
 ---
 
