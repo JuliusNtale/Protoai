@@ -1,0 +1,33 @@
+1. Check the backend is working
+Open your browser and go to:
+
+
+http://localhost:5000/health
+You should see:
+
+
+{"status":"ok","service":"proctoring-backend","timestamp":"..."}
+If you see that — backend is alive.
+
+2. Check frontend and backend are connected
+Go to http://localhost:3000 in your browser and try to log in with:
+
+Registration No: T22-03-04321
+Password: Password123!
+If it works (takes you to the dashboard) → they are connected.
+
+If you see a red error message → they are not connected. The most common reason is the backend isn't running.
+
+3. Quick visual checklist
+Check	How	Expected result
+Backend alive	Visit http://localhost:5000/health	JSON with "status":"ok"
+Database connected	Visit http://localhost:5000/health (same page)	No error in backend terminal
+Frontend running	Visit http://localhost:3000	Login page loads
+Connected	Log in on the login page	Goes to dashboard
+4. Watch the backend terminal while you use the site
+When you click anything on the frontend, you should see logs appear in the backend PowerShell window like:
+
+
+[INFO] POST /api/auth/login
+[INFO] GET /api/exams
+If you see these logs when you click — they are connected.

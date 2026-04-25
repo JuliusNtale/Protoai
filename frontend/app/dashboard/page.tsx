@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import {
   LayoutDashboard,
@@ -49,18 +49,18 @@ import {
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Tab = "overview" | "exams" | "results" | "warnings" | "settings"
 
-// ─── Mock data ────────────────────────────────────────────────────────────────
-const STUDENT = {
-  name: "Bernard Mwakanjuki",
-  initials: "BM",
-  regNo: "T22-03-92323",
-  email: "b.mwakanjuki@udom.ac.tz",
-  phone: "+255 712 345 678",
-  programme: "Bachelor of Computer Science",
-  year: "Year 3 — Semester 2",
-  college: "College of Information & Virtual Education",
-  photoVerified: true,
-  accountStatus: "Active",
+// ─── Student type ─────────────────────────────────────────────────────────────
+type StudentProfile = {
+  name: string
+  initials: string
+  regNo: string
+  email: string
+  phone: string
+  programme: string
+  year: string
+  college: string
+  photoVerified: boolean
+  accountStatus: string
 }
 
 const UPCOMING_EXAMS = [
@@ -223,6 +223,44 @@ export default function StudentDashboard() {
   const [searchResult, setSearchResult] = useState("")
   const [unreadCount, setUnreadCount] = useState(WARNINGS.filter(w => !w.read).length)
   const [warnings, setWarnings] = useState(WARNINGS)
+  const [STUDENT, setSTUDENT] = useState<StudentProfile>({
+    name: "",
+    initials: "",
+    regNo: "",
+    email: "",
+    phone: "",
+    programme: "Bachelor of Computer Science",
+    year: "Year 3 — Semester 2",
+    college: "College of Information & Virtual Education",
+    photoVerified: true,
+    accountStatus: "Active",
+  })
+
+  useEffect(() => {
+    const token = localStorage.getItem("token")
+    const raw = localStorage.getItem("user")
+    if (!token || !raw) {
+      router.push("/")
+      return
+    }
+    try {
+      const u = JSON.parse(raw)
+      const fullName: string = u.name || u.full_name || "Student"
+      const parts = fullName.trim().split(" ")
+      const initials = parts.length >= 2
+        ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+        : fullName.slice(0, 2).toUpperCase()
+      setSTUDENT(prev => ({
+        ...prev,
+        name: fullName,
+        initials,
+        regNo: u.registration_number || u.regNo || "",
+        email: u.email || "",
+      }))
+    } catch {
+      router.push("/")
+    }
+  }, [router])
 
   function handleOpenStartExam(examTitle: string) {
     setSelectedExamTitle(examTitle)
@@ -397,7 +435,7 @@ export default function StudentDashboard() {
 
         {/* Logout */}
         <button
-          onClick={() => router.push("/")}
+          onClick={() => { localStorage.removeItem("token"); localStorage.removeItem("user"); router.push("/") }}
           className="flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium text-blue-200/60 hover:bg-white/8 hover:text-white transition-colors"
         >
           <LogOut className="h-4 w-4" />
@@ -972,7 +1010,7 @@ export default function StudentDashboard() {
                       <p className="text-xs text-red-400 mt-0.5">End your current session securely</p>
                     </div>
                     <button
-                      onClick={() => router.push("/")}
+                      onClick={() => { localStorage.removeItem("token"); localStorage.removeItem("user"); router.push("/") }}
                       className="rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-600 hover:text-white transition-colors"
                     >
                       Sign Out
