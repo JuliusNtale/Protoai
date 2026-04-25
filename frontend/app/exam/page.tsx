@@ -4,6 +4,10 @@ import { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Flag, ChevronLeft, ChevronRight, AlertTriangle, X, User } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useBrowserLockdown } from "@/hooks/use-browser-lockdown"
+import { SystemStatusIndicators } from "@/components/system-status-indicators"
+import { useNetworkStatus } from "@/hooks/use-network-status"
+import { Calculator } from "@/components/calculator"
 
 const questions = [
   {
@@ -239,10 +243,15 @@ export default function ExamPage() {
   const [leavingExam, setLeavingExam] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [fullscreenError, setFullscreenError] = useState<string | null>(null)
+  const [securityAlert, setSecurityAlert] = useState<string | null>(null)
   const [examCameraReady, setExamCameraReady] = useState(false)
   const [examCameraError, setExamCameraError] = useState<string | null>(null)
   const maxWarnings = 3
   const stats = useProctoringStats()
+  const networkStatus = useNetworkStatus()
+  const { devtoolsLikelyOpen } = useBrowserLockdown({
+    onBlockedAction: message => setSecurityAlert(message),
+  })
 
   async function requestFullscreenMode() {
     const element = document.documentElement
@@ -408,46 +417,59 @@ export default function ExamPage() {
       : stats.faceVisibility === "Partially Hidden"
       ? "text-orange-400"
       : "text-red-500"
+  const cameraStatus = examCameraReady
+    ? { label: "Ready", detail: "Camera is connected", tone: "good" as const, pulse: true }
+    : examCameraError
+    ? { label: "Blocked", detail: examCameraError, tone: "error" as const }
+    : { label: "Checking", detail: "Preparing camera access", tone: "neutral" as const }
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-[#f4f5f7] text-gray-800" style={{ fontFamily: "var(--font-sans, system-ui, sans-serif)" }}>
+    <div className="flex min-h-[100dvh] flex-col overflow-x-hidden bg-[#f4f5f7] text-gray-800" style={{ fontFamily: "var(--font-sans, system-ui, sans-serif)" }}>
 
       {/* ── Top bar ── */}
-      <header className="flex h-12 shrink-0 items-center justify-between border-b border-gray-200 bg-[#1a2d5a] px-4 text-white">
+      <header className="shrink-0 border-b border-gray-200 bg-[#1a2d5a] px-3 py-2 text-white sm:px-4 sm:py-1.5">
         {/* Left: title */}
-        <div className="flex flex-col justify-center leading-none">
-          <span className="text-sm font-semibold text-white leading-tight">Advanced Algorithms in Computer Science</span>
-          <span className="text-[10px] text-blue-200/70 mt-0.5">Duration: 2 hrs &nbsp;&middot;&nbsp; 24 February 2025</span>
-        </div>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="min-w-0">
+            <span className="block truncate text-sm font-semibold leading-tight text-white">Advanced Algorithms in Computer Science</span>
+            <span className="mt-0.5 block text-[10px] text-blue-200/70">Duration: 2 hrs &nbsp;&middot;&nbsp; 24 February 2025</span>
+          </div>
 
-        {/* Centre: countdown */}
-        <div className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center">
-          <span className={cn(
-            "font-mono text-2xl font-bold tracking-widest leading-none transition-colors",
-            timerDanger ? "text-red-400" : "text-white"
-          )}>
-            {formatTime(timeLeft)}
-          </span>
-          <span className="text-[9px] tracking-widest text-blue-200/60 uppercase mt-0.5">Time Remaining</span>
-        </div>
+          <div className="order-3 flex w-full flex-col items-start sm:order-none sm:w-auto sm:items-center">
+            <span className={cn(
+              "font-mono text-xl font-bold tracking-widest leading-none transition-colors sm:text-2xl",
+              timerDanger ? "text-red-400" : "text-white"
+            )}>
+              {formatTime(timeLeft)}
+            </span>
+            <span className="mt-0.5 text-[9px] uppercase tracking-widest text-blue-200/60">Time Remaining</span>
+          </div>
 
-        {/* Right: monitoring badge + submit */}
-        <div className="flex items-center gap-3">
-          <button
-            onClick={triggerWarning}
-            className="hidden sm:flex items-center gap-1.5 rounded border border-green-400/40 bg-green-500/20 px-2.5 py-1 text-[11px] font-medium text-green-300 hover:bg-green-500/30 transition-colors"
-          >
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-green-400" />
-            Monitoring Active
-          </button>
-          <button
-            onClick={openSubmitConfirm}
-            className="rounded bg-red-500 px-4 py-1.5 text-xs font-bold tracking-wide text-white hover:bg-red-600 transition-colors uppercase"
-          >
-            Submit
-          </button>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <Calculator allowed={true} />
+            <button
+              onClick={triggerWarning}
+              className="hidden items-center gap-1.5 rounded border border-green-400/40 bg-green-500/20 px-2.5 py-1 text-[11px] font-medium text-green-300 transition-colors hover:bg-green-500/30 sm:flex"
+            >
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-green-400" />
+              Monitoring Active
+            </button>
+            <button
+              onClick={openSubmitConfirm}
+              className="rounded bg-red-500 px-3 py-1.5 text-xs font-bold tracking-wide text-white uppercase transition-colors hover:bg-red-600 sm:px-4"
+            >
+              Submit
+            </button>
+          </div>
         </div>
       </header>
+
+      <div className="border-b border-gray-200 bg-white px-3 py-2 sm:px-4">
+        <SystemStatusIndicators
+          camera={cameraStatus}
+          network={networkStatus}
+        />
+      </div>
 
       <div className="flex flex-1 overflow-hidden">
 
@@ -498,14 +520,26 @@ export default function ExamPage() {
 
         {/* ── Main question area ── */}
         <main className="flex flex-1 flex-col overflow-hidden">
-          <div className="flex-1 overflow-y-auto px-8 py-6">
+          <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-8 sm:py-6">
+            <div className="mb-4 grid grid-cols-2 gap-2 xl:hidden">
+              <div className="rounded-lg border border-gray-200 bg-white px-3 py-2">
+                <p className="text-[10px] uppercase tracking-wider text-gray-400">Warnings</p>
+                <p className={cn("text-sm font-bold", warnings > 0 ? "text-orange-500" : "text-gray-700")}>
+                  {warnings} / {maxWarnings}
+                </p>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-white px-3 py-2">
+                <p className="text-[10px] uppercase tracking-wider text-gray-400">Face Visibility</p>
+                <p className={cn("text-sm font-semibold", faceVisibilityColor)}>{stats.faceVisibility}</p>
+              </div>
+            </div>
 
             {/* Question meta row */}
-            <div className="mb-4 flex items-center justify-between">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
               <span className="text-sm font-semibold text-[#1a2d5a]">
                 Question {String(current + 1).padStart(2, "0")}
               </span>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                 <span className="rounded border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700">
                   Multiple Choice
                 </span>
@@ -513,10 +547,37 @@ export default function ExamPage() {
               </div>
             </div>
 
+            <div className="mb-4 md:hidden">
+              <div className="-mx-1 flex gap-1 overflow-x-auto pb-1">
+                {questions.map((_, i) => {
+                  const status = bubbleStatus(i)
+                  return (
+                    <button
+                      key={`mobile-bubble-${i}`}
+                      onClick={() => setCurrent(i)}
+                      className={cn(
+                        "flex h-8 w-8 shrink-0 items-center justify-center rounded text-xs font-semibold transition-all",
+                        status === "current" && "bg-[#1a2d5a] text-white shadow",
+                        status === "answered" && "border border-emerald-300 bg-emerald-100 text-emerald-700",
+                        status === "flagged" && "border border-orange-300 bg-orange-100 text-orange-600",
+                        status === "unattempted" && "bg-gray-100 text-gray-500"
+                      )}
+                    >
+                      {i + 1}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
             {/* Question text */}
-            <p className="mb-6 text-sm font-medium text-gray-800 leading-relaxed max-w-2xl">
+            <p className="mb-4 text-sm font-medium text-gray-800 leading-relaxed max-w-2xl">
               {q.text}
             </p>
+
+            <div className="mb-6">
+              <ExplainQuestion questionText={q.text} />
+            </div>
 
             {/* Options */}
             <div className="flex flex-col gap-2 max-w-2xl">
@@ -562,12 +623,12 @@ export default function ExamPage() {
           </div>
 
           {/* ── Bottom navigation ── */}
-          <div className="shrink-0 border-t border-gray-200 bg-white px-8 py-3">
-            <div className="flex items-center justify-between max-w-2xl">
+          <div className="shrink-0 border-t border-gray-200 bg-white px-3 py-3 sm:px-8">
+            <div className="flex flex-wrap items-center justify-between gap-2 max-w-2xl">
               <button
                 onClick={() => setCurrent(c => Math.max(0, c - 1))}
                 disabled={current === 0}
-                className="flex items-center gap-1.5 rounded border border-gray-300 bg-white px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition-colors"
+                className="flex flex-1 items-center justify-center gap-1.5 rounded border border-gray-300 bg-white px-4 py-2 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50 disabled:opacity-40 sm:flex-none"
               >
                 <ChevronLeft className="h-3.5 w-3.5" />
                 Previous
@@ -576,7 +637,7 @@ export default function ExamPage() {
               <button
                 onClick={toggleFlag}
                 className={cn(
-                  "flex items-center gap-1.5 rounded border px-4 py-2 text-xs font-medium transition-colors",
+                  "flex flex-1 items-center justify-center gap-1.5 rounded border px-4 py-2 text-xs font-medium transition-colors sm:flex-none",
                   flagged.has(current)
                     ? "border-orange-300 bg-orange-50 text-orange-600"
                     : "border-gray-300 bg-white text-gray-600 hover:border-orange-300 hover:text-orange-500"
@@ -589,14 +650,14 @@ export default function ExamPage() {
               {isLast ? (
                 <button
                   onClick={openSubmitConfirm}
-                  className="flex items-center gap-1.5 rounded bg-[#1a2d5a] px-5 py-2 text-xs font-semibold text-white hover:bg-[#243d73] transition-colors"
+                  className="flex flex-1 items-center justify-center gap-1.5 rounded bg-[#1a2d5a] px-5 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#243d73] sm:flex-none"
                 >
                   Submit Exam
                 </button>
               ) : (
                 <button
                   onClick={() => setCurrent(c => Math.min(questions.length - 1, c + 1))}
-                  className="flex items-center gap-1.5 rounded bg-[#1a2d5a] px-5 py-2 text-xs font-semibold text-white hover:bg-[#243d73] transition-colors"
+                  className="flex flex-1 items-center justify-center gap-1.5 rounded bg-[#1a2d5a] px-5 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#243d73] sm:flex-none"
                 >
                   Next Question
                   <ChevronRight className="h-3.5 w-3.5" />
@@ -793,6 +854,28 @@ export default function ExamPage() {
           </div>
         </div>
       )}
+
+      {(devtoolsLikelyOpen || securityAlert) && !leavingExam && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 p-4">
+          <div className="w-full max-w-md rounded-2xl border border-red-500/30 bg-zinc-950 px-6 py-6 text-center">
+            <p className="text-base font-semibold text-white">Inspection Blocked</p>
+            <p className="mt-2 text-sm leading-relaxed text-zinc-300">
+              {devtoolsLikelyOpen
+                ? "Developer tools appear to be open. Close them before continuing the exam."
+                : securityAlert}
+            </p>
+            {!devtoolsLikelyOpen && (
+              <button
+                type="button"
+                onClick={() => setSecurityAlert(null)}
+                className="mt-5 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-zinc-200"
+              >
+                Continue
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -802,6 +885,52 @@ function StatRow({ label, value, valueColor }: { label: string; value: string; v
     <div className="flex flex-col gap-0.5 py-2.5">
       <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{label}</span>
       <span className={cn("text-xs font-semibold", valueColor)}>{value}</span>
+    </div>
+  )
+}
+
+function ExplainQuestion({ questionText }: { questionText: string }) {
+  const [open, setOpen] = useState(false)
+
+  function buildHint(text: string) {
+    const lower = text.toLowerCase()
+
+    if (lower.includes("time complexity")) {
+      return "Compare the growth rates in the answer choices and match them to the algorithm's typical average-case performance."
+    }
+
+    if (lower.includes("protocol") || lower.includes("http") || lower.includes("tcp") || lower.includes("udp")) {
+      return "Focus on the primary responsibility of each protocol and eliminate choices that describe a different network layer behavior."
+    }
+
+    if (lower.includes("sql") || lower.includes("normal form") || lower.includes("database")) {
+      return "Identify the database concept being asked, then remove choices that are related but belong to another database topic."
+    }
+
+    if (lower.includes("operating system") || lower.includes("kernel") || lower.includes("deadlock")) {
+      return "Think about the operating system role or process state described, then match it to the formal definition."
+    }
+
+    return "Pick out the key concept in the question, remove obviously unrelated options first, then compare the remaining choices against the exact definition."
+  }
+
+  return (
+    <div className="max-w-2xl rounded-xl border border-blue-100 bg-blue-50/80 px-4 py-3">
+      <button
+        type="button"
+        onClick={() => setOpen(prev => !prev)}
+        className="flex items-center gap-2 text-left text-xs font-semibold uppercase tracking-[0.18em] text-blue-700"
+      >
+        <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-[11px] text-white">
+          ?
+        </span>
+        {open ? "Hide question guide" : "Show question guide"}
+      </button>
+      {open ? (
+        <p className="mt-3 text-sm leading-relaxed text-blue-900">
+          {buildHint(questionText)}
+        </p>
+      ) : null}
     </div>
   )
 }

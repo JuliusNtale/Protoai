@@ -20,8 +20,6 @@ import {
   FileText,
   Users,
   Monitor,
-  Wifi,
-  Camera,
   User,
   Mail,
   Phone,
@@ -45,6 +43,9 @@ import {
   RadialBar,
   Cell,
 } from "recharts"
+import { SystemStatusIndicators } from "@/components/system-status-indicators"
+import { useCameraStatus } from "@/hooks/use-camera-status"
+import { useNetworkStatus } from "@/hooks/use-network-status"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Tab = "overview" | "exams" | "results" | "warnings" | "settings"
@@ -149,36 +150,6 @@ const CHART_DATA = RESULTS.map(r => ({ name: r.code.split(" ")[1], score: r.scor
 
 const WARNINGS = [
   {
-    id: "W1",
-    type: "error" as const,
-    title: "Multiple Face Detected",
-    message: "During your Database Systems exam on 20 Jan 2026, another face was detected in the camera frame at 10:42 AM. This has been flagged for review by the exam coordinator.",
-    exam: "CS 204 — Database Systems",
-    date: "20 Jan 2026, 10:42 AM",
-    read: true,
-    action: "Under Review",
-  },
-  {
-    id: "W2",
-    type: "error" as const,
-    title: "Tab Switch Detected",
-    message: "3 tab-switch events were recorded during your Database Systems exam. This is considered a violation of examination policy.",
-    exam: "CS 204 — Database Systems",
-    date: "20 Jan 2026, 10:55 AM",
-    read: true,
-    action: "Resolved",
-  },
-  {
-    id: "W3",
-    type: "warning" as const,
-    title: "Gaze Off-Screen Warning",
-    message: "Your gaze was detected as off-screen for more than 10 seconds during Linear Algebra. One warning was issued.",
-    exam: "MTH 101 — Linear Algebra",
-    date: "12 Jan 2026, 09:18 AM",
-    read: true,
-    action: "Noted",
-  },
-  {
     id: "W4",
     type: "info" as const,
     title: "Upcoming Exam Reminder",
@@ -223,6 +194,10 @@ export default function StudentDashboard() {
   const [searchResult, setSearchResult] = useState("")
   const [unreadCount, setUnreadCount] = useState(WARNINGS.filter(w => !w.read).length)
   const [warnings, setWarnings] = useState(WARNINGS)
+  const cameraStatus = useCameraStatus({
+    secureOriginMessage: "Camera needs HTTPS or localhost to work on the dashboard.",
+  })
+  const networkStatus = useNetworkStatus()
   const [STUDENT, setSTUDENT] = useState<StudentProfile>({
     name: "",
     initials: "",
@@ -275,7 +250,7 @@ export default function StudentDashboard() {
   function buildRulesPdf(examTitle: string) {
     const generatedAt = new Date().toLocaleString()
     const lines = [
-      "UNIVERSITY OF DODOMA - AI PROCTORING SYSTEM",
+      "UNIVERSITY OF DODOMA - PROCTOAI SYSTEM",
       "EXAM ORIENTATION AND RULES",
       "",
       `Exam: ${examTitle || "Selected Exam"}`,
@@ -379,11 +354,11 @@ export default function StudentDashboard() {
   const failed   = RESULTS.filter(r => r.status === "fail").length
 
   return (
-    <div className="flex min-h-screen bg-[#f0f2f5]" style={{ fontFamily: "var(--font-sans, system-ui, sans-serif)" }}>
+    <div className="flex min-h-screen flex-col bg-[#f0f2f5] lg:flex-row" style={{ fontFamily: "var(--font-sans, system-ui, sans-serif)" }}>
 
       {/* ── Sidebar ── */}
       <aside
-        className="flex w-60 flex-shrink-0 flex-col justify-between py-6 px-4"
+        className="hidden w-60 flex-shrink-0 flex-col justify-between px-4 py-6 lg:flex"
         style={{ background: "#1a2d5a", minHeight: "100vh" }}
       >
         {/* Brand */}
@@ -391,7 +366,7 @@ export default function StudentDashboard() {
           <div className="flex items-center gap-2.5 px-2">
             <ShieldCheck className="h-6 w-6 text-blue-300" />
             <div>
-              <p className="text-sm font-bold text-white leading-none">ProctorAI</p>
+              <p className="text-sm font-bold text-white leading-none">Proctoai</p>
               <p className="text-[10px] text-blue-300/70 mt-0.5">University of Dodoma</p>
             </div>
           </div>
@@ -446,20 +421,57 @@ export default function StudentDashboard() {
       {/* ── Main content ── */}
       <div className="flex flex-1 flex-col min-w-0">
 
+        <div className="border-b border-gray-200 bg-[#1a2d5a] px-4 py-3 text-white lg:hidden">
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold">{STUDENT.name}</p>
+              <p className="truncate text-[11px] text-blue-200/80">{STUDENT.regNo}</p>
+            </div>
+            <button
+              onClick={() => router.push("/")}
+              className="inline-flex items-center gap-1 rounded-md border border-white/20 px-2.5 py-1 text-xs font-medium text-white/90"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              Sign Out
+            </button>
+          </div>
+          <nav className="mt-3 flex gap-2 overflow-x-auto pb-1">
+            {navItems.map(item => (
+              <button
+                key={`mobile-${item.tab}`}
+                onClick={() => setActiveTab(item.tab)}
+                className={`inline-flex flex-shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                  activeTab === item.tab
+                    ? "border-white bg-white text-[#1a2d5a]"
+                    : "border-white/30 bg-white/5 text-blue-100"
+                }`}
+              >
+                {item.icon}
+                {item.label}
+                {item.tab === "warnings" && unreadCount > 0 && (
+                  <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">
+                    {unreadCount}
+                  </span>
+                )}
+              </button>
+            ))}
+          </nav>
+        </div>
+
         {/* Top header bar */}
-        <header className="flex items-center justify-between border-b border-gray-200 bg-white px-6 py-3.5">
+        <header className="flex items-center justify-between border-b border-gray-200 bg-white px-4 py-3.5 sm:px-6">
           <div>
             <h1 className="text-base font-semibold text-gray-900">
               {navItems.find(n => n.tab === activeTab)?.label}
             </h1>
-            <p className="text-xs text-gray-400 mt-0.5">{STUDENT.programme} — {STUDENT.year}</p>
+            <p className="mt-0.5 hidden text-xs text-gray-400 sm:block">{STUDENT.programme} — {STUDENT.year}</p>
           </div>
           <div className="flex items-center gap-4">
-            <div className="hidden md:flex items-center gap-3">
-              <SysCheck icon={<Camera className="h-3 w-3" />} label="Camera" ok />
-              <SysCheck icon={<Monitor className="h-3 w-3" />} label="Screen" ok />
-              <SysCheck icon={<Wifi className="h-3 w-3" />} label="Network" ok />
-            </div>
+            <SystemStatusIndicators
+              camera={cameraStatus}
+              network={networkStatus}
+              className="hidden md:flex"
+            />
             <button
               onClick={() => setActiveTab("warnings")}
               className="relative p-2 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors"
@@ -475,8 +487,15 @@ export default function StudentDashboard() {
           </div>
         </header>
 
+        <div className="border-b border-gray-200 bg-white px-4 py-3 md:hidden">
+          <SystemStatusIndicators
+            camera={cameraStatus}
+            network={networkStatus}
+          />
+        </div>
+
         {/* Tab content */}
-        <main className="flex-1 overflow-auto p-6">
+        <main className="flex-1 overflow-auto p-4 sm:p-6">
 
           {/* ── OVERVIEW ── */}
           {activeTab === "overview" && (
@@ -522,7 +541,7 @@ export default function StudentDashboard() {
 
                 {/* Upcoming exams */}
                 <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
-                  <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 px-5 py-4">
                     <h3 className="text-sm font-semibold text-gray-800">Upcoming Exams</h3>
                     <button onClick={() => setActiveTab("exams")} className="text-xs font-medium text-blue-600 hover:underline flex items-center gap-1">
                       View all <ChevronRight className="h-3 w-3" />
@@ -627,15 +646,15 @@ export default function StudentDashboard() {
                       onClick={() => setExpandedExam(isExpanded ? null : exam.id)}
                       className="flex w-full items-center justify-between px-5 py-4 text-left"
                     >
-                      <div className="flex items-center gap-4">
+                      <div className="flex min-w-0 items-center gap-4">
                         <div
                           className="hidden sm:flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl text-white text-xs font-bold"
                           style={{ background: "#1a2d5a" }}
                         >
                           {exam.code.split(" ")[0].slice(0, 3)}
                         </div>
-                        <div>
-                          <div className="flex items-center gap-2">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
                             <span className="text-xs font-semibold text-gray-400 tracking-wide">{exam.code}</span>
                             <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${s.bg} ${s.text}`}>
                               <span className={`h-1.5 w-1.5 rounded-full ${s.dot}`} />
@@ -643,7 +662,7 @@ export default function StudentDashboard() {
                             </span>
                           </div>
                           <p className="text-sm font-semibold text-gray-900 mt-0.5">{exam.title}</p>
-                          <div className="flex items-center gap-3 mt-1">
+                          <div className="mt-1 flex flex-wrap items-center gap-3">
                             <span className="flex items-center gap-1 text-xs text-gray-400">
                               <CalendarDays className="h-3 w-3" />{exam.date}
                             </span>
@@ -785,16 +804,16 @@ export default function StudentDashboard() {
 
               {/* Results table */}
               <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
-                <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-                  <h3 className="text-sm font-semibold text-gray-800">Examination Results</h3>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-5 py-4">
+                    <h3 className="text-sm font-semibold text-gray-800">Examination Results</h3>
+                    <div className="flex w-full items-center gap-2 sm:w-auto">
                     <div className="relative">
                       <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
                       <input
                         value={searchResult}
                         onChange={e => setSearchResult(e.target.value)}
                         placeholder="Search..."
-                        className="rounded-lg border border-gray-200 bg-gray-50 pl-8 pr-3 py-1.5 text-xs focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-200 w-36"
+                          className="w-full rounded-lg border border-gray-200 bg-gray-50 py-1.5 pl-8 pr-3 text-xs focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-200 sm:w-36"
                       />
                     </div>
                     <button className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-100 transition-colors">
@@ -803,7 +822,8 @@ export default function StudentDashboard() {
                     </button>
                   </div>
                 </div>
-                <table className="w-full text-sm">
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[680px] text-sm">
                   <thead>
                     <tr className="bg-gray-50 text-left">
                       <th className="px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Course</th>
@@ -860,7 +880,8 @@ export default function StudentDashboard() {
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                  </table>
+                </div>
               </div>
             </div>
           )}
@@ -868,7 +889,7 @@ export default function StudentDashboard() {
           {/* ── WARNINGS TAB ── */}
           {activeTab === "warnings" && (
             <div className="flex flex-col gap-5">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-sm text-gray-500">
                   {unreadCount > 0 ? `You have ${unreadCount} unread notification${unreadCount > 1 ? "s" : ""}.` : "All notifications are read."}
                 </p>
@@ -1108,16 +1129,6 @@ export default function StudentDashboard() {
 }
 
 // ─── Helper components ────────────────────────────────────────────────────────
-function SysCheck({ icon, label, ok }: { icon: React.ReactNode; label: string; ok: boolean }) {
-  return (
-    <div className="flex items-center gap-1.5">
-      <span className={ok ? "text-emerald-500" : "text-red-400"}>{icon}</span>
-      <span className="text-xs text-gray-500">{label}</span>
-      <span className={`h-1.5 w-1.5 rounded-full ${ok ? "bg-emerald-400" : "bg-red-400"}`} />
-    </div>
-  )
-}
-
 function StatCard({ icon, label, value, sub, bg }: { icon: React.ReactNode; label: string; value: string | number; sub: string; bg: string }) {
   return (
     <div className={`flex flex-col gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-4`}>
