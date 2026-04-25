@@ -130,7 +130,7 @@ export default function OrientPage() {
         <div className="flex items-center gap-3">
           <ShieldCheck className="h-5 w-5 text-blue-300" />
           <div>
-            <p className="text-sm font-bold text-white leading-none">ProctorAI</p>
+            <p className="text-sm font-bold text-white leading-none">Proctoai</p>
             <p className="text-[10px] text-blue-300/70 mt-0.5">University of Dodoma</p>
           </div>
         </div>

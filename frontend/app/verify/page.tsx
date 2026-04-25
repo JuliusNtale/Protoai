@@ -263,7 +263,7 @@ export default function VerifyPage() {
       {/* ── Left step sidebar ── */}
       <aside className="hidden lg:flex flex-col justify-between w-72 xl:w-80 shrink-0 border-r border-white/5 px-8 py-10">
         <div className="flex flex-col gap-2">
-          <p className="text-[10px] font-semibold tracking-widest text-zinc-500 uppercase mb-1">ProctorAI</p>
+          <p className="text-[10px] font-semibold tracking-widest text-zinc-500 uppercase mb-1">Proctoai</p>
           <h2 className="text-lg font-semibold text-white leading-snug">Identity Verification</h2>
           <p className="text-xs text-zinc-500 leading-relaxed mt-1">
             Follow the on-screen instructions to verify your identity before accessing your exam.
@@ -345,7 +345,7 @@ export default function VerifyPage() {
 
       {/* Top label (mobile only) */}
       <div className="flex flex-col items-center gap-1 pt-4 lg:hidden">
-        <p className="text-xs font-medium tracking-widest text-zinc-500 uppercase">ProctorAI</p>
+        <p className="text-xs font-medium tracking-widest text-zinc-500 uppercase">Proctoai</p>
       </div>
 
       {/* Center — face + ring */}

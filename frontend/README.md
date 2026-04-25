@@ -27,12 +27,12 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 The authentication pages currently behave as follows:
 
 - **Sign In (`/`)**
-	- Uses **Registration Number** and **Password**.
+	- Uses **User Name** and **Password**.
 	- Role selection (Student / Lecturer / Administrator) is removed.
 	- Successful sign-in routes directly to the student dashboard.
 
 - **Sign Up (`/register`)**
-	- Uses **Full Name**, **Registration Number**, and **Password**.
+	- Uses **Full Name**, **User Name**, and **Password**.
 	- Email field is removed.
 	- After successful registration, user is logged in and routed to the dashboard.
 

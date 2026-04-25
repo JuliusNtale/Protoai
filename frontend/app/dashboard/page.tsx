@@ -237,7 +237,7 @@ export default function StudentDashboard() {
   function buildRulesPdf(examTitle: string) {
     const generatedAt = new Date().toLocaleString()
     const lines = [
-      "UNIVERSITY OF DODOMA - AI PROCTORING SYSTEM",
+      "UNIVERSITY OF DODOMA - PROCTOAI SYSTEM",
       "EXAM ORIENTATION AND RULES",
       "",
       `Exam: ${examTitle || "Selected Exam"}`,
@@ -353,7 +353,7 @@ export default function StudentDashboard() {
           <div className="flex items-center gap-2.5 px-2">
             <ShieldCheck className="h-6 w-6 text-blue-300" />
             <div>
-              <p className="text-sm font-bold text-white leading-none">ProctorAI</p>
+              <p className="text-sm font-bold text-white leading-none">Proctoai</p>
               <p className="text-[10px] text-blue-300/70 mt-0.5">University of Dodoma</p>
             </div>
           </div>

@@ -1,8 +1,9 @@
 "use client"
 
 import Link from "next/link"
+import Image from "next/image"
 import { useTheme } from "next-themes"
-import { Moon, Sun, ShieldCheck, Menu, X } from "lucide-react"
+import { Moon, Sun, Menu, X } from "lucide-react"
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -40,10 +41,10 @@ export function Navbar({ role = "guest", userName }: NavbarProps) {
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2.5 font-semibold text-foreground">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-            <ShieldCheck className="h-4 w-4 text-primary-foreground" />
+          <div className="flex h-8 w-8 overflow-hidden items-center justify-center rounded-lg bg-primary">
+            <Image src="/logo.png" alt="Proctoai Logo" width={32} height={32} className="object-cover" />
           </div>
-          <span className="text-lg tracking-tight">ProctorAI</span>
+          <span className="text-lg tracking-tight">Proctoai</span>
         </Link>
 
         {/* Desktop nav */}
