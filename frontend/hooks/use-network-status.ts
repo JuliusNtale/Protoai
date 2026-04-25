@@ -19,13 +19,15 @@ type BrowserConnection = {
   removeEventListener?: (type: "change", listener: () => void) => void
 }
 
+const INITIAL_NETWORK_STATUS: IndicatorStatus = {
+  label: "Checking",
+  detail: "Checking connection",
+  tone: "neutral",
+}
+
 function buildNetworkStatus(): IndicatorStatus {
   if (typeof navigator === "undefined") {
-    return {
-      label: "Network",
-      detail: "Checking connection",
-      tone: "neutral",
-    }
+    return INITIAL_NETWORK_STATUS
   }
 
   if (!navigator.onLine) {
@@ -80,7 +82,7 @@ function buildNetworkStatus(): IndicatorStatus {
 }
 
 export function useNetworkStatus() {
-  const [network, setNetwork] = useState<IndicatorStatus>(() => buildNetworkStatus())
+  const [network, setNetwork] = useState<IndicatorStatus>(INITIAL_NETWORK_STATUS)
 
   useEffect(() => {
     const updateStatus = () => setNetwork(buildNetworkStatus())

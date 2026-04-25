@@ -150,36 +150,6 @@ const CHART_DATA = RESULTS.map(r => ({ name: r.code.split(" ")[1], score: r.scor
 
 const WARNINGS = [
   {
-    id: "W1",
-    type: "error" as const,
-    title: "Multiple Face Detected",
-    message: "During your Database Systems exam on 20 Jan 2026, another face was detected in the camera frame at 10:42 AM. This has been flagged for review by the exam coordinator.",
-    exam: "CS 204 — Database Systems",
-    date: "20 Jan 2026, 10:42 AM",
-    read: true,
-    action: "Under Review",
-  },
-  {
-    id: "W2",
-    type: "error" as const,
-    title: "Tab Switch Detected",
-    message: "3 tab-switch events were recorded during your Database Systems exam. This is considered a violation of examination policy.",
-    exam: "CS 204 — Database Systems",
-    date: "20 Jan 2026, 10:55 AM",
-    read: true,
-    action: "Resolved",
-  },
-  {
-    id: "W3",
-    type: "warning" as const,
-    title: "Gaze Off-Screen Warning",
-    message: "Your gaze was detected as off-screen for more than 10 seconds during Linear Algebra. One warning was issued.",
-    exam: "MTH 101 — Linear Algebra",
-    date: "12 Jan 2026, 09:18 AM",
-    read: true,
-    action: "Noted",
-  },
-  {
     id: "W4",
     type: "info" as const,
     title: "Upcoming Exam Reminder",
