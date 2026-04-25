@@ -1,0 +1,69 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: proctoring_db
+      POSTGRES_USER: proctoring_user
+      POSTGRES_PASSWORD: proctoring_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U proctoring_user -d proctoring_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ./backend
+    ports:
+      - "5000:5000"
+    environment:
+      DATABASE_URL: postgresql://proctoring_user:proctoring_pass@postgres:5432/proctoring_db
+      JWT_SECRET: change-this-in-production-256-bit-secret
+      JWT_EXPIRY_HOURS: "8"
+      SMTP_HOST: smtp.gmail.com
+      SMTP_PORT: "587"
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      ADMIN_EMAIL: admin@udom.ac.tz
+      AI_SERVICE_URL: http://ai-service:8000
+      FLASK_ENV: development
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./storage:/app/storage
+
+  ai-service:
+    build: ./ai-service
+    ports:
+      - "8000:8000"
+    environment:
+      BACKEND_URL: http://backend:5000
+      MODELS_DIR: ./models
+      FACE_SIMILARITY_THRESHOLD: "0.6"
+      GAZE_AWAY_SECONDS: "5"
+      HEAD_TURNED_SECONDS: "3"
+      HEAD_YAW_THRESHOLD: "30"
+      HEAD_PITCH_THRESHOLD: "20"
+      FLASK_ENV: development
+    volumes:
+      - ./ai-service/models:/app/models
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:5000
+      NEXT_PUBLIC_WS_URL: http://localhost:8000
+    depends_on:
+      - backend
+      - ai-service
+
+volumes:
+  postgres_data:
