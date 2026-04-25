@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { SystemStatusIndicators } from "@/components/system-status-indicators"
+import { useNetworkStatus } from "@/hooks/use-network-status"
 import { CheckCircle2, Circle, Loader2 } from "lucide-react"
 
 // ─── phase machine ────────────────────────────────────────────────────────────
@@ -64,9 +66,15 @@ export default function VerifyPage() {
   const startRef = useRef<number | null>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
+  const networkStatus = useNetworkStatus()
 
   const phase = PHASE_SEQUENCE[phaseIndex]
   const isDone = phase === "done"
+  const cameraStatus = cameraReady
+    ? { label: "Ready", detail: "Camera is connected", tone: "good" as const, pulse: true }
+    : cameraError
+    ? { label: "Blocked", detail: cameraError, tone: "error" as const }
+    : { label: "Checking", detail: "Preparing camera access", tone: "neutral" as const }
 
   function stopCameraStream() {
     if (!streamRef.current) return
@@ -347,6 +355,13 @@ export default function VerifyPage() {
       <div className="flex flex-col items-center gap-1 pt-4 lg:hidden">
         <p className="text-xs font-medium tracking-widest text-zinc-500 uppercase">Proctoai</p>
       </div>
+
+      <SystemStatusIndicators
+        camera={cameraStatus}
+        network={networkStatus}
+        theme="dark"
+        className="mb-6 w-full max-w-3xl justify-center"
+      />
 
       {/* Center — face + ring */}
       <div className="flex flex-1 flex-col items-center justify-center gap-10">

@@ -20,8 +20,6 @@ import {
   FileText,
   Users,
   Monitor,
-  Wifi,
-  Camera,
   User,
   Mail,
   Phone,
@@ -45,6 +43,9 @@ import {
   RadialBar,
   Cell,
 } from "recharts"
+import { SystemStatusIndicators } from "@/components/system-status-indicators"
+import { useCameraStatus } from "@/hooks/use-camera-status"
+import { useNetworkStatus } from "@/hooks/use-network-status"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Tab = "overview" | "exams" | "results" | "warnings" | "settings"
@@ -223,6 +224,10 @@ export default function StudentDashboard() {
   const [searchResult, setSearchResult] = useState("")
   const [unreadCount, setUnreadCount] = useState(WARNINGS.filter(w => !w.read).length)
   const [warnings, setWarnings] = useState(WARNINGS)
+  const cameraStatus = useCameraStatus({
+    secureOriginMessage: "Camera needs HTTPS or localhost to work on the dashboard.",
+  })
+  const networkStatus = useNetworkStatus()
 
   function handleOpenStartExam(examTitle: string) {
     setSelectedExamTitle(examTitle)
@@ -454,11 +459,11 @@ export default function StudentDashboard() {
             <p className="mt-0.5 hidden text-xs text-gray-400 sm:block">{STUDENT.programme} — {STUDENT.year}</p>
           </div>
           <div className="flex items-center gap-4">
-            <div className="hidden md:flex items-center gap-3">
-              <SysCheck icon={<Camera className="h-3 w-3" />} label="Camera" ok />
-              <SysCheck icon={<Monitor className="h-3 w-3" />} label="Screen" ok />
-              <SysCheck icon={<Wifi className="h-3 w-3" />} label="Network" ok />
-            </div>
+            <SystemStatusIndicators
+              camera={cameraStatus}
+              network={networkStatus}
+              className="hidden md:flex"
+            />
             <button
               onClick={() => setActiveTab("warnings")}
               className="relative p-2 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors"
@@ -473,6 +478,13 @@ export default function StudentDashboard() {
             </button>
           </div>
         </header>
+
+        <div className="border-b border-gray-200 bg-white px-4 py-3 md:hidden">
+          <SystemStatusIndicators
+            camera={cameraStatus}
+            network={networkStatus}
+          />
+        </div>
 
         {/* Tab content */}
         <main className="flex-1 overflow-auto p-4 sm:p-6">
@@ -1109,16 +1121,6 @@ export default function StudentDashboard() {
 }
 
 // ─── Helper components ────────────────────────────────────────────────────────
-function SysCheck({ icon, label, ok }: { icon: React.ReactNode; label: string; ok: boolean }) {
-  return (
-    <div className="flex items-center gap-1.5">
-      <span className={ok ? "text-emerald-500" : "text-red-400"}>{icon}</span>
-      <span className="text-xs text-gray-500">{label}</span>
-      <span className={`h-1.5 w-1.5 rounded-full ${ok ? "bg-emerald-400" : "bg-red-400"}`} />
-    </div>
-  )
-}
-
 function StatCard({ icon, label, value, sub, bg }: { icon: React.ReactNode; label: string; value: string | number; sub: string; bg: string }) {
   return (
     <div className={`flex flex-col gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-4`}>

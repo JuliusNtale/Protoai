@@ -4,9 +4,7 @@ import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import {
   ShieldCheck,
-  Camera,
   Monitor,
-  Wifi,
   Clock,
   ChevronRight,
   BookOpen,
@@ -17,6 +15,9 @@ import {
   Info,
   Volume2,
 } from "lucide-react"
+import { SystemStatusIndicators } from "@/components/system-status-indicators"
+import { useCameraStatus } from "@/hooks/use-camera-status"
+import { useNetworkStatus } from "@/hooks/use-network-status"
 
 const ORIENT_SECONDS = 5 * 60 // 5 minutes
 
@@ -74,9 +75,7 @@ const SECTIONS = [
 ]
 
 const CHECKS = [
-  { icon: <Camera className="h-4 w-4" />,  label: "Webcam detected and active",       ok: true  },
   { icon: <Monitor className="h-4 w-4" />, label: "Screen recording enabled",          ok: true  },
-  { icon: <Wifi className="h-4 w-4" />,    label: "Network connection stable",          ok: true  },
   { icon: <Volume2 className="h-4 w-4" />, label: "No audio alerts detected",          ok: true  },
 ]
 
@@ -86,6 +85,10 @@ export default function OrientPage() {
   const [canSkip, setCanSkip] = useState(false)
   const [starting, setStarting] = useState(false)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const cameraStatus = useCameraStatus({
+    secureOriginMessage: "Camera needs HTTPS or localhost to work during orientation.",
+  })
+  const networkStatus = useNetworkStatus()
 
   useEffect(() => {
     // Allow "Start Now" immediately but show timer
@@ -143,16 +146,12 @@ export default function OrientPage() {
 
         {/* System checks */}
         <div className="flex items-center gap-3">
-          {CHECKS.map((c, i) => (
-            <div key={i} className="hidden lg:flex items-center gap-1">
-              <span className="text-emerald-400">{c.icon}</span>
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-            </div>
-          ))}
-          <div className="flex items-center gap-1.5 rounded-full bg-emerald-500/20 border border-emerald-400/30 px-2.5 py-1">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-[11px] font-semibold text-emerald-300">Monitoring Active</span>
-          </div>
+          <SystemStatusIndicators
+            camera={cameraStatus}
+            network={networkStatus}
+            theme="dark"
+            className="hidden xl:flex"
+          />
         </div>
       </header>
 
@@ -201,7 +200,12 @@ export default function OrientPage() {
           </div>
 
           {/* System check strip */}
-          <div className="flex flex-wrap gap-3 border-b border-gray-100 bg-gray-50 px-6 py-3">
+          <div className="flex flex-col gap-3 border-b border-gray-100 bg-gray-50 px-6 py-3">
+            <SystemStatusIndicators
+              camera={cameraStatus}
+              network={networkStatus}
+            />
+            <div className="flex flex-wrap gap-3">
             {CHECKS.map((c, i) => (
               <div key={i} className="flex items-center gap-1.5">
                 <span className="text-emerald-500">{c.icon}</span>
@@ -209,6 +213,7 @@ export default function OrientPage() {
                 <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
               </div>
             ))}
+            </div>
           </div>
 
           {/* Content */}
