@@ -4,6 +4,9 @@ import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { SystemStatusIndicators } from "@/components/system-status-indicators"
+import { useBrowserLockdown } from "@/hooks/use-browser-lockdown"
+import { useNetworkStatus } from "@/hooks/use-network-status"
 import { CheckCircle2, Circle, Loader2 } from "lucide-react"
 
 // ─── phase machine ────────────────────────────────────────────────────────────
@@ -60,13 +63,23 @@ export default function VerifyPage() {
   const [cameraError, setCameraError] = useState<string | null>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [fullscreenError, setFullscreenError] = useState<string | null>(null)
+  const [securityAlert, setSecurityAlert] = useState<string | null>(null)
   const rafRef = useRef<number | null>(null)
   const startRef = useRef<number | null>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
+  const networkStatus = useNetworkStatus()
+  const { devtoolsLikelyOpen } = useBrowserLockdown({
+    onBlockedAction: message => setSecurityAlert(message),
+  })
 
   const phase = PHASE_SEQUENCE[phaseIndex]
   const isDone = phase === "done"
+  const cameraStatus = cameraReady
+    ? { label: "Ready", detail: "Camera is connected", tone: "good" as const, pulse: true }
+    : cameraError
+    ? { label: "Blocked", detail: cameraError, tone: "error" as const }
+    : { label: "Checking", detail: "Preparing camera access", tone: "neutral" as const }
 
   function stopCameraStream() {
     if (!streamRef.current) return
@@ -263,7 +276,7 @@ export default function VerifyPage() {
       {/* ── Left step sidebar ── */}
       <aside className="hidden lg:flex flex-col justify-between w-72 xl:w-80 shrink-0 border-r border-white/5 px-8 py-10">
         <div className="flex flex-col gap-2">
-          <p className="text-[10px] font-semibold tracking-widest text-zinc-500 uppercase mb-1">ProctorAI</p>
+          <p className="text-[10px] font-semibold tracking-widest text-zinc-500 uppercase mb-1">Proctoai</p>
           <h2 className="text-lg font-semibold text-white leading-snug">Identity Verification</h2>
           <p className="text-xs text-zinc-500 leading-relaxed mt-1">
             Follow the on-screen instructions to verify your identity before accessing your exam.
@@ -345,8 +358,15 @@ export default function VerifyPage() {
 
       {/* Top label (mobile only) */}
       <div className="flex flex-col items-center gap-1 pt-4 lg:hidden">
-        <p className="text-xs font-medium tracking-widest text-zinc-500 uppercase">ProctorAI</p>
+        <p className="text-xs font-medium tracking-widest text-zinc-500 uppercase">Proctoai</p>
       </div>
+
+      <SystemStatusIndicators
+        camera={cameraStatus}
+        network={networkStatus}
+        theme="dark"
+        className="mb-6 w-full max-w-3xl justify-center"
+      />
 
       {/* Center — face + ring */}
       <div className="flex flex-1 flex-col items-center justify-center gap-10">
@@ -558,6 +578,28 @@ export default function VerifyPage() {
             >
               Enter Fullscreen
             </button>
+          </div>
+        </div>
+      )}
+
+      {(devtoolsLikelyOpen || securityAlert) && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/90 p-4">
+          <div className="w-full max-w-md rounded-2xl border border-red-500/30 bg-zinc-950 px-6 py-6 text-center">
+            <p className="text-base font-semibold text-white">Inspection Blocked</p>
+            <p className="mt-2 text-sm leading-relaxed text-zinc-300">
+              {devtoolsLikelyOpen
+                ? "Developer tools appear to be open. Close them before continuing verification."
+                : securityAlert}
+            </p>
+            {!devtoolsLikelyOpen && (
+              <button
+                type="button"
+                onClick={() => setSecurityAlert(null)}
+                className="mt-5 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-zinc-200"
+              >
+                Continue
+              </button>
+            )}
           </div>
         </div>
       )}

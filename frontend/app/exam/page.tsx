@@ -4,6 +4,10 @@ import { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Flag, ChevronLeft, ChevronRight, AlertTriangle, X, User } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useBrowserLockdown } from "@/hooks/use-browser-lockdown"
+import { SystemStatusIndicators } from "@/components/system-status-indicators"
+import { useNetworkStatus } from "@/hooks/use-network-status"
+import { Calculator } from "@/components/calculator"
 
 const questions = [
   {
@@ -239,10 +243,15 @@ export default function ExamPage() {
   const [leavingExam, setLeavingExam] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [fullscreenError, setFullscreenError] = useState<string | null>(null)
+  const [securityAlert, setSecurityAlert] = useState<string | null>(null)
   const [examCameraReady, setExamCameraReady] = useState(false)
   const [examCameraError, setExamCameraError] = useState<string | null>(null)
   const maxWarnings = 3
   const stats = useProctoringStats()
+  const networkStatus = useNetworkStatus()
+  const { devtoolsLikelyOpen } = useBrowserLockdown({
+    onBlockedAction: message => setSecurityAlert(message),
+  })
 
   async function requestFullscreenMode() {
     const element = document.documentElement
@@ -408,6 +417,11 @@ export default function ExamPage() {
       : stats.faceVisibility === "Partially Hidden"
       ? "text-orange-400"
       : "text-red-500"
+  const cameraStatus = examCameraReady
+    ? { label: "Ready", detail: "Camera is connected", tone: "good" as const, pulse: true }
+    : examCameraError
+    ? { label: "Blocked", detail: examCameraError, tone: "error" as const }
+    : { label: "Checking", detail: "Preparing camera access", tone: "neutral" as const }
 
   return (
     <div className="flex min-h-[100dvh] flex-col overflow-x-hidden bg-[#f4f5f7] text-gray-800" style={{ fontFamily: "var(--font-sans, system-ui, sans-serif)" }}>
@@ -432,6 +446,7 @@ export default function ExamPage() {
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3">
+            <Calculator allowed={true} />
             <button
               onClick={triggerWarning}
               className="hidden items-center gap-1.5 rounded border border-green-400/40 bg-green-500/20 px-2.5 py-1 text-[11px] font-medium text-green-300 transition-colors hover:bg-green-500/30 sm:flex"
@@ -448,6 +463,13 @@ export default function ExamPage() {
           </div>
         </div>
       </header>
+
+      <div className="border-b border-gray-200 bg-white px-3 py-2 sm:px-4">
+        <SystemStatusIndicators
+          camera={cameraStatus}
+          network={networkStatus}
+        />
+      </div>
 
       <div className="flex flex-1 overflow-hidden">
 
@@ -549,9 +571,13 @@ export default function ExamPage() {
             </div>
 
             {/* Question text */}
-            <p className="mb-6 text-sm font-medium text-gray-800 leading-relaxed max-w-2xl">
+            <p className="mb-4 text-sm font-medium text-gray-800 leading-relaxed max-w-2xl">
               {q.text}
             </p>
+
+            <div className="mb-6">
+              <ExplainQuestion questionText={q.text} />
+            </div>
 
             {/* Options */}
             <div className="flex flex-col gap-2 max-w-2xl">
@@ -828,6 +854,28 @@ export default function ExamPage() {
           </div>
         </div>
       )}
+
+      {(devtoolsLikelyOpen || securityAlert) && !leavingExam && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 p-4">
+          <div className="w-full max-w-md rounded-2xl border border-red-500/30 bg-zinc-950 px-6 py-6 text-center">
+            <p className="text-base font-semibold text-white">Inspection Blocked</p>
+            <p className="mt-2 text-sm leading-relaxed text-zinc-300">
+              {devtoolsLikelyOpen
+                ? "Developer tools appear to be open. Close them before continuing the exam."
+                : securityAlert}
+            </p>
+            {!devtoolsLikelyOpen && (
+              <button
+                type="button"
+                onClick={() => setSecurityAlert(null)}
+                className="mt-5 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-zinc-200"
+              >
+                Continue
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -837,6 +885,52 @@ function StatRow({ label, value, valueColor }: { label: string; value: string; v
     <div className="flex flex-col gap-0.5 py-2.5">
       <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{label}</span>
       <span className={cn("text-xs font-semibold", valueColor)}>{value}</span>
+    </div>
+  )
+}
+
+function ExplainQuestion({ questionText }: { questionText: string }) {
+  const [open, setOpen] = useState(false)
+
+  function buildHint(text: string) {
+    const lower = text.toLowerCase()
+
+    if (lower.includes("time complexity")) {
+      return "Compare the growth rates in the answer choices and match them to the algorithm's typical average-case performance."
+    }
+
+    if (lower.includes("protocol") || lower.includes("http") || lower.includes("tcp") || lower.includes("udp")) {
+      return "Focus on the primary responsibility of each protocol and eliminate choices that describe a different network layer behavior."
+    }
+
+    if (lower.includes("sql") || lower.includes("normal form") || lower.includes("database")) {
+      return "Identify the database concept being asked, then remove choices that are related but belong to another database topic."
+    }
+
+    if (lower.includes("operating system") || lower.includes("kernel") || lower.includes("deadlock")) {
+      return "Think about the operating system role or process state described, then match it to the formal definition."
+    }
+
+    return "Pick out the key concept in the question, remove obviously unrelated options first, then compare the remaining choices against the exact definition."
+  }
+
+  return (
+    <div className="max-w-2xl rounded-xl border border-blue-100 bg-blue-50/80 px-4 py-3">
+      <button
+        type="button"
+        onClick={() => setOpen(prev => !prev)}
+        className="flex items-center gap-2 text-left text-xs font-semibold uppercase tracking-[0.18em] text-blue-700"
+      >
+        <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-[11px] text-white">
+          ?
+        </span>
+        {open ? "Hide question guide" : "Show question guide"}
+      </button>
+      {open ? (
+        <p className="mt-3 text-sm leading-relaxed text-blue-900">
+          {buildHint(questionText)}
+        </p>
+      ) : null}
     </div>
   )
 }

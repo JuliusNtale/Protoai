@@ -20,8 +20,6 @@ import {
   FileText,
   Users,
   Monitor,
-  Wifi,
-  Camera,
   User,
   Mail,
   Phone,
@@ -45,6 +43,9 @@ import {
   RadialBar,
   Cell,
 } from "recharts"
+import { SystemStatusIndicators } from "@/components/system-status-indicators"
+import { useCameraStatus } from "@/hooks/use-camera-status"
+import { useNetworkStatus } from "@/hooks/use-network-status"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Tab = "overview" | "exams" | "results" | "warnings" | "settings"
@@ -149,36 +150,6 @@ const CHART_DATA = RESULTS.map(r => ({ name: r.code.split(" ")[1], score: r.scor
 
 const WARNINGS = [
   {
-    id: "W1",
-    type: "error" as const,
-    title: "Multiple Face Detected",
-    message: "During your Database Systems exam on 20 Jan 2026, another face was detected in the camera frame at 10:42 AM. This has been flagged for review by the exam coordinator.",
-    exam: "CS 204 — Database Systems",
-    date: "20 Jan 2026, 10:42 AM",
-    read: true,
-    action: "Under Review",
-  },
-  {
-    id: "W2",
-    type: "error" as const,
-    title: "Tab Switch Detected",
-    message: "3 tab-switch events were recorded during your Database Systems exam. This is considered a violation of examination policy.",
-    exam: "CS 204 — Database Systems",
-    date: "20 Jan 2026, 10:55 AM",
-    read: true,
-    action: "Resolved",
-  },
-  {
-    id: "W3",
-    type: "warning" as const,
-    title: "Gaze Off-Screen Warning",
-    message: "Your gaze was detected as off-screen for more than 10 seconds during Linear Algebra. One warning was issued.",
-    exam: "MTH 101 — Linear Algebra",
-    date: "12 Jan 2026, 09:18 AM",
-    read: true,
-    action: "Noted",
-  },
-  {
     id: "W4",
     type: "info" as const,
     title: "Upcoming Exam Reminder",
@@ -223,6 +194,10 @@ export default function StudentDashboard() {
   const [searchResult, setSearchResult] = useState("")
   const [unreadCount, setUnreadCount] = useState(WARNINGS.filter(w => !w.read).length)
   const [warnings, setWarnings] = useState(WARNINGS)
+  const cameraStatus = useCameraStatus({
+    secureOriginMessage: "Camera needs HTTPS or localhost to work on the dashboard.",
+  })
+  const networkStatus = useNetworkStatus()
   const [STUDENT, setSTUDENT] = useState<StudentProfile>({
     name: "",
     initials: "",
@@ -275,7 +250,7 @@ export default function StudentDashboard() {
   function buildRulesPdf(examTitle: string) {
     const generatedAt = new Date().toLocaleString()
     const lines = [
-      "UNIVERSITY OF DODOMA - AI PROCTORING SYSTEM",
+      "UNIVERSITY OF DODOMA - PROCTOAI SYSTEM",
       "EXAM ORIENTATION AND RULES",
       "",
       `Exam: ${examTitle || "Selected Exam"}`,
@@ -391,7 +366,7 @@ export default function StudentDashboard() {
           <div className="flex items-center gap-2.5 px-2">
             <ShieldCheck className="h-6 w-6 text-blue-300" />
             <div>
-              <p className="text-sm font-bold text-white leading-none">ProctorAI</p>
+              <p className="text-sm font-bold text-white leading-none">Proctoai</p>
               <p className="text-[10px] text-blue-300/70 mt-0.5">University of Dodoma</p>
             </div>
           </div>
@@ -492,11 +467,11 @@ export default function StudentDashboard() {
             <p className="mt-0.5 hidden text-xs text-gray-400 sm:block">{STUDENT.programme} — {STUDENT.year}</p>
           </div>
           <div className="flex items-center gap-4">
-            <div className="hidden md:flex items-center gap-3">
-              <SysCheck icon={<Camera className="h-3 w-3" />} label="Camera" ok />
-              <SysCheck icon={<Monitor className="h-3 w-3" />} label="Screen" ok />
-              <SysCheck icon={<Wifi className="h-3 w-3" />} label="Network" ok />
-            </div>
+            <SystemStatusIndicators
+              camera={cameraStatus}
+              network={networkStatus}
+              className="hidden md:flex"
+            />
             <button
               onClick={() => setActiveTab("warnings")}
               className="relative p-2 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors"
@@ -511,6 +486,13 @@ export default function StudentDashboard() {
             </button>
           </div>
         </header>
+
+        <div className="border-b border-gray-200 bg-white px-4 py-3 md:hidden">
+          <SystemStatusIndicators
+            camera={cameraStatus}
+            network={networkStatus}
+          />
+        </div>
 
         {/* Tab content */}
         <main className="flex-1 overflow-auto p-4 sm:p-6">
@@ -1147,16 +1129,6 @@ export default function StudentDashboard() {
 }
 
 // ─── Helper components ────────────────────────────────────────────────────────
-function SysCheck({ icon, label, ok }: { icon: React.ReactNode; label: string; ok: boolean }) {
-  return (
-    <div className="flex items-center gap-1.5">
-      <span className={ok ? "text-emerald-500" : "text-red-400"}>{icon}</span>
-      <span className="text-xs text-gray-500">{label}</span>
-      <span className={`h-1.5 w-1.5 rounded-full ${ok ? "bg-emerald-400" : "bg-red-400"}`} />
-    </div>
-  )
-}
-
 function StatCard({ icon, label, value, sub, bg }: { icon: React.ReactNode; label: string; value: string | number; sub: string; bg: string }) {
   return (
     <div className={`flex flex-col gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-4`}>

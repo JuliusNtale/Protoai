@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
+import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { Camera, CheckCircle, User, Hash, Lock, Eye, EyeOff, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -212,8 +213,13 @@ export default function RegisterPage() {
             <p className="text-xs font-semibold tracking-widest text-blue-300 uppercase mb-3">
               University of Dodoma
             </p>
+            <div className="flex items-center gap-2 mb-2">
+              <div className="flex h-10 w-10 overflow-hidden items-center justify-center rounded-xl bg-white shadow-lg">
+                <Image src="/logo.png" alt="Proctoai Logo" width={40} height={40} className="object-cover" />
+              </div>
+            </div>
             <h1 className="text-2xl font-bold leading-tight text-white">
-              AI Proctoring<br />System
+              Proctoai
             </h1>
             <p className="mt-2 text-xs text-blue-200/70 leading-relaxed">
               College of Information &amp; Virtual Education
