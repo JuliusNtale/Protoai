@@ -379,11 +379,11 @@ export default function StudentDashboard() {
   const failed   = RESULTS.filter(r => r.status === "fail").length
 
   return (
-    <div className="flex min-h-screen bg-[#f0f2f5]" style={{ fontFamily: "var(--font-sans, system-ui, sans-serif)" }}>
+    <div className="flex min-h-screen flex-col bg-[#f0f2f5] lg:flex-row" style={{ fontFamily: "var(--font-sans, system-ui, sans-serif)" }}>
 
       {/* ── Sidebar ── */}
       <aside
-        className="flex w-60 flex-shrink-0 flex-col justify-between py-6 px-4"
+        className="hidden w-60 flex-shrink-0 flex-col justify-between px-4 py-6 lg:flex"
         style={{ background: "#1a2d5a", minHeight: "100vh" }}
       >
         {/* Brand */}
@@ -446,13 +446,50 @@ export default function StudentDashboard() {
       {/* ── Main content ── */}
       <div className="flex flex-1 flex-col min-w-0">
 
+        <div className="border-b border-gray-200 bg-[#1a2d5a] px-4 py-3 text-white lg:hidden">
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold">{STUDENT.name}</p>
+              <p className="truncate text-[11px] text-blue-200/80">{STUDENT.regNo}</p>
+            </div>
+            <button
+              onClick={() => router.push("/")}
+              className="inline-flex items-center gap-1 rounded-md border border-white/20 px-2.5 py-1 text-xs font-medium text-white/90"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              Sign Out
+            </button>
+          </div>
+          <nav className="mt-3 flex gap-2 overflow-x-auto pb-1">
+            {navItems.map(item => (
+              <button
+                key={`mobile-${item.tab}`}
+                onClick={() => setActiveTab(item.tab)}
+                className={`inline-flex flex-shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                  activeTab === item.tab
+                    ? "border-white bg-white text-[#1a2d5a]"
+                    : "border-white/30 bg-white/5 text-blue-100"
+                }`}
+              >
+                {item.icon}
+                {item.label}
+                {item.tab === "warnings" && unreadCount > 0 && (
+                  <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">
+                    {unreadCount}
+                  </span>
+                )}
+              </button>
+            ))}
+          </nav>
+        </div>
+
         {/* Top header bar */}
-        <header className="flex items-center justify-between border-b border-gray-200 bg-white px-6 py-3.5">
+        <header className="flex items-center justify-between border-b border-gray-200 bg-white px-4 py-3.5 sm:px-6">
           <div>
             <h1 className="text-base font-semibold text-gray-900">
               {navItems.find(n => n.tab === activeTab)?.label}
             </h1>
-            <p className="text-xs text-gray-400 mt-0.5">{STUDENT.programme} — {STUDENT.year}</p>
+            <p className="mt-0.5 hidden text-xs text-gray-400 sm:block">{STUDENT.programme} — {STUDENT.year}</p>
           </div>
           <div className="flex items-center gap-4">
             <div className="hidden md:flex items-center gap-3">
@@ -476,7 +513,7 @@ export default function StudentDashboard() {
         </header>
 
         {/* Tab content */}
-        <main className="flex-1 overflow-auto p-6">
+        <main className="flex-1 overflow-auto p-4 sm:p-6">
 
           {/* ── OVERVIEW ── */}
           {activeTab === "overview" && (
@@ -522,7 +559,7 @@ export default function StudentDashboard() {
 
                 {/* Upcoming exams */}
                 <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
-                  <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 px-5 py-4">
                     <h3 className="text-sm font-semibold text-gray-800">Upcoming Exams</h3>
                     <button onClick={() => setActiveTab("exams")} className="text-xs font-medium text-blue-600 hover:underline flex items-center gap-1">
                       View all <ChevronRight className="h-3 w-3" />
@@ -627,15 +664,15 @@ export default function StudentDashboard() {
                       onClick={() => setExpandedExam(isExpanded ? null : exam.id)}
                       className="flex w-full items-center justify-between px-5 py-4 text-left"
                     >
-                      <div className="flex items-center gap-4">
+                      <div className="flex min-w-0 items-center gap-4">
                         <div
                           className="hidden sm:flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl text-white text-xs font-bold"
                           style={{ background: "#1a2d5a" }}
                         >
                           {exam.code.split(" ")[0].slice(0, 3)}
                         </div>
-                        <div>
-                          <div className="flex items-center gap-2">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
                             <span className="text-xs font-semibold text-gray-400 tracking-wide">{exam.code}</span>
                             <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${s.bg} ${s.text}`}>
                               <span className={`h-1.5 w-1.5 rounded-full ${s.dot}`} />
@@ -643,7 +680,7 @@ export default function StudentDashboard() {
                             </span>
                           </div>
                           <p className="text-sm font-semibold text-gray-900 mt-0.5">{exam.title}</p>
-                          <div className="flex items-center gap-3 mt-1">
+                          <div className="mt-1 flex flex-wrap items-center gap-3">
                             <span className="flex items-center gap-1 text-xs text-gray-400">
                               <CalendarDays className="h-3 w-3" />{exam.date}
                             </span>
@@ -785,16 +822,16 @@ export default function StudentDashboard() {
 
               {/* Results table */}
               <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
-                <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-                  <h3 className="text-sm font-semibold text-gray-800">Examination Results</h3>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-5 py-4">
+                    <h3 className="text-sm font-semibold text-gray-800">Examination Results</h3>
+                    <div className="flex w-full items-center gap-2 sm:w-auto">
                     <div className="relative">
                       <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
                       <input
                         value={searchResult}
                         onChange={e => setSearchResult(e.target.value)}
                         placeholder="Search..."
-                        className="rounded-lg border border-gray-200 bg-gray-50 pl-8 pr-3 py-1.5 text-xs focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-200 w-36"
+                          className="w-full rounded-lg border border-gray-200 bg-gray-50 py-1.5 pl-8 pr-3 text-xs focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-200 sm:w-36"
                       />
                     </div>
                     <button className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-100 transition-colors">
@@ -803,7 +840,8 @@ export default function StudentDashboard() {
                     </button>
                   </div>
                 </div>
-                <table className="w-full text-sm">
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[680px] text-sm">
                   <thead>
                     <tr className="bg-gray-50 text-left">
                       <th className="px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Course</th>
@@ -860,7 +898,8 @@ export default function StudentDashboard() {
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                  </table>
+                </div>
               </div>
             </div>
           )}
@@ -868,7 +907,7 @@ export default function StudentDashboard() {
           {/* ── WARNINGS TAB ── */}
           {activeTab === "warnings" && (
             <div className="flex flex-col gap-5">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-sm text-gray-500">
                   {unreadCount > 0 ? `You have ${unreadCount} unread notification${unreadCount > 1 ? "s" : ""}.` : "All notifications are read."}
                 </p>
