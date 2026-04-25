@@ -1,0 +1,12 @@
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.env
+models/*.onnx
+models/*.pt
+models/*.pkl
+models/embeddings/
+storage/
+*.log
+.pytest_cache/
