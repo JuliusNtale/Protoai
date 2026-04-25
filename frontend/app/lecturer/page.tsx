@@ -1212,20 +1212,20 @@ export default function LecturerPortal() {
     <div className="flex min-h-screen bg-background">
 
       {/* ── Sidebar ── */}
-      <aside className="hidden lg:flex flex-col w-64 xl:w-72 flex-shrink-0 border-r border-border bg-card">
+      <aside className="hidden lg:flex flex-col w-64 xl:w-72 flex-shrink-0 border-r border-border bg-card " style={{ background: "linear-gradient(175deg, #1a2d5a 0%, #162550 60%, #0f1c3d 100%)" }}>
         {/* Brand */}
         <div className="flex flex-col gap-1 border-b border-border px-6 py-5">
-          <p className="text-[10px] font-semibold tracking-widest text-muted-foreground uppercase">University of Dodoma</p>
+          <p className="text-[10px] font-semibold tracking-widest text-white uppercase">University of Dodoma</p>
           <h1 className="text-base font-bold text-foreground leading-tight">AI Proctoring System</h1>
-          <p className="text-xs text-muted-foreground">Lecturer Portal</p>
+          <p className="text-xs text-white">Lecturer Portal</p>
         </div>
 
         {/* Profile mini */}
-        <div className="flex items-center gap-3 border-b border-border px-6 py-4">
+        <div className="flex items-center gap-3  px-6 py-4">
           <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">AM</div>
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-foreground">Dr. Amani Msangi</p>
-            <p className="truncate text-xs text-muted-foreground">amani.msangi@udom.ac.tz</p>
+            <p className="truncate text-xs text-white">amani.msangi@udom.ac.tz</p>
           </div>
         </div>
 
@@ -1236,7 +1236,7 @@ export default function LecturerPortal() {
               className={cn("flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all text-left",
                 tab === item.tab
                   ? "bg-primary text-primary-foreground shadow-sm"
-                  : "text-muted-foreground hover:bg-accent hover:text-foreground")}>
+                  : "text-white hover:bg-accent hover:text-foreground")}>
               <item.icon className="h-4 w-4 flex-shrink-0" />
               {item.label}
               {item.tab === "monitor" && sessions.filter(s=>s.warnings>=3).length > 0 && (
