@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Flag, ChevronLeft, ChevronRight, AlertTriangle, X, User } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { Calculator } from "@/components/calculator"
 
 const questions = [
   {
@@ -432,6 +433,7 @@ export default function ExamPage() {
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3">
+            <Calculator />
             <button
               onClick={triggerWarning}
               className="hidden items-center gap-1.5 rounded border border-green-400/40 bg-green-500/20 px-2.5 py-1 text-[11px] font-medium text-green-300 transition-colors hover:bg-green-500/30 sm:flex"
@@ -549,9 +551,13 @@ export default function ExamPage() {
             </div>
 
             {/* Question text */}
-            <p className="mb-6 text-sm font-medium text-gray-800 leading-relaxed max-w-2xl">
+            <p className="mb-4 text-sm font-medium text-gray-800 leading-relaxed max-w-2xl">
               {q.text}
             </p>
+
+            <div className="mb-6">
+              <ExplainQuestion questionText={q.text} />
+            </div>
 
             {/* Options */}
             <div className="flex flex-col gap-2 max-w-2xl">
