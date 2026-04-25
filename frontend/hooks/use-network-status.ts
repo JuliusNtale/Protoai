@@ -40,10 +40,12 @@ function buildNetworkStatus(): IndicatorStatus {
   const effectiveType = connection?.effectiveType
   const downlink = connection?.downlink
 
+  const speedLabel = typeof downlink === "number" ? `${downlink.toFixed(1)} Mbps` : null
+
   if (connection?.saveData || effectiveType === "slow-2g" || effectiveType === "2g") {
     return {
       label: "Weak",
-      detail: "Connection is unstable",
+      detail: speedLabel ? `${speedLabel} — unstable` : "Connection is unstable",
       tone: "warning",
       pulse: true,
     }
@@ -52,7 +54,7 @@ function buildNetworkStatus(): IndicatorStatus {
   if (effectiveType === "3g") {
     return {
       label: "Fair",
-      detail: "Connection may fluctuate",
+      detail: speedLabel ? `${speedLabel} — may fluctuate` : "Connection may fluctuate",
       tone: "warning",
     }
   }
@@ -60,14 +62,18 @@ function buildNetworkStatus(): IndicatorStatus {
   if (typeof downlink === "number" && downlink < 1.5) {
     return {
       label: "Slow",
-      detail: "Bandwidth is limited",
+      detail: speedLabel ? `${speedLabel} — limited bandwidth` : "Bandwidth is limited",
       tone: "warning",
     }
   }
 
   return {
     label: "Stable",
-    detail: effectiveType ? `${effectiveType.toUpperCase()} connection` : "Connection is healthy",
+    detail: speedLabel
+      ? `${speedLabel}${effectiveType ? ` · ${effectiveType.toUpperCase()}` : ""}`
+      : effectiveType
+        ? `${effectiveType.toUpperCase()} connection`
+        : "Connection is healthy",
     tone: "good",
     pulse: true,
   }

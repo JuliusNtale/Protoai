@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { SystemStatusIndicators } from "@/components/system-status-indicators"
+import { useBrowserLockdown } from "@/hooks/use-browser-lockdown"
 import { useNetworkStatus } from "@/hooks/use-network-status"
 import { CheckCircle2, Circle, Loader2 } from "lucide-react"
 
@@ -62,11 +63,15 @@ export default function VerifyPage() {
   const [cameraError, setCameraError] = useState<string | null>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [fullscreenError, setFullscreenError] = useState<string | null>(null)
+  const [securityAlert, setSecurityAlert] = useState<string | null>(null)
   const rafRef = useRef<number | null>(null)
   const startRef = useRef<number | null>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const networkStatus = useNetworkStatus()
+  const { devtoolsLikelyOpen } = useBrowserLockdown({
+    onBlockedAction: message => setSecurityAlert(message),
+  })
 
   const phase = PHASE_SEQUENCE[phaseIndex]
   const isDone = phase === "done"
@@ -573,6 +578,28 @@ export default function VerifyPage() {
             >
               Enter Fullscreen
             </button>
+          </div>
+        </div>
+      )}
+
+      {(devtoolsLikelyOpen || securityAlert) && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/90 p-4">
+          <div className="w-full max-w-md rounded-2xl border border-red-500/30 bg-zinc-950 px-6 py-6 text-center">
+            <p className="text-base font-semibold text-white">Inspection Blocked</p>
+            <p className="mt-2 text-sm leading-relaxed text-zinc-300">
+              {devtoolsLikelyOpen
+                ? "Developer tools appear to be open. Close them before continuing verification."
+                : securityAlert}
+            </p>
+            {!devtoolsLikelyOpen && (
+              <button
+                type="button"
+                onClick={() => setSecurityAlert(null)}
+                className="mt-5 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-zinc-200"
+              >
+                Continue
+              </button>
+            )}
           </div>
         </div>
       )}

@@ -1,6 +1,8 @@
 "use client"
 
 import { Camera, ShieldCheck, Wifi } from "lucide-react"
+
+const S = "h-3 w-3"
 import { cn } from "@/lib/utils"
 import type { IndicatorStatus } from "@/hooks/use-network-status"
 
@@ -77,27 +79,28 @@ function StatusChip({
   theme: "light" | "dark"
 }) {
   return (
-    <div className={cn("flex min-w-[126px] items-center gap-2 rounded-xl border px-3 py-2", toneClasses(status.tone, theme))}>
-      <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-white/10">
-        {icon}
-      </div>
-      <div className="min-w-0">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] opacity-70">{title}</p>
-        <div className="flex items-center gap-1.5">
-          <span className="truncate text-xs font-semibold">{status.label}</span>
-          <span
-            className={cn(
-              "h-2 w-2 flex-shrink-0 rounded-full",
-              status.tone === "good" && "bg-emerald-400",
-              status.tone === "warning" && "bg-amber-400",
-              status.tone === "error" && "bg-red-400",
-              status.tone === "neutral" && "bg-slate-400",
-              status.pulse && "animate-pulse"
-            )}
-          />
-        </div>
-        <p className="truncate text-[11px] opacity-80">{status.detail}</p>
-      </div>
+    <div
+      className={cn(
+        "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium",
+        toneClasses(status.tone, theme),
+      )}
+      title={`${title}: ${status.detail}`}
+    >
+      <span className="flex-shrink-0 opacity-80">{icon}</span>
+      <span className="font-semibold">{status.label}</span>
+      {status.detail && (
+        <span className="hidden sm:inline opacity-60 text-[11px]">&mdash; {status.detail}</span>
+      )}
+      <span
+        className={cn(
+          "h-1.5 w-1.5 flex-shrink-0 rounded-full",
+          status.tone === "good"    && "bg-emerald-400",
+          status.tone === "warning" && "bg-amber-400",
+          status.tone === "error"   && "bg-red-400",
+          status.tone === "neutral" && "bg-slate-400",
+          status.pulse && "animate-pulse",
+        )}
+      />
     </div>
   )
 }
@@ -113,9 +116,9 @@ export function SystemStatusIndicators({
 
   return (
     <div className={cn("flex flex-wrap gap-2", className)}>
-      <StatusChip icon={<Camera className="h-4 w-4" />} title="Camera" status={camera} theme={theme} />
-      <StatusChip icon={<Wifi className="h-4 w-4" />} title="Network" status={network} theme={theme} />
-      <StatusChip icon={<ShieldCheck className="h-4 w-4" />} title="Condition" status={statusCondition} theme={theme} />
+      <StatusChip icon={<Camera className={S} />} title="Camera" status={camera} theme={theme} />
+      <StatusChip icon={<Wifi className={S} />} title="Network" status={network} theme={theme} />
+      <StatusChip icon={<ShieldCheck className={S} />} title="Condition" status={statusCondition} theme={theme} />
     </div>
   )
 }

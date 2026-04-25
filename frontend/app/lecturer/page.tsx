@@ -9,14 +9,15 @@ import {
   GripVertical, X, Search, Filter, Download, AlertTriangle,
   TrendingUp, TrendingDown, Award, Clock, UserCheck, UserX,
   ShieldAlert, Wifi, WifiOff, Activity, ChevronRight, MoreVertical,
-  FileText, Send, RefreshCw,
+  FileText, Send, RefreshCw, Calculator,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   MOCK_EXAMS, MOCK_STUDENTS, MOCK_RESULTS, MOCK_MONITORING,
+  MOCK_LECTURERS, MOCK_SUBJECTS,
   type Exam, type Student, type ExamResult, type MonitoringSession,
   type Question, type QuestionType, type Option,
-  gradeColor, scorePercent,
+  gradeColor, scorePercent, lecturerName, subjectLabel,
 } from "./data"
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -179,8 +180,11 @@ function ExamsTab({ exams, setExams }: { exams: Exam[]; setExams: (e: Exam[]) =>
   const [examDate, setExamDate]         = useState("")
   const [examTime, setExamTime]         = useState("")
   const [examMarks, setExamMarks]       = useState("100")
-  const [examPassmark, setExamPassmark] = useState("45")
-  const [questions, setQuestions]       = useState<Question[]>([newMCQ()])
+  const [examPassmark, setExamPassmark]       = useState("45")
+  const [allowCalculator, setAllowCalculator] = useState(false)
+  const [creatorId,  setCreatorId]            = useState("l1")
+  const [supervisorId, setSupervisorId]       = useState("l1")
+  const [questions, setQuestions]             = useState<Question[]>([newMCQ()])
   const [expandedQ, setExpandedQ]       = useState<string | null>(null)
   const [saving, setSaving]             = useState(false)
   const [viewExam, setViewExam]         = useState<Exam | null>(null)
@@ -212,12 +216,14 @@ function ExamsTab({ exams, setExams }: { exams: Exam[]; setExams: (e: Exam[]) =>
         date: examDate || "TBD", time: examTime || "09:00",
         totalMarks: Number(examMarks), passmark: Number(examPassmark),
         students: 0, submitted: 0, status, questions,
+        allowCalculator, creatorId, supervisorId,
       }
       setExams([newExam, ...exams])
       setSaving(false)
       setBuilderOpen(false)
       setExamTitle(""); setExamCourse(""); setExamCode(""); setExamDuration("60")
       setExamDate(""); setExamTime(""); setExamMarks("100"); setExamPassmark("45")
+      setAllowCalculator(false); setCreatorId("l1"); setSupervisorId("l1")
       setQuestions([newMCQ()])
     }, 800)
   }
@@ -245,6 +251,20 @@ function ExamsTab({ exams, setExams }: { exams: Exam[]; setExams: (e: Exam[]) =>
         </Button>
       </div>
 
+      {/* Subjects this lecturer teaches */}
+      <div className="rounded-xl border border-border bg-card px-4 py-3">
+        <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Subjects I Teach</p>
+        <div className="flex flex-wrap gap-2">
+          {MOCK_SUBJECTS.filter(s => s.lecturerIds.includes("l1")).map(s => (
+            <div key={s.id} className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-1.5">
+              <span className="font-mono text-[11px] font-bold text-primary">{s.code}</span>
+              <span className="text-xs text-foreground">{s.name}</span>
+              <span className="text-[10px] text-muted-foreground">&bull; {s.lecturerIds.length} lecturer{s.lecturerIds.length > 1 ? "s" : ""}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* Exam cards */}
       <div className="flex flex-col gap-3">
         {filtered.map(exam => (
@@ -264,6 +284,21 @@ function ExamsTab({ exams, setExams }: { exams: Exam[]; setExams: (e: Exam[]) =>
                   <span className="flex items-center gap-1"><Users className="h-3 w-3" />{exam.students} enrolled</span>
                   <span>{exam.date} &bull; {exam.time}</span>
                   <span>{exam.questions.length} questions &bull; {exam.totalMarks} marks</span>
+                  <span className="flex items-center gap-1 text-muted-foreground/80">
+                    <FileText className="h-3 w-3" />Created by {lecturerName(exam.creatorId)}
+                  </span>
+                  <span className="flex items-center gap-1 text-muted-foreground/80">
+                    <UserCheck className="h-3 w-3" />Supervised by {lecturerName(exam.supervisorId)}
+                  </span>
+                  {exam.allowCalculator ? (
+                    <span className="flex items-center gap-1 rounded-full border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">
+                      <Calculator className="h-3 w-3" />Calculator allowed
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1 rounded-full border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 px-2 py-0.5 text-[10px] font-semibold text-red-700 dark:text-red-400">
+                      <Calculator className="h-3 w-3" />No calculator
+                    </span>
+                  )}
                 </div>
               </div>
               {/* Progress bar for completion */}
@@ -309,6 +344,14 @@ function ExamsTab({ exams, setExams }: { exams: Exam[]; setExams: (e: Exam[]) =>
               <div>
                 <h2 className="font-bold text-foreground">{viewExam.title}</h2>
                 <p className="text-xs text-muted-foreground">{viewExam.courseCode} &bull; {viewExam.date} &bull; {viewExam.duration} min</p>
+                <div className="mt-1 flex flex-wrap gap-3">
+                  <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                    <FileText className="h-3 w-3" />Created by <strong className="text-foreground">{lecturerName(viewExam.creatorId)}</strong>
+                  </span>
+                  <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                    <UserCheck className="h-3 w-3" />Supervised by <strong className="text-foreground">{lecturerName(viewExam.supervisorId)}</strong>
+                  </span>
+                </div>
               </div>
               <button onClick={() => setViewExam(null)} className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent">
                 <X className="h-5 w-5" />
@@ -377,6 +420,52 @@ function ExamsTab({ exams, setExams }: { exams: Exam[]; setExams: (e: Exam[]) =>
                         className="rounded-lg border border-input bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20" />
                     </div>
                   ))}
+                </div>
+
+                {/* Creator + Supervisor row */}
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-medium text-muted-foreground">Created By</label>
+                    <select value={creatorId} onChange={e => setCreatorId(e.target.value)}
+                      className="rounded-lg border border-input bg-card px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20">
+                      {MOCK_LECTURERS.map(l => (
+                        <option key={l.id} value={l.id}>{l.name} ({l.staffId})</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-medium text-muted-foreground">Supervised / Invigilated By</label>
+                    <select value={supervisorId} onChange={e => setSupervisorId(e.target.value)}
+                      className="rounded-lg border border-input bg-card px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20">
+                      {MOCK_LECTURERS.map(l => (
+                        <option key={l.id} value={l.id}>{l.name} ({l.staffId})</option>
+                      ))}
+                    </select>
+                    <p className="text-[10px] text-muted-foreground">Can be a different lecturer from the creator</p>
+                  </div>
+                </div>
+
+                {/* Calculator permission toggle */}
+                <div className="flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3">
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-sm font-medium text-foreground">Allow Scientific Calculator</span>
+                    <span className="text-xs text-muted-foreground">Students will see a Casio fx-991 calculator during this exam</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setAllowCalculator(v => !v)}
+                    className={cn(
+                      "relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2",
+                      allowCalculator ? "bg-primary" : "bg-muted"
+                    )}
+                    role="switch"
+                    aria-checked={allowCalculator}
+                  >
+                    <span className={cn(
+                      "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200",
+                      allowCalculator ? "translate-x-5" : "translate-x-0"
+                    )} />
+                  </button>
                 </div>
               </div>
 

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Flag, ChevronLeft, ChevronRight, AlertTriangle, X, User } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useBrowserLockdown } from "@/hooks/use-browser-lockdown"
 import { SystemStatusIndicators } from "@/components/system-status-indicators"
 import { useNetworkStatus } from "@/hooks/use-network-status"
 import { Calculator } from "@/components/calculator"
@@ -242,11 +243,15 @@ export default function ExamPage() {
   const [leavingExam, setLeavingExam] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [fullscreenError, setFullscreenError] = useState<string | null>(null)
+  const [securityAlert, setSecurityAlert] = useState<string | null>(null)
   const [examCameraReady, setExamCameraReady] = useState(false)
   const [examCameraError, setExamCameraError] = useState<string | null>(null)
   const maxWarnings = 3
   const stats = useProctoringStats()
   const networkStatus = useNetworkStatus()
+  const { devtoolsLikelyOpen } = useBrowserLockdown({
+    onBlockedAction: message => setSecurityAlert(message),
+  })
 
   async function requestFullscreenMode() {
     const element = document.documentElement
@@ -441,7 +446,7 @@ export default function ExamPage() {
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3">
-            <Calculator />
+            <Calculator allowed={true} />
             <button
               onClick={triggerWarning}
               className="hidden items-center gap-1.5 rounded border border-green-400/40 bg-green-500/20 px-2.5 py-1 text-[11px] font-medium text-green-300 transition-colors hover:bg-green-500/30 sm:flex"
@@ -846,6 +851,28 @@ export default function ExamPage() {
             >
               Enter Fullscreen
             </button>
+          </div>
+        </div>
+      )}
+
+      {(devtoolsLikelyOpen || securityAlert) && !leavingExam && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 p-4">
+          <div className="w-full max-w-md rounded-2xl border border-red-500/30 bg-zinc-950 px-6 py-6 text-center">
+            <p className="text-base font-semibold text-white">Inspection Blocked</p>
+            <p className="mt-2 text-sm leading-relaxed text-zinc-300">
+              {devtoolsLikelyOpen
+                ? "Developer tools appear to be open. Close them before continuing the exam."
+                : securityAlert}
+            </p>
+            {!devtoolsLikelyOpen && (
+              <button
+                type="button"
+                onClick={() => setSecurityAlert(null)}
+                className="mt-5 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-zinc-200"
+              >
+                Continue
+              </button>
+            )}
           </div>
         </div>
       )}

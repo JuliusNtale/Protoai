@@ -200,20 +200,18 @@ export default function OrientPage() {
           </div>
 
           {/* System check strip */}
-          <div className="flex flex-col gap-3 border-b border-gray-100 bg-gray-50 px-6 py-3">
+          <div className="flex flex-wrap items-center gap-3 border-b border-gray-100 bg-gray-50 px-6 py-2.5">
             <SystemStatusIndicators
               camera={cameraStatus}
               network={networkStatus}
             />
-            <div className="flex flex-wrap gap-3">
             {CHECKS.map((c, i) => (
-              <div key={i} className="flex items-center gap-1.5">
-                <span className="text-emerald-500">{c.icon}</span>
-                <span className="text-xs text-gray-600">{c.label}</span>
-                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+              <div key={i} className="flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1">
+                <span className="text-emerald-500 [&>svg]:h-3 [&>svg]:w-3">{c.icon}</span>
+                <span className="text-[11px] font-medium text-emerald-700">{c.label}</span>
+                <CheckCircle2 className="h-3 w-3 text-emerald-500" />
               </div>
             ))}
-            </div>
           </div>
 
           {/* Content */}

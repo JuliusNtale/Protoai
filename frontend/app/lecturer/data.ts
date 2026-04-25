@@ -1,5 +1,49 @@
 // ─── Shared mock data & types for the Lecturer portal ─────────────────────────
 
+// ── Lecturer & Subject (many-to-many) ────────────────────────────────────────
+export interface Lecturer {
+  id: string
+  name: string
+  staffId: string
+  email: string
+  department: string
+  subjectIds: string[]   // subjects this lecturer teaches
+}
+
+export interface Subject {
+  id: string
+  code: string
+  name: string
+  programme: string
+  lecturerIds: string[]  // lecturers teaching this subject
+}
+
+export const MOCK_LECTURERS: Lecturer[] = [
+  { id: "l1", name: "Dr. Amina Rajabu",   staffId: "UDOM/STAFF/CS/001", email: "a.rajabu@udom.ac.tz",  department: "Computer Science", subjectIds: ["s1","s2","s3"] },
+  { id: "l2", name: "Mr. Salim Kombo",    staffId: "UDOM/STAFF/CS/002", email: "s.kombo@udom.ac.tz",   department: "Computer Science", subjectIds: ["s1","s4"] },
+  { id: "l3", name: "Dr. Patricia Mwale", staffId: "UDOM/STAFF/IT/003", email: "p.mwale@udom.ac.tz",   department: "Information Technology", subjectIds: ["s2","s5"] },
+  { id: "l4", name: "Mr. Hassan Khamis",  staffId: "UDOM/STAFF/CS/004", email: "h.khamis@udom.ac.tz",  department: "Computer Science", subjectIds: ["s3","s4","s5"] },
+]
+
+export const MOCK_SUBJECTS: Subject[] = [
+  { id: "s1", code: "CS401", name: "Advanced Algorithms",  programme: "BSc Computer Science",      lecturerIds: ["l1","l2"] },
+  { id: "s2", code: "CS202", name: "Data Structures",      programme: "BSc Computer Science",      lecturerIds: ["l1","l3"] },
+  { id: "s3", code: "CS303", name: "Database Systems",     programme: "BSc Computer Science",      lecturerIds: ["l1","l4"] },
+  { id: "s4", code: "CS305", name: "Operating Systems",    programme: "BSc Computer Science",      lecturerIds: ["l2","l4"] },
+  { id: "s5", code: "IT201", name: "Network Fundamentals", programme: "BSc Information Technology",lecturerIds: ["l3","l4"] },
+]
+
+// Helper — get lecturer display name by id
+export function lecturerName(id: string): string {
+  return MOCK_LECTURERS.find(l => l.id === id)?.name ?? "Unknown"
+}
+
+// Helper — get subject display label by code
+export function subjectLabel(code: string): string {
+  const s = MOCK_SUBJECTS.find(s => s.code === code)
+  return s ? `${s.code} — ${s.name}` : code
+}
+
 export type ExamStatus = "Draft" | "Scheduled" | "Live" | "Completed"
 export type QuestionType = "mcq" | "truefalse"
 export type StudentStatus = "Active" | "Suspended" | "Graduated"
@@ -33,6 +77,9 @@ export interface Exam {
   submitted: number
   status: ExamStatus
   questions: Question[]
+  allowCalculator: boolean
+  creatorId: string       // lecturer who created the exam
+  supervisorId: string    // lecturer supervising/invigilating (may differ)
 }
 
 export interface Student {
@@ -96,6 +143,9 @@ export const MOCK_EXAMS: Exam[] = [
     students: 48,
     submitted: 42,
     status: "Completed",
+    allowCalculator: true,
+    creatorId: "l1",
+    supervisorId: "l2",
     questions: [
       {
         id: "q1", type: "mcq", text: "Which of the following best describes the time complexity of QuickSort in the average case?",
@@ -127,6 +177,9 @@ export const MOCK_EXAMS: Exam[] = [
     students: 56,
     submitted: 0,
     status: "Scheduled",
+    allowCalculator: false,
+    creatorId: "l1",
+    supervisorId: "l3",
     questions: [],
   },
   {
@@ -142,6 +195,9 @@ export const MOCK_EXAMS: Exam[] = [
     students: 0,
     submitted: 0,
     status: "Draft",
+    allowCalculator: false,
+    creatorId: "l4",
+    supervisorId: "l4",
     questions: [],
   },
   {
@@ -157,6 +213,9 @@ export const MOCK_EXAMS: Exam[] = [
     students: 38,
     submitted: 38,
     status: "Completed",
+    allowCalculator: true,
+    creatorId: "l2",
+    supervisorId: "l4",
     questions: [],
   },
 ]
