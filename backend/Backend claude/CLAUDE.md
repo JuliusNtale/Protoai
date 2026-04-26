@@ -1,7 +1,7 @@
 # AI-Based Online Examination Proctoring System
 
 > University of Dodoma · College of Informatics and Virtual Education
-> Department of Computer Science and Engineering · Final Year Project 2025/26
+> Department of Computer Science and Engineering · Final Year Project 2026/26
 > Supervisor: Dr. Mohamed Dewa
 > Repository: https://github.com/victorjudysen/ai-exam-proctoring-system
 
