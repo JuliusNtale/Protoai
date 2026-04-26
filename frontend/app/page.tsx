@@ -106,7 +106,7 @@ export default function LoginPage() {
 
         {/* Footer version */}
         <p className="relative z-10 text-[10px] text-blue-300/40 tracking-wide">
-          &copy; 2025 University of Dodoma &middot; v1.0
+          &copy; 2026 University of Dodoma &middot; v1.0
         </p>
       </aside>
 
