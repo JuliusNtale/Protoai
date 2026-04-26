@@ -6,6 +6,7 @@ import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { Camera, CheckCircle, User, Hash, Lock, Eye, EyeOff, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { getApiPath } from "@/lib/api-url"
 
 const features = [
   { label: "Create your exam identity in one flow" },
@@ -164,7 +165,7 @@ export default function RegisterPage() {
     setError(null)
 
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/register`, {
+      const res = await fetch(getApiPath("/auth/register"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -188,7 +189,7 @@ export default function RegisterPage() {
 
       router.push("/dashboard")
     } catch {
-      setError("Unable to connect to the server. Please try again.")
+      setError("Unable to connect to the server. Check the API URL or production CORS settings, then try again.")
       setLoading(false)
     }
   }

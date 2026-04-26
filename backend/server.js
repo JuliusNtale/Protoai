@@ -13,18 +13,28 @@ const imageRoutes = require('./routes/images');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+const extraOrigins = (process.env.CORS_ORIGINS || "")
+  .split(",")
+  .map(origin => origin.trim())
+  .filter(Boolean);
 
-app.use(helmet());
-const allowedOrigins = [
+const defaultOrigins = [
   'http://localhost:3000',
   'http://localhost:8000',
   process.env.FRONTEND_URL,
 ].filter(Boolean);
 
+const corsOrigins = [...new Set([...defaultOrigins, ...extraOrigins])];
+
+app.use(helmet());
 app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
-    callback(new Error('Not allowed by CORS'));
+  origin(origin, callback) {
+    if (!origin || corsOrigins.includes(origin)) {
+      callback(null, true);
+      return;
+    }
+
+    callback(new Error(`CORS blocked for origin: ${origin}`));
   },
   credentials: true
 }));

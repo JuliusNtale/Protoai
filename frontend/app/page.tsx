@@ -5,6 +5,7 @@ import Link from "next/link"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { Eye, EyeOff, ScanFace, CheckCircle } from "lucide-react"
+import { getApiPath } from "@/lib/api-url"
 
 const features = [
   { label: "Face verification before every exam session" },
@@ -27,7 +28,7 @@ export default function LoginPage() {
     setError(null)
 
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/login`, {
+      const res = await fetch(getApiPath("/auth/login"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ registration_number: regNum, password }),
@@ -53,7 +54,7 @@ export default function LoginPage() {
         router.push("/dashboard")
       }
     } catch {
-      setError("Unable to connect to the server. Please try again.")
+      setError("Unable to connect to the server. Check the API URL or production CORS settings, then try again.")
       setLoading(false)
     }
   }
