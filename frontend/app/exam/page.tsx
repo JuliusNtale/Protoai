@@ -432,7 +432,7 @@ export default function ExamPage() {
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="min-w-0">
             <span className="block truncate text-sm font-semibold leading-tight text-white">Advanced Algorithms in Computer Science</span>
-            <span className="mt-0.5 block text-[10px] text-blue-200/70">Duration: 2 hrs &nbsp;&middot;&nbsp; 24 February 2025</span>
+            <span className="mt-0.5 block text-[10px] text-blue-200/70">Duration: 2 hrs &nbsp;&middot;&nbsp; 24 February 2026</span>
           </div>
 
           <div className="order-3 flex w-full flex-col items-start sm:order-none sm:w-auto sm:items-center">

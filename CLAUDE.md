@@ -1,7 +1,7 @@
 # AI-Based Online Examination Proctoring System
 ## Claude Code Context — Read This First
 
-**University of Dodoma | FYP 2025/26 | Supervisor: Dr. Mohamed Dewa**
+**University of Dodoma | FYP 2026/26 | Supervisor: Dr. Mohamed Dewa**
 **Repository:** https://github.com/victorjudysen/ai-exam-proctoring-system
 
 ---

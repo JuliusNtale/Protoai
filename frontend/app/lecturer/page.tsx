@@ -79,7 +79,7 @@ function OverviewTab({ exams, results, students, setTab }: {
           <div>
             <h2 className="text-xl font-bold text-foreground">Welcome back, Dr. Amani Msangi</h2>
             <p className="mt-1 text-sm text-muted-foreground">College of Informatics &amp; Virtual Education &mdash; University of Dodoma</p>
-            <p className="mt-0.5 text-xs text-muted-foreground">Friday, 25 April 2025</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">Friday, 25 April 2026</p>
           </div>
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 px-3 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">
@@ -405,7 +405,7 @@ function ExamsTab({ exams, setExams }: { exams: Exam[]; setExams: (e: Exam[]) =>
                 <h3 className="text-sm font-semibold text-foreground">Exam Details</h3>
                 <div className="grid gap-3 sm:grid-cols-2">
                   {[
-                    { label:"Exam Title", value:examTitle, set:setExamTitle, placeholder:"e.g. Final Exam 2025", span:true },
+                    { label:"Exam Title", value:examTitle, set:setExamTitle, placeholder:"e.g. Final Exam 2026", span:true },
                     { label:"Course Name", value:examCourse, set:setExamCourse, placeholder:"e.g. Advanced Algorithms" },
                     { label:"Course Code", value:examCode, set:setExamCode, placeholder:"e.g. CS401" },
                     { label:"Duration (min)", value:examDuration, set:setExamDuration, placeholder:"60", type:"number" },
@@ -1267,7 +1267,7 @@ export default function LecturerPortal() {
         <header className="flex flex-shrink-0 items-center justify-between border-b border-border bg-card px-6 py-3">
           <div>
             <h2 className="text-base font-semibold text-foreground">{NAV.find(n=>n.tab===tab)?.label}</h2>
-            <p className="text-xs text-muted-foreground">Academic Year 2024/2025 &mdash; Semester 2</p>
+            <p className="text-xs text-muted-foreground">Academic Year 2024/2026 &mdash; Semester 2</p>
           </div>
           <div className="flex items-center gap-3">
             {/* Notification bell */}
