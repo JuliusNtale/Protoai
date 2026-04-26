@@ -45,7 +45,14 @@ export default function LoginPage() {
       localStorage.setItem("token", data.token)
       localStorage.setItem("user", JSON.stringify(data.user))
 
-      router.push("/dashboard")
+      const role = data.user?.role
+      if (role === "lecturer") {
+        router.push("/lecturer")
+      } else if (role === "administrator") {
+        router.push("/admin")
+      } else {
+        router.push("/dashboard")
+      }
     } catch {
       setError("Unable to connect to the server. Check the API URL or production CORS settings, then try again.")
       setLoading(false)
