@@ -8,10 +8,14 @@ const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-mono" });
 
 export const metadata: Metadata = {
-  title: 'Proctoai – AI-Based Online Examination Proctoring',
+  title: 'ProctorAI – AI-Based Online Examination Proctoring',
   description: 'Secure, AI-powered online examination proctoring system with facial recognition, gaze tracking, and real-time monitoring.',
   generator: 'v0.app',
+  icons: {
+    icon: '/favicon.ico',
+  },
 }
+
 
 export default function RootLayout({
   children,
