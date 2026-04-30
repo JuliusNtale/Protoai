@@ -60,11 +60,7 @@ export default function LoginPage() {
   }
 
   return (
-<<<<<<< HEAD
-      <div className="flex min-h-screen font-sans">
-=======
-    <div className="flex min-h-screen font-sans">
->>>>>>> 614fbbbfc326dbd651de72133b45933861e49d19
+    <div className="flex min-h-screen" style={{ fontFamily: "var(--font-sans, system-ui, sans-serif)" }}>
 
       {/* ── Left sidebar ── */}
       <aside
