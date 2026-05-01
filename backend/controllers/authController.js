@@ -161,13 +161,18 @@ async function login(req, res) {
     }
 
     // Reject if a temporary password was issued but has since expired
-    if (user.temp_password_expiry && new Date() > new Date(user.temp_password_expiry)) {
-      return res.status(401).json({
-        error: {
-          code: 'TEMP_PASSWORD_EXPIRED',
-          message: 'Your temporary password has expired. Please request a new one.'
-        }
-      });
+    if (user.temp_password_expiry) {
+      const expiry = user.temp_password_expiry instanceof Date
+        ? user.temp_password_expiry
+        : new Date(String(user.temp_password_expiry).replace(' ', 'T') + 'Z');
+      if (new Date() > expiry) {
+        return res.status(401).json({
+          error: {
+            code: 'TEMP_PASSWORD_EXPIRED',
+            message: 'Your temporary password has expired. Please request a new one.'
+          }
+        });
+      }
     }
 
     const token = jwt.sign(
@@ -283,14 +288,14 @@ async function requestPasswordReset(req, res) {
     const hashedTemp = await bcrypt.hash(tempPassword, 12);
 
     user.password_hash = hashedTemp;
-    user.temp_password_expiry = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes
+    user.temp_password_expiry = new Date(Date.now() + 30 * 60 * 1000).toISOString(); // 30 min, UTC
     await user.save();
 
     const transporter = getTransporter();
     if (transporter) {
       const appUrl = process.env.APP_URL || 'http://localhost:3000';
       const mailOptions = {
-        from: process.env.EMAIL_USER || '"ProctoAI" <noreply@proctoai.udom.ac.tz>',
+        from: process.env.EMAIL_FROM || 'onboarding@resend.dev',
         to: user.email,
         subject: 'Your ProctoAI Temporary Password',
         html: `
