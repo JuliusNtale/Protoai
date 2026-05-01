@@ -152,6 +152,37 @@ async function login(req, res) {
   }
 }
 
+async function changePassword(req, res) {
+  const { current_password, new_password } = req.body;
+
+  if (!current_password || !new_password) {
+    return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'current_password and new_password are required' } });
+  }
+  if (new_password.length < 8) {
+    return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'New password must be at least 8 characters' } });
+  }
+
+  try {
+    const user = await User.scope('withPassword').findByPk(req.user.user_id);
+    if (!user) {
+      return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'User not found' } });
+    }
+
+    const match = await bcrypt.compare(current_password, user.password_hash);
+    if (!match) {
+      return res.status(401).json({ error: { code: 'INVALID_CREDENTIALS', message: 'Current password is incorrect' } });
+    }
+
+    user.password_hash = await bcrypt.hash(new_password, 12);
+    await user.save();
+
+    return res.status(200).json({ message: 'Password updated successfully' });
+  } catch (err) {
+    logger.error('changePassword error: ' + err.message);
+    return res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Failed to update password' } });
+  }
+}
+
 async function requestPasswordReset(req, res) {
   return res.status(501).json({ error: { code: 'NOT_IMPLEMENTED', message: 'Password reset coming soon' } });
 }
@@ -160,4 +191,4 @@ async function confirmPasswordReset(req, res) {
   return res.status(501).json({ error: { code: 'NOT_IMPLEMENTED', message: 'Password reset coming soon' } });
 }
 
-module.exports = { register, login, requestPasswordReset, confirmPasswordReset };
+module.exports = { register, login, changePassword, requestPasswordReset, confirmPasswordReset };
