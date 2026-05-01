@@ -199,6 +199,11 @@ export default function StudentDashboard() {
   const [pwLoading, setPwLoading] = useState(false)
   const [pwError, setPwError] = useState("")
   const [pwSuccess, setPwSuccess] = useState("")
+  const [editEmail, setEditEmail] = useState("")
+  const [editPhone, setEditPhone] = useState("")
+  const [profileSaving, setProfileSaving] = useState(false)
+  const [profileError, setProfileError] = useState("")
+  const [profileSuccess, setProfileSuccess] = useState("")
   const [searchResult, setSearchResult] = useState("")
   const [unreadCount, setUnreadCount] = useState(WARNINGS.filter(w => !w.read).length)
   const [warnings, setWarnings] = useState(WARNINGS)
@@ -233,13 +238,18 @@ export default function StudentDashboard() {
       const initials = parts.length >= 2
         ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
         : fullName.slice(0, 2).toUpperCase()
+      const email = u.email || ""
+      const phone = u.phone_number || ""
       setSTUDENT(prev => ({
         ...prev,
         name: fullName,
         initials,
         regNo: u.registration_number || u.regNo || "",
-        email: u.email || "",
+        email,
+        phone,
       }))
+      setEditEmail(email)
+      setEditPhone(phone)
     } catch {
       router.push("/")
     }
@@ -281,6 +291,41 @@ export default function StudentDashboard() {
       setPwError("Network error. Please try again.")
     } finally {
       setPwLoading(false)
+    }
+  }
+
+  async function handleSaveProfile() {
+    setProfileError("")
+    setProfileSuccess("")
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (editEmail && !emailRegex.test(editEmail)) {
+      setProfileError("Please enter a valid email address.")
+      return
+    }
+    setProfileSaving(true)
+    try {
+      const token = localStorage.getItem("token")
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/users/profile`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ email: editEmail, phone_number: editPhone }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setProfileError(data?.error?.message || "Failed to save profile.")
+      } else {
+        setProfileSuccess("Profile updated successfully.")
+        setSTUDENT(prev => ({ ...prev, email: editEmail, phone: editPhone }))
+        const raw = localStorage.getItem("user")
+        if (raw) {
+          const u = JSON.parse(raw)
+          localStorage.setItem("user", JSON.stringify({ ...u, email: editEmail, phone_number: editPhone }))
+        }
+      }
+    } catch {
+      setProfileError("Network error. Please try again.")
+    } finally {
+      setProfileSaving(false)
     }
   }
 
@@ -1014,11 +1059,47 @@ export default function StudentDashboard() {
                     </div>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <ProfileField icon={<Mail className="h-3.5 w-3.5" />}    label="Email"      value={STUDENT.email} />
-                    <ProfileField icon={<Phone className="h-3.5 w-3.5" />}   label="Phone"      value={STUDENT.phone} />
+                    {/* Editable: Email */}
+                    <div>
+                      <label className="flex items-center gap-1.5 text-[10px] font-semibold tracking-widest text-gray-400 uppercase mb-1">
+                        <Mail className="h-3.5 w-3.5" />Email
+                      </label>
+                      <input
+                        type="email"
+                        value={editEmail}
+                        onChange={e => setEditEmail(e.target.value)}
+                        placeholder="your@email.com"
+                        className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-200"
+                      />
+                    </div>
+                    {/* Editable: Phone */}
+                    <div>
+                      <label className="flex items-center gap-1.5 text-[10px] font-semibold tracking-widest text-gray-400 uppercase mb-1">
+                        <Phone className="h-3.5 w-3.5" />Phone
+                      </label>
+                      <input
+                        type="tel"
+                        value={editPhone}
+                        onChange={e => setEditPhone(e.target.value)}
+                        placeholder="+255 700 000 000"
+                        className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-200"
+                      />
+                    </div>
                     <ProfileField icon={<BookOpen className="h-3.5 w-3.5" />} label="Programme" value={STUDENT.programme} />
                     <ProfileField icon={<MapPin className="h-3.5 w-3.5" />}  label="Year"       value={STUDENT.year} />
                     <ProfileField icon={<Users className="h-3.5 w-3.5" />}   label="College"    value={STUDENT.college} wideCol />
+                  </div>
+                  {profileError && <p className="text-xs font-medium text-red-600 mt-1">{profileError}</p>}
+                  {profileSuccess && <p className="text-xs font-medium text-emerald-600 mt-1">{profileSuccess}</p>}
+                  <div className="pt-1">
+                    <button
+                      onClick={handleSaveProfile}
+                      disabled={profileSaving}
+                      className="rounded-lg px-5 py-2.5 text-sm font-semibold text-white transition-all hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed"
+                      style={{ background: "#1a2d5a" }}
+                    >
+                      {profileSaving ? "Saving…" : "Save Changes"}
+                    </button>
                   </div>
                 </div>
               </div>

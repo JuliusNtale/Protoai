@@ -14,6 +14,14 @@ const loginLimiter = rateLimit({
   message: { error: { code: 'TOO_MANY_REQUESTS', message: 'Too many login attempts. Try again in 15 minutes.' } }
 });
 
+const lookupLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: { code: 'TOO_MANY_REQUESTS', message: 'Too many attempts. Try again in 15 minutes.' } }
+});
+
 // Registration: accepts 'name' (Julius's field) or 'full_name' (fallback)
 const registerValidation = [
   body().custom((_, { req }) => {
@@ -46,8 +54,11 @@ router.post('/login', loginLimiter, loginValidation, authController.login);
 // PUT /api/auth/change-password (requires JWT)
 router.put('/change-password', verifyToken, authController.changePassword);
 
-// POST /api/auth/reset-password
-router.post('/reset-password', authController.requestPasswordReset);
+// POST /api/auth/lookup — returns masked email/phone for a registration number
+router.post('/lookup', lookupLimiter, authController.lookupUser);
+
+// POST /api/auth/reset-password — generates and sends a temporary password
+router.post('/reset-password', lookupLimiter, authController.requestPasswordReset);
 
 // POST /api/auth/reset-password/confirm
 router.post('/reset-password/confirm', authController.confirmPasswordReset);
