@@ -332,13 +332,29 @@ async function requestPasswordReset(req, res) {
         const info = await transporter.sendMail(mailOptions);
         if (process.env.EMAIL_MODE === 'dev') {
           const nodemailer = require('nodemailer');
-          logger.info(`Temp password email preview: ${nodemailer.getTestMessageUrl(info)}`);
+          const previewUrl = nodemailer.getTestMessageUrl(info);
+          logger.info('========================================');
+          logger.info(`TEMP PASSWORD for ${user.registration_number}: ${tempPassword}`);
+          logger.info(`Email preview URL: ${previewUrl}`);
+          logger.info('========================================');
         }
       } catch (mailErr) {
         logger.error('Failed to send temp password email: ' + mailErr.message);
+        if (process.env.EMAIL_MODE === 'dev') {
+          logger.info('========================================');
+          logger.info(`TEMP PASSWORD for ${user.registration_number}: ${tempPassword}`);
+          logger.info('(Email delivery failed — use the password above to log in)');
+          logger.info('========================================');
+        }
       }
     } else {
       logger.warn('Mailer not initialised — temp password email skipped');
+      if (process.env.EMAIL_MODE === 'dev') {
+        logger.info('========================================');
+        logger.info(`TEMP PASSWORD for ${user.registration_number}: ${tempPassword}`);
+        logger.info('(No mailer — use the password above to log in)');
+        logger.info('========================================');
+      }
     }
 
     return res.status(200).json(genericSuccess);
