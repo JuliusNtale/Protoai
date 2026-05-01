@@ -4,6 +4,7 @@ const router = express.Router();
 const { body } = require('express-validator');
 const rateLimit = require('express-rate-limit');
 const authController = require('../controllers/authController');
+const { verifyToken } = require('../middleware/auth');
 
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -41,6 +42,9 @@ router.post('/register', registerValidation, authController.register);
 
 // POST /api/auth/login — rate limited: 5 attempts per 15 min per IP
 router.post('/login', loginLimiter, loginValidation, authController.login);
+
+// PUT /api/auth/change-password (requires JWT)
+router.put('/change-password', verifyToken, authController.changePassword);
 
 // POST /api/auth/reset-password
 router.post('/reset-password', authController.requestPasswordReset);

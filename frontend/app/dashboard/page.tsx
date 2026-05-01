@@ -191,6 +191,14 @@ export default function StudentDashboard() {
   const [agreedRules, setAgreedRules] = useState(false)
   const [startingExam, setStartingExam] = useState(false)
   const [showPass, setShowPass] = useState(false)
+  const [showNewPass, setShowNewPass] = useState(false)
+  const [showConfirmPass, setShowConfirmPass] = useState(false)
+  const [currentPassword, setCurrentPassword] = useState("")
+  const [newPassword, setNewPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
+  const [pwLoading, setPwLoading] = useState(false)
+  const [pwError, setPwError] = useState("")
+  const [pwSuccess, setPwSuccess] = useState("")
   const [searchResult, setSearchResult] = useState("")
   const [unreadCount, setUnreadCount] = useState(WARNINGS.filter(w => !w.read).length)
   const [warnings, setWarnings] = useState(WARNINGS)
@@ -236,6 +244,45 @@ export default function StudentDashboard() {
       router.push("/")
     }
   }, [router])
+
+  async function handleChangePassword() {
+    setPwError("")
+    setPwSuccess("")
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setPwError("All password fields are required.")
+      return
+    }
+    if (newPassword.length < 8) {
+      setPwError("New password must be at least 8 characters.")
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      setPwError("New password and confirmation do not match.")
+      return
+    }
+    setPwLoading(true)
+    try {
+      const token = localStorage.getItem("token")
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/change-password`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setPwError(data?.error?.message || "Failed to update password.")
+      } else {
+        setPwSuccess("Password updated successfully.")
+        setCurrentPassword("")
+        setNewPassword("")
+        setConfirmPassword("")
+      }
+    } catch {
+      setPwError("Network error. Please try again.")
+    } finally {
+      setPwLoading(false)
+    }
+  }
 
   function handleOpenStartExam(examTitle: string) {
     setSelectedExamTitle(examTitle)
@@ -983,16 +1030,39 @@ export default function StudentDashboard() {
                   <p className="text-xs text-gray-400 mt-0.5">Use a strong password you do not use elsewhere</p>
                 </div>
                 <div className="px-5 py-5 flex flex-col gap-4">
-                  <SettingsInput label="Current Password"  type={showPass ? "text" : "password"} placeholder="••••••••"
+                  <SettingsInput
+                    label="Current Password"
+                    type={showPass ? "text" : "password"}
+                    placeholder="••••••••"
+                    value={currentPassword}
+                    onChange={setCurrentPassword}
                     suffix={<button type="button" onClick={() => setShowPass(!showPass)} className="text-gray-400 hover:text-gray-600">{showPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button>}
                   />
-                  <SettingsInput label="New Password"      type="password" placeholder="••••••••" />
-                  <SettingsInput label="Confirm Password"  type="password" placeholder="••••••••" />
+                  <SettingsInput
+                    label="New Password"
+                    type={showNewPass ? "text" : "password"}
+                    placeholder="••••••••"
+                    value={newPassword}
+                    onChange={setNewPassword}
+                    suffix={<button type="button" onClick={() => setShowNewPass(!showNewPass)} className="text-gray-400 hover:text-gray-600">{showNewPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button>}
+                  />
+                  <SettingsInput
+                    label="Confirm Password"
+                    type={showConfirmPass ? "text" : "password"}
+                    placeholder="••••••••"
+                    value={confirmPassword}
+                    onChange={setConfirmPassword}
+                    suffix={<button type="button" onClick={() => setShowConfirmPass(!showConfirmPass)} className="text-gray-400 hover:text-gray-600">{showConfirmPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button>}
+                  />
+                  {pwError && <p className="text-xs font-medium text-red-600">{pwError}</p>}
+                  {pwSuccess && <p className="text-xs font-medium text-emerald-600">{pwSuccess}</p>}
                   <button
-                    className="self-start rounded-lg px-5 py-2.5 text-sm font-semibold text-white transition-all hover:opacity-90"
+                    onClick={handleChangePassword}
+                    disabled={pwLoading}
+                    className="self-start rounded-lg px-5 py-2.5 text-sm font-semibold text-white transition-all hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed"
                     style={{ background: "#1a2d5a" }}
                   >
-                    Update Password
+                    {pwLoading ? "Updating…" : "Update Password"}
                   </button>
                 </div>
               </div>
@@ -1166,7 +1236,10 @@ function ProfileField({ icon, label, value, wideCol }: { icon: React.ReactNode; 
   )
 }
 
-function SettingsInput({ label, type, placeholder, suffix }: { label: string; type: string; placeholder: string; suffix?: React.ReactNode }) {
+function SettingsInput({ label, type, placeholder, suffix, value, onChange }: {
+  label: string; type: string; placeholder: string; suffix?: React.ReactNode
+  value?: string; onChange?: (v: string) => void
+}) {
   return (
     <div>
       <label className="block text-xs font-semibold text-gray-500 mb-1">{label}</label>
@@ -1174,6 +1247,8 @@ function SettingsInput({ label, type, placeholder, suffix }: { label: string; ty
         <input
           type={type}
           placeholder={placeholder}
+          value={value ?? undefined}
+          onChange={onChange ? (e) => onChange(e.target.value) : undefined}
           className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-200 pr-10"
         />
         {suffix && <div className="absolute right-3 top-1/2 -translate-y-1/2">{suffix}</div>}
