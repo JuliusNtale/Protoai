@@ -10,6 +10,7 @@ const examRoutes = require('./routes/exams');
 const sessionRoutes = require('./routes/sessions');
 const reportRoutes = require('./routes/reports');
 const imageRoutes = require('./routes/images');
+const userRoutes = require('./routes/users');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -54,6 +55,7 @@ if (process.env.NODE_ENV !== 'production') {
     res.json({ ok: true, user: req.user });
   });
 }
+app.use('/api/users', userRoutes);
 app.use('/api/sessions', sessionRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/images', imageRoutes);
