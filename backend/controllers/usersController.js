@@ -45,7 +45,13 @@ async function updateProfile(req, res) {
     });
   } catch (err) {
     logger.error('updateProfile error: ' + err.message);
-    return res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Failed to update profile' } });
+    return res.status(500).json({
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: 'Failed to update profile',
+        detail: process.env.NODE_ENV !== 'production' ? err.message : undefined
+      }
+    });
   }
 }
 
