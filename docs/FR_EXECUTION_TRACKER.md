@@ -43,13 +43,13 @@ Codebase source: `Development/ai-exam-proctoring-system`
 | FR-14 | Detect and record gaze-away events | In Progress | Victor + Derick | `ai-service/services/gaze_estimator.py`, log endpoint | Gaze anomalies persist in behavioral logs | 2026-05-17 | Needs l2cs model finalization |
 | FR-15 | Detect and record abnormal head movement | In Progress | Victor + Derick | `ai-service/services/head_pose.py`, log endpoint | Head pose anomalies persist with timestamps | 2026-05-17 | Event naming consistency needed |
 | FR-16 | Detect/flag browser tab switching | In Progress | Julius + Derick | exam page visibility handlers, `POST /api/sessions/log` | Tab switch events logged as anomalies | 2026-05-14 | Ensure event enum alignment |
-| FR-17 | Record all behavioral anomalies with timestamps | In Progress | Derick | `backend/controllers/logController.js`, `BehavioralLog` model | Every anomaly type is timestamped and queryable | 2026-05-15 | Normalize `event_type` vocabulary |
+| FR-17 | Record all behavioral anomalies with timestamps | In Progress | Derick | `backend/controllers/logController.js`, `BehavioralLog` model | Every anomaly type is timestamped and queryable | 2026-05-15 | 2026-05-06: canonical normalization logic added; DB migration added |
 | FR-18 | Generate post-exam behavioral report per session | In Progress | Derick | `backend/services/reportService.js`, `backend/controllers/reportController.js` | Report generated with totals/risk/warnings per session | 2026-05-18 | Validate against proposal report fields |
 | FR-19 | Admin view/filter/export reports | In Progress | Derick + Julius | `backend/routes/reports.js`, admin UI page | Admin can view list, filter, export CSV | 2026-05-20 | Frontend admin integration incomplete |
 | FR-20 | Flag high-anomaly students for review | In Progress | Derick + Julius | `PATCH /api/reports/:session_id/flag`, admin UI | Flag action persists and is visible in dashboard | 2026-05-20 | Add UI action + tests |
-| FR-21 | Real-time on-screen warning on confirmed suspicious event | In Progress | Julius + Victor | socket event handling in exam page + AI emit | Warning 1/2 appears instantly on anomaly events | 2026-05-14 | Current warning mostly local simulation |
-| FR-22 | Cumulative `warning_count` per session in DB with timestamps | In Progress | Derick | `logController`, `ExamSession`, `BehavioralLog` | Count increments atomically and is auditable | 2026-05-15 | Race-safe transaction exists; validate at load |
-| FR-23 | On 3+ warnings: auto-submit, lock session, notify lecturer/admin | In Progress | Derick + Victor + Julius | `backend/controllers/logController.js`, `backend/services/emailService.js`, AI socket handler, exam UI | Third warning deterministically locks session, submits answers, emits lock event, sends alerts | 2026-05-18 | Critical acceptance scenario |
+| FR-21 | Real-time on-screen warning on confirmed suspicious event | In Progress | Julius + Victor | socket event handling in exam page + AI emit | Warning 1/2 appears instantly on anomaly events | 2026-05-14 | Backend/API canonical event contracts finalized 2026-05-06; frontend still to fully consume |
+| FR-22 | Cumulative `warning_count` per session in DB with timestamps | In Progress | Derick | `logController`, `ExamSession`, `BehavioralLog` | Count increments atomically and is auditable | 2026-05-15 | 2026-05-06: canonical event migration + unit coverage added |
+| FR-23 | On 3+ warnings: auto-submit, lock session, notify lecturer/admin | In Progress | Derick + Victor + Julius | `backend/controllers/logController.js`, `backend/services/emailService.js`, AI socket handler, exam UI | Third warning deterministically locks session, submits answers, emits lock event, sends alerts | 2026-05-18 | 2026-05-06: backend canonicalization done; end-to-end UI lock validation pending |
 
 ## 4. NFR Tracker
 
@@ -101,6 +101,6 @@ Next action:
 
 ## 8. Immediate Action Items (Open)
 
-1. Create `docs/API_EVENT_DICTIONARY.md` with canonical anomaly enums and payloads.
-2. Add an FR acceptance test checklist file: `docs/FR_ACCEPTANCE_TESTS.md`.
+1. Apply backend migration `20260506001-normalize-behavioral-log-event-types.js` in shared/staging DB.
+2. Wire frontend exam page to real socket anomaly events (`anomaly_result`, `session_locked`).
 3. Run first end-to-end dry run and attach evidence links in this tracker.
