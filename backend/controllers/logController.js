@@ -104,4 +104,4 @@ async function logAnomaly(req, res) {
   }
 }
 
-module.exports = { logAnomaly };
+module.exports = { logAnomaly, normaliseEventType };
