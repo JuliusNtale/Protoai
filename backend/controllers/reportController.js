@@ -124,4 +124,4 @@ async function exportCsv(req, res) {
   }
 }
 
-module.exports = { getReport, flagReport, exportCsv };
+module.exports = { getReport, flagReport, exportCsv, toCanonicalEventType };
