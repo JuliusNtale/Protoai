@@ -8,6 +8,19 @@ import { useBrowserLockdown } from "@/hooks/use-browser-lockdown"
 import { SystemStatusIndicators } from "@/components/system-status-indicators"
 import { useNetworkStatus } from "@/hooks/use-network-status"
 import { Calculator } from "@/components/calculator"
+import { getApiPath } from "@/lib/api-url"
+
+type SocketLike = {
+  on: (event: string, callback: (...args: any[]) => void) => void
+  emit: (event: string, payload: unknown) => void
+  disconnect: () => void
+}
+
+declare global {
+  interface Window {
+    io?: (url: string, options?: Record<string, unknown>) => SocketLike
+  }
+}
 
 const questions = [
   {
@@ -230,6 +243,9 @@ export default function ExamPage() {
   const router = useRouter()
   const examVideoRef = useRef<HTMLVideoElement>(null)
   const examStreamRef = useRef<MediaStream | null>(null)
+  const answersRef = useRef<Record<number, number>>({})
+  const frameCanvasRef = useRef<HTMLCanvasElement>(null)
+  const socketRef = useRef<SocketLike | null>(null)
   const [current, setCurrent] = useState(0)
   const [answers, setAnswers] = useState<Record<number, number>>({})
   const [flagged, setFlagged] = useState<Set<number>>(new Set())
@@ -246,8 +262,12 @@ export default function ExamPage() {
   const [securityAlert, setSecurityAlert] = useState<string | null>(null)
   const [examCameraReady, setExamCameraReady] = useState(false)
   const [examCameraError, setExamCameraError] = useState<string | null>(null)
+  const [sessionId, setSessionId] = useState<number | null>(null)
+  const [socketConnected, setSocketConnected] = useState(false)
+  const [sessionLocked, setSessionLocked] = useState(false)
   const maxWarnings = 3
   const stats = useProctoringStats()
+  const setTabSwitches = stats.setTabSwitches
   const networkStatus = useNetworkStatus()
   const { devtoolsLikelyOpen } = useBrowserLockdown({
     onBlockedAction: message => setSecurityAlert(message),
@@ -329,6 +349,15 @@ export default function ExamPage() {
   }
 
   useEffect(() => {
+    const raw = localStorage.getItem("session_id")
+    if (!raw) return
+    const parsed = Number(raw)
+    if (Number.isFinite(parsed) && parsed > 0) {
+      setSessionId(parsed)
+    }
+  }, [])
+
+  useEffect(() => {
     const id = setInterval(() => {
       setTimeLeft(t => (t <= 0 ? 0 : t - 1))
     }, 1000)
@@ -359,16 +388,59 @@ export default function ExamPage() {
     }
   }, [])
 
-  const triggerWarning = useCallback(() => {
-    const next = warnings + 1
+  const applyWarning = useCallback((incomingCount: number) => {
+    const next = Math.max(incomingCount, 0)
     setWarnings(next)
-    stats.setTabSwitches(s => s + 1)
+    setTabSwitches(next)
     setWarningModal(next >= maxWarnings ? "final" : "warning")
-  }, [warnings, stats])
+  }, [maxWarnings, setTabSwitches])
+
+  async function submitSessionToServer() {
+    if (!sessionId) return
+    const token = localStorage.getItem("token")
+    if (!token) return
+
+    const payloadAnswers = Object.fromEntries(
+      Object.entries(answersRef.current).map(([idx, optionIdx]) => [String(Number(idx) + 1), String(optionIdx)])
+    )
+
+    await fetch(getApiPath(`/sessions/${sessionId}/submit`), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ answers: payloadAnswers }),
+    })
+  }
+
+  async function ensureSocketClientLoaded() {
+    if (window.io) return
+    await new Promise<void>((resolve, reject) => {
+      const existing = document.querySelector('script[data-socket-io-client="true"]') as HTMLScriptElement | null
+      if (existing) {
+        existing.addEventListener("load", () => resolve(), { once: true })
+        existing.addEventListener("error", () => reject(new Error("Failed to load Socket.IO client")), { once: true })
+        return
+      }
+
+      const script = document.createElement("script")
+      script.src = "https://cdn.socket.io/4.7.5/socket.io.min.js"
+      script.async = true
+      script.dataset.socketIoClient = "true"
+      script.addEventListener("load", () => resolve(), { once: true })
+      script.addEventListener("error", () => reject(new Error("Failed to load Socket.IO client")), { once: true })
+      document.head.appendChild(script)
+    })
+  }
 
   function handleAnswer(optIdx: number) {
     setAnswers(a => ({ ...a, [current]: optIdx }))
   }
+
+  useEffect(() => {
+    answersRef.current = answers
+  }, [answers])
 
   function toggleFlag() {
     setFlagged(f => {
@@ -394,14 +466,78 @@ export default function ExamPage() {
     setShowSubmitConfirm(true)
   }
 
-  function handleConfirmSubmit() {
+  async function handleConfirmSubmit() {
     setSubmitting(true)
-    setTimeout(() => {
+    try {
+      await submitSessionToServer()
+    } finally {
       setSubmitting(false)
       setShowSubmitConfirm(false)
       setShowCongrats(true)
-    }, 900)
+    }
   }
+
+  useEffect(() => {
+    if (!examCameraReady || !sessionId || sessionLocked) return
+
+    let cancelled = false
+    let interval: ReturnType<typeof setInterval> | null = null
+    let socket: SocketLike | null = null
+
+    void (async () => {
+      try {
+        await ensureSocketClientLoaded()
+        if (cancelled || !window.io) return
+
+        const wsUrl = process.env.NEXT_PUBLIC_WS_URL || "http://localhost:8000"
+        socket = window.io(wsUrl, { transports: ["websocket", "polling"] })
+        socketRef.current = socket
+
+        socket.on("connect", () => setSocketConnected(true))
+        socket.on("disconnect", () => setSocketConnected(false))
+
+        socket.on("anomaly_result", (event) => {
+          if (!event || Number(event.session_id) !== sessionId) return
+          const count = Number(event.warning_count || 0)
+          applyWarning(count)
+          if (Array.isArray(event.anomalies) && event.anomalies.length > 0) {
+            setTabSwitches(count)
+          }
+        })
+
+        socket.on("session_locked", async (event) => {
+          if (!event || Number(event.session_id) !== sessionId) return
+          setSessionLocked(true)
+          applyWarning(maxWarnings)
+          await submitSessionToServer()
+        })
+
+        interval = setInterval(() => {
+          if (!examVideoRef.current || !frameCanvasRef.current || !socket) return
+          const ctx = frameCanvasRef.current.getContext("2d")
+          if (!ctx) return
+
+          ctx.drawImage(examVideoRef.current, 0, 0, 320, 240)
+          const frameBase64 = frameCanvasRef.current.toDataURL("image/jpeg", 0.6)
+          socket.emit("webcam_frame", {
+            session_id: sessionId,
+            frame_base64: frameBase64,
+            timestamp: new Date().toISOString(),
+          })
+        }, 3000)
+      } catch {
+        setSocketConnected(false)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+      if (interval) clearInterval(interval)
+      if (socket) socket.disconnect()
+      socketRef.current = null
+      setSocketConnected(false)
+    }
+  }, [applyWarning, examCameraReady, maxWarnings, sessionId, sessionLocked, setTabSwitches])
 
   // Status for each question bubble
   function bubbleStatus(i: number) {
@@ -448,11 +584,11 @@ export default function ExamPage() {
           <div className="flex items-center gap-2 sm:gap-3">
             <Calculator allowed={true} />
             <button
-              onClick={triggerWarning}
-              className="hidden items-center gap-1.5 rounded border border-green-400/40 bg-green-500/20 px-2.5 py-1 text-[11px] font-medium text-green-300 transition-colors hover:bg-green-500/30 sm:flex"
+              type="button"
+              className="hidden items-center gap-1.5 rounded border border-green-400/40 bg-green-500/20 px-2.5 py-1 text-[11px] font-medium text-green-300 sm:flex"
             >
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-green-400" />
-              Monitoring Active
+              <span className={cn("h-1.5 w-1.5 rounded-full", socketConnected ? "animate-pulse bg-green-400" : "bg-yellow-300")} />
+              {socketConnected ? "Monitoring Active" : "Connecting Monitor"}
             </button>
             <button
               onClick={openSubmitConfirm}
@@ -694,6 +830,7 @@ export default function ExamPage() {
               </p>
             )}
           </div>
+          <canvas ref={frameCanvasRef} width={320} height={240} style={{ display: "none" }} />
 
           {!examCameraReady ? (
             <button
