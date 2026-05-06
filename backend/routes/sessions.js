@@ -23,7 +23,12 @@ router.post('/log',
   verifyInternalToken,
   [
     body('session_id').isInt({ min: 1 }).withMessage('session_id is required'),
-    body('event_type').isIn(['gaze_away', 'head_movement', 'tab_switch', 'face_absent', 'multiple_persons'])
+    body('event_type').isIn([
+      // Canonical names
+      'gaze_away', 'head_turned', 'tab_switch', 'face_absent', 'multiple_faces',
+      // Legacy aliases kept temporarily for backward compatibility
+      'head_movement', 'multiple_persons'
+    ])
       .withMessage('Invalid event_type')
   ],
   logController.logAnomaly

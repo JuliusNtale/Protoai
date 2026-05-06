@@ -7,13 +7,29 @@ const logger = require('../utils/logger');
 
 const WARNING_THRESHOLD = 3;
 
+function normaliseEventType(eventType) {
+  if (eventType === 'head_movement') return 'head_turned';
+  if (eventType === 'multiple_persons') return 'multiple_faces';
+  return eventType;
+}
+
+function toStorageEventType(eventType) {
+  // Temporary storage compatibility mapping until DB enum migration is applied.
+  if (eventType === 'head_turned') return 'head_movement';
+  if (eventType === 'multiple_faces') return 'multiple_persons';
+  return eventType;
+}
+
 async function logAnomaly(req, res) {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: errors.array()[0].msg } });
   }
 
-  const { session_id, event_type, metadata } = req.body;
+  const { session_id, metadata } = req.body;
+  const event_type = normaliseEventType(req.body.event_type);
+  const storage_event_type = toStorageEventType(event_type);
+  const event_data = req.body.event_data || metadata || {};
 
   try {
     const result = await sequelize.transaction(async (t) => {
@@ -38,8 +54,8 @@ async function logAnomaly(req, res) {
       // Insert behavioral log entry
       await BehavioralLog.create({
         session_id,
-        event_type,
-        metadata: metadata || {},
+        event_type: storage_event_type,
+        metadata: event_data,
         event_timestamp: new Date()
       }, { transaction: t });
 
@@ -85,6 +101,7 @@ async function logAnomaly(req, res) {
 
     return res.status(200).json({
       ok: true,
+      event_type,
       warning_count: result.warning_count,
       escalated: result.escalated,
       session_status: result.session_status

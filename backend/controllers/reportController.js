@@ -3,6 +3,12 @@ const { ExamSession, Report, BehavioralLog, User, Examination } = require('../mo
 const { generateReport } = require('../services/reportService');
 const logger = require('../utils/logger');
 
+function toCanonicalEventType(eventType) {
+  if (eventType === 'head_movement') return 'head_turned';
+  if (eventType === 'multiple_persons') return 'multiple_faces';
+  return eventType;
+}
+
 async function getReport(req, res) {
   const { session_id } = req.params;
 
@@ -30,6 +36,11 @@ async function getReport(req, res) {
       attributes: ['event_type', 'metadata', 'event_timestamp'],
       order: [['event_timestamp', 'ASC']]
     });
+    const canonicalLogs = logs.map(l => ({
+      event_type: toCanonicalEventType(l.event_type),
+      event_data: l.metadata || {},
+      event_timestamp: l.event_timestamp
+    }));
 
     return res.status(200).json({
       session: {
@@ -45,7 +56,7 @@ async function getReport(req, res) {
       student: session.student,
       exam: session.exam,
       report: report || null,
-      behavioral_logs: logs
+      behavioral_logs: canonicalLogs
     });
   } catch (err) {
     logger.error(`getReport error: ${err.message}`);
