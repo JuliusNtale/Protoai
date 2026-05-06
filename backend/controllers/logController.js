@@ -13,13 +13,6 @@ function normaliseEventType(eventType) {
   return eventType;
 }
 
-function toStorageEventType(eventType) {
-  // Temporary storage compatibility mapping until DB enum migration is applied.
-  if (eventType === 'head_turned') return 'head_movement';
-  if (eventType === 'multiple_faces') return 'multiple_persons';
-  return eventType;
-}
-
 async function logAnomaly(req, res) {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -28,7 +21,6 @@ async function logAnomaly(req, res) {
 
   const { session_id, metadata } = req.body;
   const event_type = normaliseEventType(req.body.event_type);
-  const storage_event_type = toStorageEventType(event_type);
   const event_data = req.body.event_data || metadata || {};
 
   try {
@@ -54,7 +46,7 @@ async function logAnomaly(req, res) {
       // Insert behavioral log entry
       await BehavioralLog.create({
         session_id,
-        event_type: storage_event_type,
+        event_type,
         metadata: event_data,
         event_timestamp: new Date()
       }, { transaction: t });
