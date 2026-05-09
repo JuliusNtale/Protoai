@@ -4,7 +4,7 @@ from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt, get_jwt_identity, jwt_required
 
 from app.extensions import db
-from app.models import Exam
+from app.models import Exam, Question
 
 exams_bp = Blueprint("exams", __name__)
 
@@ -71,3 +71,49 @@ def create_exam():
     db.session.commit()
 
     return jsonify({"exam_id": exam.exam_id, "id": exam.exam_id}), 201
+
+
+@exams_bp.get("/<int:exam_id>")
+@jwt_required()
+def get_exam(exam_id):
+    exam = Exam.query.get(exam_id)
+    if not exam:
+        return jsonify({"error": {"message": "Exam not found"}}), 404
+
+    claims = get_jwt()
+    can_view_answers = claims.get("role") in {"lecturer", "admin"}
+    questions = Question.query.filter_by(exam_id=exam.exam_id).order_by(Question.order_num.asc()).all()
+
+    payload_questions = []
+    for question in questions:
+        question_payload = {
+            "question_id": question.question_id,
+            "question_text": question.question_text,
+            "option_a": question.option_a,
+            "option_b": question.option_b,
+            "option_c": question.option_c,
+            "option_d": question.option_d,
+            "question_type": question.question_type,
+            "marks": question.marks,
+            "order_num": question.order_num,
+        }
+        if can_view_answers:
+            question_payload["correct_answer"] = question.correct_answer
+        payload_questions.append(question_payload)
+
+    return (
+        jsonify(
+            {
+                "exam": {
+                    "exam_id": exam.exam_id,
+                    "title": exam.title,
+                    "course_code": exam.course_code,
+                    "duration_min": exam.duration_min,
+                    "scheduled_at": exam.scheduled_at.isoformat() if exam.scheduled_at else None,
+                    "status": exam.status,
+                },
+                "questions": payload_questions,
+            }
+        ),
+        200,
+    )
