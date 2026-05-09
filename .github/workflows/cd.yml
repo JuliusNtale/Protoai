@@ -103,5 +103,6 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             cd /root/ProctorAI/ai-exam-proctoring-system
+            git pull origin main
             docker compose pull
-            docker compose up -d
+            docker compose up -d --build
