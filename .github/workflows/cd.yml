@@ -106,5 +106,7 @@ jobs:
             cd /root/ProctorAI/ai-exam-proctoring-system
             git pull origin main
             docker compose pull
-            docker compose down
+            docker compose down --remove-orphans
+            docker ps -q --filter "publish=5000" | xargs -r docker rm -f
+            docker ps -q --filter "publish=5432" | xargs -r docker rm -f
             docker compose up -d --build
