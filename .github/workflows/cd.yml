@@ -105,4 +105,5 @@ jobs:
             cd /root/ProctorAI/ai-exam-proctoring-system
             git pull origin main
             docker compose pull
+            docker compose down
             docker compose up -d --build
