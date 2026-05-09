@@ -102,6 +102,6 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            cd /var/www/ai-exam-proctoring
+            cd /root/ProctorAI/ai-exam-proctoring-system
             docker compose pull
             docker compose up -d
