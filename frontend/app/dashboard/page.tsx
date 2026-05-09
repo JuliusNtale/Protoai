@@ -46,6 +46,7 @@ import {
 import { SystemStatusIndicators } from "@/components/system-status-indicators"
 import { useCameraStatus } from "@/hooks/use-camera-status"
 import { useNetworkStatus } from "@/hooks/use-network-status"
+import { getApiPath } from "@/lib/api-url"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Tab = "overview" | "exams" | "results" | "warnings" | "settings"
@@ -187,9 +188,11 @@ export default function StudentDashboard() {
   const [activeTab, setActiveTab] = useState<Tab>("overview")
   const [expandedExam, setExpandedExam] = useState<string | null>(null)
   const [selectedExamTitle, setSelectedExamTitle] = useState("")
+  const [selectedExamId, setSelectedExamId] = useState<number | null>(null)
   const [showExamRules, setShowExamRules] = useState(false)
   const [agreedRules, setAgreedRules] = useState(false)
   const [startingExam, setStartingExam] = useState(false)
+  const [startExamError, setStartExamError] = useState("")
   const [showPass, setShowPass] = useState(false)
   const [showNewPass, setShowNewPass] = useState(false)
   const [showConfirmPass, setShowConfirmPass] = useState(false)
@@ -329,8 +332,10 @@ export default function StudentDashboard() {
     }
   }
 
-  function handleOpenStartExam(examTitle: string) {
+  function handleOpenStartExam(examTitle: string, examId: number | null = null) {
     setSelectedExamTitle(examTitle)
+    setSelectedExamId(examId)
+    setStartExamError("")
     setAgreedRules(false)
     setShowExamRules(true)
   }
@@ -418,14 +423,94 @@ export default function StudentDashboard() {
     URL.revokeObjectURL(url)
   }
 
-  function handleStartExam() {
+  async function resolveExamIdFromApi(title: string): Promise<number | null> {
+    const token = localStorage.getItem("token")
+    if (!token) return null
+
+    try {
+      const response = await fetch(getApiPath("/exams"), {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok || !Array.isArray(payload?.exams)) return null
+
+      const byExactTitle = payload.exams.find((exam: { id?: number; title?: string }) => exam?.title === title)
+      if (byExactTitle && Number.isFinite(Number(byExactTitle.id))) return Number(byExactTitle.id)
+
+      const lowered = title.trim().toLowerCase()
+      const byCaseInsensitive = payload.exams.find(
+        (exam: { id?: number; title?: string }) => typeof exam?.title === "string" && exam.title.trim().toLowerCase() === lowered
+      )
+      if (byCaseInsensitive && Number.isFinite(Number(byCaseInsensitive.id))) return Number(byCaseInsensitive.id)
+    } catch {
+      return null
+    }
+
+    return null
+  }
+
+  async function handleStartExam() {
     if (!agreedRules) return
+
+    setStartExamError("")
     setStartingExam(true)
-    setTimeout(() => {
-      setStartingExam(false)
+
+    try {
+      const token = localStorage.getItem("token")
+      if (!token) {
+        setStartExamError("Session expired. Please sign in again.")
+        return
+      }
+
+      const examId = selectedExamId ?? await resolveExamIdFromApi(selectedExamTitle)
+      if (!examId) {
+        setStartExamError("Unable to resolve exam ID from backend. Refresh exams and try again.")
+        return
+      }
+
+      const response = await fetch(getApiPath("/sessions/start"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ exam_id: examId }),
+      })
+      const payload = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        if (response.status === 409 && Number.isFinite(Number(payload?.session_id))) {
+          localStorage.setItem("session_id", String(payload.session_id))
+          localStorage.setItem("exam_id", String(examId))
+          setShowExamRules(false)
+          router.push("/verify")
+          return
+        }
+
+        const serverMessage =
+          payload?.error?.message ||
+          payload?.message ||
+          "Could not start exam session. Please try again."
+        setStartExamError(serverMessage)
+        return
+      }
+
+      if (!Number.isFinite(Number(payload?.session_id))) {
+        setStartExamError("Session started but no session ID was returned.")
+        return
+      }
+
+      localStorage.setItem("session_id", String(payload.session_id))
+      localStorage.setItem("exam_id", String(examId))
       setShowExamRules(false)
       router.push("/verify")
-    }, 900)
+    } catch {
+      setStartExamError("Network error while starting exam. Please try again.")
+    } finally {
+      setStartingExam(false)
+    }
   }
 
   function markAllRead() {
@@ -1252,6 +1337,9 @@ export default function StudentDashboard() {
                 />
                 <span className="text-sm text-gray-700">I agree to the exam rules and regulations.</span>
               </label>
+              {startExamError ? (
+                <p className="text-xs font-medium text-red-600">{startExamError}</p>
+              ) : null}
             </div>
 
             <div className="flex items-center justify-end gap-3 border-t border-gray-100 px-6 py-4">

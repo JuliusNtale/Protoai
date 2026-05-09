@@ -64,6 +64,8 @@ export default function VerifyPage() {
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [fullscreenError, setFullscreenError] = useState<string | null>(null)
   const [securityAlert, setSecurityAlert] = useState<string | null>(null)
+  const [isVerifyingIdentity, setIsVerifyingIdentity] = useState(false)
+  const [identityError, setIdentityError] = useState<string | null>(null)
   const rafRef = useRef<number | null>(null)
   const startRef = useRef<number | null>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -269,6 +271,73 @@ export default function VerifyPage() {
   // Derive step status
   const activeStepIndex = STEPS.findIndex(s => s.phase === phase)
   const completedStepPhases = Array.from(segmentsFilled)
+
+  async function handleContinueToExam() {
+    if (!videoRef.current || !cameraReady || isVerifyingIdentity) return
+
+    setIdentityError(null)
+    setIsVerifyingIdentity(true)
+
+    try {
+      const rawUser = localStorage.getItem("user")
+      const rawSessionId = localStorage.getItem("session_id")
+      if (!rawUser) {
+        setIdentityError("Session expired. Please sign in again.")
+        return
+      }
+      if (!rawSessionId || !Number.isFinite(Number(rawSessionId)) || Number(rawSessionId) <= 0) {
+        setIdentityError("No active exam session found. Start the exam again from dashboard.")
+        return
+      }
+
+      const parsed = JSON.parse(rawUser)
+      const userId = Number(parsed.user_id ?? parsed.id)
+      if (!Number.isFinite(userId) || userId <= 0) {
+        setIdentityError("Unable to identify your account. Please sign in again.")
+        return
+      }
+
+      const canvas = document.createElement("canvas")
+      canvas.width = 320
+      canvas.height = 240
+      const ctx = canvas.getContext("2d")
+      if (!ctx) {
+        setIdentityError("Could not prepare camera frame for verification.")
+        return
+      }
+
+      ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height)
+      const imageBase64 = canvas.toDataURL("image/jpeg", 0.8)
+
+      const aiBase = (process.env.NEXT_PUBLIC_AI_URL || "http://localhost:8000").replace(/\/+$/, "")
+      const response = await fetch(`${aiBase}/verify-identity`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: userId,
+          image_base64: imageBase64,
+        }),
+      })
+
+      const result = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        const serverMessage = typeof result?.error === "string" ? result.error : "Identity verification failed. Please retry."
+        setIdentityError(serverMessage)
+        return
+      }
+
+      if (result?.match !== true) {
+        setIdentityError("Face does not match your registered profile. Try again with better lighting.")
+        return
+      }
+
+      router.push("/exam")
+    } catch {
+      setIdentityError("Unable to reach AI verification service. Check network and try again.")
+    } finally {
+      setIsVerifyingIdentity(false)
+    }
+  }
 
   return (
     <div className="flex min-h-screen bg-black select-none">
@@ -505,6 +574,9 @@ export default function VerifyPage() {
               <p className="text-sm text-zinc-400 max-w-55 leading-relaxed">
                 Your identity has been confirmed. Click continue to enter your exam now.
               </p>
+              {identityError ? (
+                <p className="text-xs text-red-400">{identityError}</p>
+              ) : null}
             </>
           ) : (
             <>
@@ -528,10 +600,11 @@ export default function VerifyPage() {
       <div className="flex w-full max-w-xs flex-col items-center gap-4">
         {isDone ? (
           <Button
-            onClick={() => router.push("/exam")}
+            onClick={() => void handleContinueToExam()}
+            disabled={isVerifyingIdentity || !cameraReady}
             className="w-full h-14 rounded-2xl bg-white text-black font-semibold text-base hover:bg-zinc-100 transition-colors"
           >
-            Continue to Exam
+            {isVerifyingIdentity ? "Verifying..." : "Continue to Exam"}
           </Button>
         ) : (
           <>
