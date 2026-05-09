@@ -39,6 +39,7 @@ jobs:
 
       - name: Container health check
         run: |
+          docker rm -f staging-health-check 2>/dev/null || true
           docker pull ${{ secrets.DOCKERHUB_USERNAME }}/proctoring-backend:staging
           docker run -d --name staging-health-check \
             -p 5001:5000 \
