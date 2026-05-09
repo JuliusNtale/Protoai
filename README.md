@@ -1,44 +1,107 @@
 # AI-Based Online Examination Proctoring System
 
-**University of Dodoma | FYP 2025/26**  
-Supervisor: Dr. Mohamed Dewa  
-Repository: https://github.com/victorjudysen/ai-exam-proctoring-system
+> University of Dodoma · FYP 2025/26 · Supervisor: Dr. Mohamed Dewa
+
+An AI-powered exam proctoring platform that verifies student identity via facial recognition, monitors behaviour in real-time (gaze, head pose, tab switches, multiple faces), and issues graduated warnings — auto-submitting the exam and emailing the lecturer on the third offence.
+
+[![CI](https://github.com/victorjudysen/ai-exam-proctoring-system/actions/workflows/ci.yml/badge.svg)](https://github.com/victorjudysen/ai-exam-proctoring-system/actions/workflows/ci.yml)
+[![CD](https://github.com/victorjudysen/ai-exam-proctoring-system/actions/workflows/cd.yml/badge.svg)](https://github.com/victorjudysen/ai-exam-proctoring-system/actions/workflows/cd.yml)
 
 ---
 
-## Overview
+## Tech Stack
 
-This project is an AI-powered online exam proctoring platform designed to ensure academic integrity during remote assessments. It leverages facial recognition, gaze and head pose estimation, and real-time monitoring to detect suspicious behavior and automate exam supervision.
-
----
-
-## Features
-
-- **Student Identity Verification:** Facial recognition before each exam using FaceNet (ONNX)
-- **Real-Time Monitoring:**
-  - Gaze tracking (L2CS-Net ONNX)
-  - Head pose estimation (MediaPipe)
-  - Tab switching and multiple face detection
-- **Warning System:** Graduated warnings (1→2→3). At 3, the exam is auto-submitted and the lecturer is notified.
-- **Dashboards & Reports:** Live dashboards for lecturers/admins and post-exam behavioral reports
+| Layer | Technology |
+|-------|-----------|
+| Frontend | Next.js 15, React 19, TypeScript, Tailwind CSS, shadcn/ui |
+| Backend API | Node.js, Express 4, JWT, bcrypt, Sequelize |
+| AI Service | Python Flask, ONNX Runtime, MediaPipe, OpenCV |
+| Database | PostgreSQL 15 |
+| Containerisation | Docker, Docker Compose |
+| CI/CD | GitHub Actions |
 
 ---
 
-## Architecture
+## Run Locally with Docker
 
+```bash
+# 1. Copy and fill in environment variables
+cp backend/.env.example backend/.env
+cp ai-service/.env.example ai-service/.env
+
+# 2. Start all services
+docker compose up
 ```
-Browser (Next.js 15 / React 19)
-    │
-    ├─── HTTP (axios) ──────────────► Flask Backend API  (port 5000)
-    │                                    │
-    └─── WebSocket (socket.io) ────────► Flask AI Service (port 8000)
-                                         │
-                                         ├── FaceNet (ONNX) ── identity verify
-                                         ├── L2CS-Net (ONNX) ─ gaze estimation
-                                         └── MediaPipe ──────── head pose
-                                         
-Database: PostgreSQL (7 tables)
-Storage:  /storage/faces/ (server-only, never in git)
+
+| Service | URL |
+|---------|-----|
+| Frontend | http://localhost:3000 |
+| Backend API | http://localhost:5000 |
+| AI Service | http://localhost:8000 |
+
+---
+
+## Run Tests
+
+```bash
+# Root-level API integration tests (Jest + Supertest)
+npm install
+npm test
+
+# Backend unit tests
+cd backend && npm ci && npm test
+
+# AI service tests
+cd ai-service && pip install -r requirements.txt && python -m pytest tests/ -v
+```
+
+---
+
+## CI / CD
+
+**CI** triggers on every push to any branch and on pull requests to `main`. It runs all tests, then builds the Docker images. The build job will not start if any test fails.
+
+**CD** triggers automatically after CI passes on `main`. It follows four sequential steps:
+
+| Step | What happens |
+|------|-------------|
+| `deploy-staging` | Builds and pushes `:staging` + `:<sha>` to Docker Hub; runs a container health check |
+| `approve-production` | Manual approval gate (requires a reviewer in the `production` environment) |
+| `deploy-production` | Retags the staging image as `:latest`, `:v1`, and `:<sha>` on Docker Hub |
+| `deploy-server` | SSHs into the VPS and runs `docker compose pull && docker compose up -d` |
+
+### GitHub Secrets required
+
+Add these in **GitHub → Settings → Secrets and variables → Actions**:
+
+| Secret | Value |
+|--------|-------|
+| `DOCKERHUB_USERNAME` | Your Docker Hub username |
+| `DOCKERHUB_TOKEN` | Docker Hub access token (read/write) |
+| `SERVER_HOST` | VPS IP address |
+| `SERVER_USER` | SSH username (e.g. `root`) |
+| `SSH_PRIVATE_KEY` | The ed25519 private key printed during setup |
+
+### GitHub Environments required
+
+Create these in **GitHub → Settings → Environments**:
+
+- **`staging`** — no restrictions
+- **`production`** — enable **Required reviewers**, add your own username  
+  *(repository must be public for required reviewers on free accounts)*
+
+### VPS setup (one-time)
+
+```bash
+# 1. Add the public key to authorized_keys on the server
+echo "<paste deploy_key.pub content here>" >> ~/.ssh/authorized_keys
+
+# 2. Set DOCKERHUB_USERNAME so docker compose pull can resolve image names
+echo "DOCKERHUB_USERNAME=your-username" >> /var/www/ai-exam-proctoring/.env
+
+# 3. Ensure Docker and Docker Compose are installed
+docker --version
+docker compose version
 ```
 
 ---
@@ -47,133 +110,17 @@ Storage:  /storage/faces/ (server-only, never in git)
 
 ```
 ai-exam-proctoring-system/
-├── CLAUDE.md               ← Claude context & rules
-├── .claude/                ← Detailed context, API, DB, prompts
-├── frontend/               ← Next.js app (UI)
-├── backend/                ← Python Flask REST API
-├── ai-service/             ← Python Flask AI endpoints
-├── ml-training/            ← Colab notebooks + scripts
-├── docs/                   ← SRS, API spec, test cases
-├── docker-compose.yml      ← Starts all services
-└── .gitignore              ← Blocks .env, *.pt, *.onnx, storage/faces/
+├── frontend/          Next.js app
+├── backend/           Express REST API
+├── ai-service/        Flask AI endpoints (WebSocket + model inference)
+├── tests/             Root-level integration tests (Jest + Supertest)
+├── docs/              API spec, test cases, SRS
+├── .github/workflows/ CI and CD pipelines
+└── docker-compose.yml Starts all services
 ```
 
 ---
 
-## Team
+## Branching
 
-| Name | Reg. No | Role | AI Tool | Branch Prefix |
-|------|---------|------|---------|---------------|
-| Victor J. Kweka | T22-03-11759 | Project Lead + AI Service | Claude Code | feat/kweka-* |
-| Julius P. Ntale | T22-03-05441 | Frontend Engineer | Claude Code | feat/julius-* |
-| Derick G. Mhidze | T22-03-04321 | Backend Engineer | Claude Code | feat/derick-* |
-| Beckham Y. Mwakanjuki | T22-03-10715 | AI/ML Engineer | Gemini/Colab | feat/beckham-* |
-| Abdul-Swamad J. Hassan | T22-03-13834 | Documentation Engineer | Claude Code | docs/abdul-* |
-
----
-
-## Setup & Usage
-
-### Prerequisites
-- Node.js (v18+ recommended)
-- Python 3.10+
-- PostgreSQL
-- (Optional) Docker & Docker Compose
-
-### Frontend (Next.js)
-```bash
-cd frontend
-npm install        # or: pnpm install
-npm run dev        # http://localhost:3000
-```
-
-### Backend API (Flask)
-```bash
-cd backend
-python -m venv venv
-source venv/bin/activate   # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-cp .env.example .env       # fill in your values
-python app.py              # http://localhost:5000
-```
-
-### AI Service (Flask)
-```bash
-cd ai-service
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-python app.py              # http://localhost:8000
-```
-
-### All at once (Docker)
-```bash
-docker-compose up
-```
-
----
-
-## Development Workflow
-
-- **Branching:** Work on feature branches (`feat/your-name-*`), never push to `main` directly
-- **Commits:** Add only specific files, not `git add .`
-- **Pull Requests:** Open PRs for review, assign Kweka as reviewer
-- **Sensitive Data:** Never commit `.env`, model weights, or face images
-
----
-
-## Key Design Decisions
-
-- **Warning threshold = 3**: Gaze away >5s, head turned >3s, tab switch, face absent — each fires a warning. At 3, auto-submit + email.
-- **Facial recognition pipeline:** MTCNN detect → FaceNet embed → cosine similarity → threshold 0.6
-- **Gaze model:** L2CS-Net fine-tuned to 5 classes: Screen, Left, Right, Up, Down
-- **Head pose:** MediaPipe Face Mesh + OpenCV solvePnP
-
----
-
-## Quality Targets
-
-| Metric | Target |
-|--------|--------|
-| Facial recognition accuracy | ≥ 90% |
-| False Acceptance Rate (FAR) | < 5% |
-| False Rejection Rate (FRR) | < 10% |
-| Identity verification latency | < 3 seconds |
-| Frame processing time | < 1 sec/frame |
-| System uptime during exams | ≥ 95% |
-| Concurrent exam sessions | ≥ 100 |
-| Gaze estimation MAE | < 5 degrees |
-| Head pose estimation MAE | < 5 degrees |
-| SUS usability score | ≥ 3.5 / 5.0 (70/100) |
-
----
-
-## Status (April 2026)
-
-| Layer | Status | What's Done | What's Missing |
-|-------|--------|-------------|----------------|
-| Frontend | 80% | All 8 pages built with UI and mock data | Real API calls, Socket.io frame loop, warning overlay wired to real events |
-| Backend API | 15% | Flask scaffold, auth stub, exam stub | JWT auth, DB migrations, all endpoints, email alerts, report gen |
-| AI Service | 0% | Nothing | Full Flask service, model integration, WebSocket server |
-| ML Models | 0% | Nothing | Dataset download, training scripts, ONNX exports |
-| Database | 0% | Nothing | PostgreSQL schema, migrations |
-| DevOps | 0% | Nothing | Docker Compose, GitHub Actions CI |
-| Documentation | 0% | Original plan PDF | SRS, API docs, test cases, final report |
-
----
-
-## References & Further Context
-
-- `.claude/` — Project state, API, DB schema, prompt guide
-- `docs/Original-Development-Plan-&-Roles.pdf` — Full original spec
-- `NEXT_STEPS.md` — Per-member development plan
-
----
-
-## License
-
-This project is for academic use at the University of Dodoma. For other uses, contact the project supervisor.
-
----
-
-*This README is a living document and will be updated as the project progresses.*
+Work on feature branches (`feat/your-name-*`), never push directly to `main`. Open a PR and assign Kweka as reviewer. Never commit `.env` files, model weights (`.pt`, `.onnx`), or face images.

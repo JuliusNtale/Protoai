@@ -1,0 +1,107 @@
+name: CD
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+jobs:
+  # ── Job 1: Build & push :staging image, run container health check ──────────
+  deploy-staging:
+    name: Deploy Staging
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push backend — staging + sha tags
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/proctoring-backend:staging
+            ${{ secrets.DOCKERHUB_USERNAME }}/proctoring-backend:${{ github.event.workflow_run.head_sha }}
+
+      - name: Container health check
+        run: |
+          docker pull ${{ secrets.DOCKERHUB_USERNAME }}/proctoring-backend:staging
+          docker run -d --name staging-health-check \
+            -p 5001:5000 \
+            -e NODE_ENV=production \
+            -e JWT_SECRET=staging-health-check-secret \
+            -e EMAIL_MODE=test \
+            ${{ secrets.DOCKERHUB_USERNAME }}/proctoring-backend:staging
+          sleep 6
+          curl -sf http://localhost:5001/health || (docker logs staging-health-check && exit 1)
+          docker stop staging-health-check
+          docker rm staging-health-check
+
+  # ── Job 2: Manual approval gate (requires environment: production) ──────────
+  approve-production:
+    name: Approve Production
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    environment: production
+
+    steps:
+      - name: Production deployment approved
+        run: echo "Approval granted — proceeding to production."
+
+  # ── Job 3: Push :latest :v1 :<sha> to Docker Hub ───────────────────────────
+  deploy-production:
+    name: Deploy Production
+    runs-on: ubuntu-latest
+    needs: approve-production
+
+    steps:
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Retag staging image as production releases
+        env:
+          IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/proctoring-backend
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          docker pull $IMAGE:staging
+          docker tag $IMAGE:staging $IMAGE:latest
+          docker tag $IMAGE:staging $IMAGE:v1
+          docker tag $IMAGE:staging $IMAGE:$SHA
+          docker push $IMAGE:latest
+          docker push $IMAGE:v1
+          docker push $IMAGE:$SHA
+
+  # ── Job 4: SSH into VPS, pull latest image, restart with Docker Compose ─────
+  deploy-server:
+    name: Deploy to VPS
+    runs-on: ubuntu-latest
+    needs: deploy-production
+
+    steps:
+      - name: SSH and deploy
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd /var/www/ai-exam-proctoring
+            docker compose pull
+            docker compose up -d

@@ -19,6 +19,7 @@ services:
 
   backend:
     build: ./backend
+    image: ${DOCKERHUB_USERNAME:-local}/proctoring-backend:${IMAGE_TAG:-latest}
     ports:
       - "5000:5000"
     environment:
@@ -40,6 +41,7 @@ services:
 
   ai-service:
     build: ./ai-service
+    image: ${DOCKERHUB_USERNAME:-local}/proctoring-ai-service:${IMAGE_TAG:-latest}
     ports:
       - "8000:8000"
     environment:
@@ -56,6 +58,7 @@ services:
 
   frontend:
     build: ./frontend
+    image: ${DOCKERHUB_USERNAME:-local}/proctoring-frontend:${IMAGE_TAG:-latest}
     ports:
       - "3000:3000"
     environment:
