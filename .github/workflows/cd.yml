@@ -106,7 +106,6 @@ jobs:
             cd /root/ProctorAI/ai-exam-proctoring-system
             git pull origin main
             docker compose pull
+            pm2 delete all 2>/dev/null || true
             docker ps -aq | xargs -r docker rm -f
-            fuser -k 5000/tcp 2>/dev/null || true
-            fuser -k 5432/tcp 2>/dev/null || true
             docker compose up -d --build
