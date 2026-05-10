@@ -25,6 +25,16 @@ type ManagedUser = {
   is_active: boolean
 }
 
+type AuditLogRow = {
+  audit_id: number
+  action: string
+  actor_user_id?: number | null
+  actor_name?: string | null
+  target_user_id?: number | null
+  ip_address?: string | null
+  created_at?: string | null
+}
+
 export default function AdminDashboard() {
   const router = useRouter()
   const [token, setToken] = useState("")
@@ -52,6 +62,9 @@ export default function AdminDashboard() {
   const [query, setQuery] = useState("")
   const [roleFilter, setRoleFilter] = useState<"all" | "student" | "lecturer">("all")
   const [activeFilter, setActiveFilter] = useState<"all" | "active" | "inactive">("all")
+  const [auditLogs, setAuditLogs] = useState<AuditLogRow[]>([])
+  const [auditLoading, setAuditLoading] = useState(false)
+  const [auditError, setAuditError] = useState("")
 
   useEffect(() => {
     const rawToken = localStorage.getItem("token")
@@ -86,6 +99,7 @@ export default function AdminDashboard() {
       localStorage.setItem("user", JSON.stringify(user))
       setMustChangePassword(Boolean(user?.must_change_password))
       await fetchUsers(activeToken)
+      await fetchAuditLogs(activeToken)
     } finally {
       setLoadingMe(false)
     }
@@ -111,6 +125,24 @@ export default function AdminDashboard() {
       setUsers(payload.users || [])
     } finally {
       setUsersLoading(false)
+    }
+  }
+
+  async function fetchAuditLogs(activeToken = token) {
+    setAuditLoading(true)
+    setAuditError("")
+    try {
+      const res = await fetch(getApiPath("/users/audit-logs"), {
+        headers: { Authorization: `Bearer ${activeToken}` },
+      })
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setAuditError(payload?.error?.message || "Could not load audit logs.")
+        return
+      }
+      setAuditLogs(payload.audit_logs || [])
+    } finally {
+      setAuditLoading(false)
     }
   }
 
@@ -198,6 +230,7 @@ export default function AdminDashboard() {
       setPhoneNumber("")
       setUsername("")
       await fetchUsers()
+      await fetchAuditLogs()
     } finally {
       setCreating(false)
     }
@@ -215,6 +248,7 @@ export default function AdminDashboard() {
       return
     }
     await fetchUsers()
+    await fetchAuditLogs()
   }
 
   async function resetCredentials(user: ManagedUser) {
@@ -238,6 +272,7 @@ export default function AdminDashboard() {
       ...prev,
     ])
     await fetchUsers()
+    await fetchAuditLogs()
   }
 
   const summary = useMemo(() => {
@@ -407,6 +442,46 @@ export default function AdminDashboard() {
                 {provisioned.length === 0 && (
                   <tr>
                     <td className="py-3 text-gray-500" colSpan={4}>No credentials generated yet.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section className="rounded-xl bg-white p-5 shadow-sm border">
+          <h2 className="text-lg font-semibold">Security Audit Logs</h2>
+          <p className="text-sm text-gray-500 mt-1">Tracks authentication and admin lifecycle actions.</p>
+          <div className="mt-3">
+            <button onClick={() => fetchAuditLogs()} className="rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" disabled={auditLoading}>
+              {auditLoading ? "Loading..." : "Refresh Logs"}
+            </button>
+          </div>
+          {auditError && <p className="mt-2 text-sm text-red-600">{auditError}</p>}
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left">
+                  <th className="py-2">Time</th>
+                  <th>Action</th>
+                  <th>Actor</th>
+                  <th>Target User</th>
+                  <th>IP</th>
+                </tr>
+              </thead>
+              <tbody>
+                {auditLogs.map((row) => (
+                  <tr key={row.audit_id} className="border-b">
+                    <td className="py-2">{row.created_at ? new Date(row.created_at).toLocaleString() : "-"}</td>
+                    <td>{row.action}</td>
+                    <td>{row.actor_name || row.actor_user_id || "-"}</td>
+                    <td>{row.target_user_id || "-"}</td>
+                    <td>{row.ip_address || "-"}</td>
+                  </tr>
+                ))}
+                {auditLogs.length === 0 && (
+                  <tr>
+                    <td className="py-3 text-gray-500" colSpan={5}>No audit logs found.</td>
                   </tr>
                 )}
               </tbody>

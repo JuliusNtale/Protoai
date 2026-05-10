@@ -6,7 +6,7 @@ from flask_jwt_extended import get_jwt, get_jwt_identity, jwt_required
 
 from app.audit import log_audit
 from app.extensions import db
-from app.models import User
+from app.models import AuditLog, User
 
 users_bp = Blueprint("users", __name__)
 
@@ -141,5 +141,49 @@ def reset_credentials(user_id: int):
             "user": user.to_auth_user() | {"is_active": user.is_active},
             "login_id": user.username or user.reg_number,
             "temporary_password": temp_password,
+        }
+    ), 200
+
+
+@users_bp.get("/audit-logs")
+@jwt_required()
+def list_audit_logs():
+    if not _is_admin():
+        return jsonify({"error": {"message": "Forbidden"}}), 403
+
+    action_filter = (request.args.get("action") or "").strip().lower()
+    query_text = (request.args.get("query") or "").strip().lower()
+
+    query = (
+        db.session.query(AuditLog, User)
+        .outerjoin(User, User.user_id == AuditLog.actor_user_id)
+        .order_by(AuditLog.created_at.desc())
+    )
+    if action_filter:
+        query = query.filter(AuditLog.action.ilike(f"%{action_filter}%"))
+    if query_text:
+        query = query.filter(
+            (AuditLog.action.ilike(f"%{query_text}%"))
+            | (User.full_name.ilike(f"%{query_text}%"))
+            | (User.email.ilike(f"%{query_text}%"))
+        )
+
+    rows = query.limit(200).all()
+    return jsonify(
+        {
+            "audit_logs": [
+                {
+                    "audit_id": audit.audit_id,
+                    "action": audit.action,
+                    "actor_user_id": audit.actor_user_id,
+                    "actor_name": actor.full_name if actor else None,
+                    "target_user_id": audit.target_user_id,
+                    "ip_address": audit.ip_address,
+                    "user_agent": audit.user_agent,
+                    "metadata": audit.details or {},
+                    "created_at": audit.created_at.isoformat() if audit.created_at else None,
+                }
+                for audit, actor in rows
+            ]
         }
     ), 200
