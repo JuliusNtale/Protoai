@@ -1,15 +1,28 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Shield, UserPlus, KeyRound } from "lucide-react"
+import { KeyRound, Shield, UserPlus, Users } from "lucide-react"
 import { getApiPath } from "@/lib/api-url"
 
 type Provisioned = {
+  user_id?: number
   full_name: string
   role: string
   login_id: string
   temporary_password: string
+}
+
+type ManagedUser = {
+  user_id: number
+  full_name: string
+  registration_number: string
+  username?: string | null
+  email: string
+  phone_number?: string | null
+  role: string
+  must_change_password: boolean
+  is_active: boolean
 }
 
 export default function AdminDashboard() {
@@ -20,6 +33,8 @@ export default function AdminDashboard() {
   const [newPassword, setNewPassword] = useState("")
   const [passwordMsg, setPasswordMsg] = useState("")
   const [loadingPassword, setLoadingPassword] = useState(false)
+  const [loadingMe, setLoadingMe] = useState(true)
+  const [adminError, setAdminError] = useState("")
 
   const [role, setRole] = useState<"student" | "lecturer">("student")
   const [fullName, setFullName] = useState("")
@@ -31,21 +46,73 @@ export default function AdminDashboard() {
   const [creating, setCreating] = useState(false)
   const [provisioned, setProvisioned] = useState<Provisioned[]>([])
 
+  const [users, setUsers] = useState<ManagedUser[]>([])
+  const [usersLoading, setUsersLoading] = useState(false)
+  const [usersError, setUsersError] = useState("")
+  const [query, setQuery] = useState("")
+  const [roleFilter, setRoleFilter] = useState<"all" | "student" | "lecturer">("all")
+  const [activeFilter, setActiveFilter] = useState<"all" | "active" | "inactive">("all")
+
   useEffect(() => {
     const rawToken = localStorage.getItem("token")
-    const rawUser = localStorage.getItem("user")
-    if (!rawToken || !rawUser) {
-      router.push("/")
-      return
-    }
-    const user = JSON.parse(rawUser)
-    if (user?.role !== "administrator" && user?.role !== "admin") {
+    if (!rawToken) {
       router.push("/")
       return
     }
     setToken(rawToken)
-    setMustChangePassword(Boolean(user?.must_change_password))
+    void verifySession(rawToken)
   }, [router])
+
+  async function verifySession(activeToken: string) {
+    setLoadingMe(true)
+    setAdminError("")
+    try {
+      const res = await fetch(getApiPath("/auth/me"), {
+        headers: { Authorization: `Bearer ${activeToken}` },
+      })
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setAdminError(payload?.error?.message || "Session expired. Please sign in again.")
+        localStorage.removeItem("token")
+        localStorage.removeItem("user")
+        router.push("/")
+        return
+      }
+      const user = payload?.user
+      if (user?.role !== "administrator" && user?.role !== "admin") {
+        router.push("/")
+        return
+      }
+      localStorage.setItem("user", JSON.stringify(user))
+      setMustChangePassword(Boolean(user?.must_change_password))
+      await fetchUsers(activeToken)
+    } finally {
+      setLoadingMe(false)
+    }
+  }
+
+  async function fetchUsers(activeToken = token) {
+    setUsersLoading(true)
+    setUsersError("")
+    try {
+      const params = new URLSearchParams()
+      if (query.trim()) params.set("query", query.trim())
+      if (roleFilter !== "all") params.set("role", roleFilter)
+      if (activeFilter !== "all") params.set("active", String(activeFilter === "active"))
+      const suffix = params.toString() ? `?${params.toString()}` : ""
+      const res = await fetch(`${getApiPath("/users")}${suffix}`, {
+        headers: { Authorization: `Bearer ${activeToken}` },
+      })
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setUsersError(payload?.error?.message || "Could not load users.")
+        return
+      }
+      setUsers(payload.users || [])
+    } finally {
+      setUsersLoading(false)
+    }
+  }
 
   async function submitPasswordChange() {
     setPasswordMsg("")
@@ -117,6 +184,7 @@ export default function AdminDashboard() {
 
       setProvisioned(prev => [
         {
+          user_id: payload.user?.user_id,
           full_name: payload.user?.full_name || fullName,
           role: payload.user?.role || role,
           login_id: payload.login_id,
@@ -129,22 +197,81 @@ export default function AdminDashboard() {
       setEmail("")
       setPhoneNumber("")
       setUsername("")
+      await fetchUsers()
     } finally {
       setCreating(false)
     }
   }
 
+  async function toggleUserStatus(user: ManagedUser) {
+    const res = await fetch(getApiPath(`/users/${user.user_id}/status`), {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ is_active: !user.is_active }),
+    })
+    const payload = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      setUsersError(payload?.error?.message || "Failed to update user status.")
+      return
+    }
+    await fetchUsers()
+  }
+
+  async function resetCredentials(user: ManagedUser) {
+    const res = await fetch(getApiPath(`/users/${user.user_id}/reset-credentials`), {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    const payload = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      setUsersError(payload?.error?.message || "Failed to reset credentials.")
+      return
+    }
+    setProvisioned(prev => [
+      {
+        user_id: user.user_id,
+        full_name: user.full_name,
+        role: user.role,
+        login_id: payload.login_id,
+        temporary_password: payload.temporary_password,
+      },
+      ...prev,
+    ])
+    await fetchUsers()
+  }
+
+  const summary = useMemo(() => {
+    const students = users.filter(u => u.role === "student").length
+    const lecturers = users.filter(u => u.role === "lecturer").length
+    const active = users.filter(u => u.is_active).length
+    return { students, lecturers, active, total: users.length }
+  }, [users])
+
+  if (loadingMe) {
+    return (
+      <main className="min-h-screen bg-[#f4f5f7] p-6">
+        <div className="mx-auto max-w-5xl rounded-xl border bg-white p-6 text-sm text-gray-500">Validating admin session...</div>
+      </main>
+    )
+  }
+
   return (
     <main className="min-h-screen bg-[#f4f5f7] p-6">
-      <div className="mx-auto max-w-5xl space-y-6">
+      <div className="mx-auto max-w-6xl space-y-6">
         <section className="rounded-xl bg-white p-5 shadow-sm border">
           <div className="flex items-center gap-2">
             <Shield className="h-5 w-5 text-blue-700" />
             <h1 className="text-xl font-semibold">Admin Console</h1>
           </div>
-          <p className="mt-2 text-sm text-gray-500">
-            Create student and lecturer accounts, assign roles, and share generated temporary credentials manually.
-          </p>
+          <p className="mt-2 text-sm text-gray-500">Manage account lifecycle: provision users, enforce first-login password change, activate/deactivate accounts, and reset credentials.</p>
+          {adminError && <p className="mt-2 text-sm text-red-600">{adminError}</p>}
+        </section>
+
+        <section className="grid gap-3 md:grid-cols-4">
+          <StatCard label="Total Users" value={summary.total} />
+          <StatCard label="Students" value={summary.students} />
+          <StatCard label="Lecturers" value={summary.lecturers} />
+          <StatCard label="Active Users" value={summary.active} />
         </section>
 
         {mustChangePassword && (
@@ -155,27 +282,11 @@ export default function AdminDashboard() {
             </div>
             <p className="mt-1 text-sm text-amber-700">You must change your temporary password before regular admin operations.</p>
             <div className="mt-4 grid gap-3 md:grid-cols-2">
-              <input
-                type="password"
-                value={currentPassword}
-                onChange={e => setCurrentPassword(e.target.value)}
-                placeholder="Current temporary password"
-                className="rounded-md border p-2 text-sm"
-              />
-              <input
-                type="password"
-                value={newPassword}
-                onChange={e => setNewPassword(e.target.value)}
-                placeholder="New strong password"
-                className="rounded-md border p-2 text-sm"
-              />
+              <input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} placeholder="Current temporary password" className="rounded-md border p-2 text-sm" />
+              <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="New strong password" className="rounded-md border p-2 text-sm" />
             </div>
             {passwordMsg && <p className="mt-2 text-sm text-amber-800">{passwordMsg}</p>}
-            <button
-              onClick={submitPasswordChange}
-              disabled={loadingPassword}
-              className="mt-3 rounded-md bg-amber-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-            >
+            <button onClick={submitPasswordChange} disabled={loadingPassword} className="mt-3 rounded-md bg-amber-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
               {loadingPassword ? "Updating..." : "Update Password"}
             </button>
           </section>
@@ -184,7 +295,7 @@ export default function AdminDashboard() {
         <section className="rounded-xl bg-white p-5 shadow-sm border space-y-4">
           <div className="flex items-center gap-2">
             <UserPlus className="h-5 w-5 text-blue-700" />
-            <h2 className="text-lg font-semibold">Provision Account</h2>
+            <h2 className="text-lg font-semibold">Create Lecturer/Student Account</h2>
           </div>
           <div className="grid gap-3 md:grid-cols-2">
             <select value={role} onChange={e => setRole(e.target.value as "student" | "lecturer")} className="rounded-md border p-2 text-sm">
@@ -200,18 +311,80 @@ export default function AdminDashboard() {
             )}
           </div>
           {createError && <p className="text-sm text-red-600">{createError}</p>}
-          <button
-            onClick={provisionAccount}
-            disabled={creating || mustChangePassword}
-            className="rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-          >
+          <button onClick={provisionAccount} disabled={creating || mustChangePassword} className="rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
             {creating ? "Creating..." : "Create Account + Generate Temporary Credentials"}
           </button>
         </section>
 
+        <section className="rounded-xl bg-white p-5 shadow-sm border space-y-4">
+          <div className="flex items-center gap-2">
+            <Users className="h-5 w-5 text-blue-700" />
+            <h2 className="text-lg font-semibold">Manage Users</h2>
+          </div>
+          <div className="grid gap-3 md:grid-cols-4">
+            <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search name/email/reg number" className="rounded-md border p-2 text-sm md:col-span-2" />
+            <select value={roleFilter} onChange={e => setRoleFilter(e.target.value as "all" | "student" | "lecturer")} className="rounded-md border p-2 text-sm">
+              <option value="all">all roles</option>
+              <option value="student">student</option>
+              <option value="lecturer">lecturer</option>
+            </select>
+            <select value={activeFilter} onChange={e => setActiveFilter(e.target.value as "all" | "active" | "inactive")} className="rounded-md border p-2 text-sm">
+              <option value="all">all status</option>
+              <option value="active">active</option>
+              <option value="inactive">inactive</option>
+            </select>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={() => fetchUsers()} className="rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" disabled={usersLoading}>
+              {usersLoading ? "Loading..." : "Refresh"}
+            </button>
+          </div>
+          {usersError && <p className="text-sm text-red-600">{usersError}</p>}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left">
+                  <th className="py-2">Name</th>
+                  <th>Role</th>
+                  <th>Login ID</th>
+                  <th>Email</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.map((user) => (
+                  <tr key={user.user_id} className="border-b">
+                    <td className="py-2">{user.full_name}</td>
+                    <td>{user.role}</td>
+                    <td className="font-mono">{user.username || user.registration_number}</td>
+                    <td>{user.email}</td>
+                    <td>{user.is_active ? "active" : "inactive"}</td>
+                    <td>
+                      <div className="flex gap-2">
+                        <button onClick={() => toggleUserStatus(user)} className="rounded border px-2 py-1 text-xs">
+                          {user.is_active ? "Deactivate" : "Activate"}
+                        </button>
+                        <button onClick={() => resetCredentials(user)} className="rounded border px-2 py-1 text-xs">
+                          Reset Credentials
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {users.length === 0 && (
+                  <tr>
+                    <td className="py-3 text-gray-500" colSpan={6}>No users found.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
         <section className="rounded-xl bg-white p-5 shadow-sm border">
-          <h2 className="text-lg font-semibold">Recently Generated Credentials</h2>
-          <p className="text-sm text-gray-500 mt-1">Share these manually with sample students/lecturers. Each user must change password after first login.</p>
+          <h2 className="text-lg font-semibold">Generated Temporary Credentials</h2>
+          <p className="text-sm text-gray-500 mt-1">Share manually. Each user is forced to set a new password on first login.</p>
           <div className="mt-4 overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -242,5 +415,14 @@ export default function AdminDashboard() {
         </section>
       </div>
     </main>
+  )
+}
+
+function StatCard({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-xl border bg-white p-4">
+      <p className="text-xs uppercase tracking-wider text-gray-500">{label}</p>
+      <p className="mt-1 text-2xl font-semibold text-gray-900">{value}</p>
+    </div>
   )
 }
