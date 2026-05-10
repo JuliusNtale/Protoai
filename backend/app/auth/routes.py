@@ -2,7 +2,7 @@ import base64
 import os
 import random
 import string
-from datetime import datetime
+from datetime import datetime, timedelta
 from uuid import uuid4
 
 from flask import Blueprint, current_app, jsonify, request
@@ -15,6 +15,11 @@ from app.models import FacialImage, User
 
 auth_bp = Blueprint("auth", __name__)
 
+# Lightweight in-process brute-force guard.
+_LOGIN_ATTEMPTS = {}
+_MAX_FAILED_ATTEMPTS = 5
+_LOCKOUT_MINUTES = 10
+
 
 def _normalize_role(role):
     if not role:
@@ -26,6 +31,42 @@ def _normalize_role(role):
 def _generate_temp_password(length=12):
     alphabet = string.ascii_letters + string.digits
     return "".join(random.choice(alphabet) for _ in range(length))
+
+
+def _attempt_key(login_id: str, ip: str) -> str:
+    return f"{(login_id or '').lower()}|{ip or ''}"
+
+
+def _ip_from_request() -> str:
+    return (request.headers.get("X-Forwarded-For") or request.remote_addr or "").split(",")[0].strip()
+
+
+def _is_locked_out(login_id: str, ip: str) -> tuple[bool, int]:
+    key = _attempt_key(login_id, ip)
+    entry = _LOGIN_ATTEMPTS.get(key)
+    if not entry:
+        return False, 0
+    lockout_until = entry.get("lockout_until")
+    if lockout_until and datetime.utcnow() < lockout_until:
+        remaining = int((lockout_until - datetime.utcnow()).total_seconds())
+        return True, max(1, remaining)
+    if lockout_until and datetime.utcnow() >= lockout_until:
+        _LOGIN_ATTEMPTS.pop(key, None)
+    return False, 0
+
+
+def _register_failed_attempt(login_id: str, ip: str) -> None:
+    key = _attempt_key(login_id, ip)
+    entry = _LOGIN_ATTEMPTS.get(key) or {"count": 0, "lockout_until": None, "last_attempt": None}
+    entry["count"] += 1
+    entry["last_attempt"] = datetime.utcnow()
+    if entry["count"] >= _MAX_FAILED_ATTEMPTS:
+        entry["lockout_until"] = datetime.utcnow() + timedelta(minutes=_LOCKOUT_MINUTES)
+    _LOGIN_ATTEMPTS[key] = entry
+
+
+def _clear_attempts(login_id: str, ip: str) -> None:
+    _LOGIN_ATTEMPTS.pop(_attempt_key(login_id, ip), None)
 
 
 @auth_bp.post("/register")
@@ -96,25 +137,32 @@ def login():
     login_id = (data.get("login_id") or data.get("reg_number") or data.get("registration_number") or "").strip()
     password = data.get("password") or ""
     requested_role = _normalize_role(data.get("role")) if data.get("role") else None
+    ip = _ip_from_request()
+
+    locked, remaining_seconds = _is_locked_out(login_id, ip)
+    if locked:
+        return jsonify({"error": {"message": f"Too many failed attempts. Try again in {remaining_seconds} seconds"}}), 429
 
     user = User.query.filter(
         or_(User.reg_number == login_id, User.email == login_id.lower(), User.username == login_id)
     ).first()
     if not user or not user.verify_password(password) or not user.is_active or (requested_role and requested_role != user.role):
+        _register_failed_attempt(login_id, ip)
         log_audit(
             action="auth.login_failed",
             target_user_id=user.user_id if user else None,
-            metadata={"login_id": login_id, "requested_role": requested_role},
+            metadata={"login_id": login_id, "requested_role": requested_role, "ip": ip},
         )
         db.session.commit()
         return jsonify({"error": "Invalid credentials"}), 401
 
+    _clear_attempts(login_id, ip)
     token = create_access_token(identity=str(user.user_id), additional_claims={"role": user.role})
     log_audit(
         action="auth.login_succeeded",
         actor_user_id=user.user_id,
         target_user_id=user.user_id,
-        metadata={"login_id": login_id, "role": user.role},
+        metadata={"login_id": login_id, "role": user.role, "ip": ip},
     )
     db.session.commit()
     return jsonify({"token": token, "user": user.to_auth_user()}), 200
