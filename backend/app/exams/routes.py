@@ -142,6 +142,30 @@ def update_exam(exam_id):
     return jsonify({"message": "Exam updated successfully"}), 200
 
 
+@exams_bp.delete("/<int:exam_id>")
+@jwt_required()
+def delete_exam(exam_id):
+    role = get_jwt().get("role")
+    user_id = int(get_jwt_identity())
+    if role not in {"lecturer", "admin"}:
+        return jsonify({"error": {"message": "Forbidden"}}), 403
+
+    exam = Exam.query.get(exam_id)
+    if not exam:
+        return jsonify({"error": {"message": "Exam not found"}}), 404
+    if role == "lecturer" and exam.lecturer_id != user_id:
+        return jsonify({"error": {"message": "Forbidden"}}), 403
+
+    # Prevent deletion once sessions exist to preserve integrity/audit history.
+    if ExamSession.query.filter_by(exam_id=exam.exam_id).first():
+        return jsonify({"error": {"message": "Exam has active/history sessions and cannot be deleted"}}), 409
+
+    Question.query.filter_by(exam_id=exam.exam_id).delete()
+    db.session.delete(exam)
+    db.session.commit()
+    return jsonify({"message": "Exam deleted"}), 200
+
+
 @exams_bp.get("/<int:exam_id>")
 @jwt_required()
 def get_exam(exam_id):

@@ -215,6 +215,27 @@ export default function LecturerDashboard() {
     await load(token)
   }
 
+  async function deleteExam(exam: ExamRow) {
+    const ok = window.confirm(`Delete exam "${exam.title}"? This cannot be undone.`)
+    if (!ok) return
+    const res = await fetch(getApiPath(`/exams/${exam.exam_id}`), {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    const payload = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      setError(payload?.error?.message || "Could not delete exam.")
+      return
+    }
+    if (selectedExamId === exam.exam_id) {
+      setSelectedExamId(null)
+      setQuestions([])
+      setStudents([])
+      setCourseStudents([])
+    }
+    await load(token)
+  }
+
   async function createQuestion() {
     if (!selectedExamId || !questionText || !correctAnswer) return
     const res = await fetch(getApiPath(`/exams/${selectedExamId}/questions`), {
@@ -384,6 +405,7 @@ export default function LecturerDashboard() {
                   <th>Status</th>
                   <th>Set Status</th>
                   <th>Edit</th>
+                  <th>Delete</th>
                   <th>Open</th>
                 </tr>
               </thead>
@@ -410,6 +432,11 @@ export default function LecturerDashboard() {
                       <button onClick={() => editExam(exam)} className="rounded border px-2 py-1 text-xs">Edit</button>
                     </td>
                     <td>
+                      <button onClick={() => deleteExam(exam)} className="rounded border px-2 py-1 text-xs text-red-700">
+                        Delete
+                      </button>
+                    </td>
+                    <td>
                       <button
                         onClick={async () => {
                           setSelectedExamId(exam.exam_id)
@@ -422,7 +449,7 @@ export default function LecturerDashboard() {
                     </td>
                   </tr>
                 ))}
-                {exams.length === 0 && <tr><td colSpan={7} className="py-3 text-gray-500">No exams created yet.</td></tr>}
+                {exams.length === 0 && <tr><td colSpan={8} className="py-3 text-gray-500">No exams created yet.</td></tr>}
               </tbody>
             </table>
           </div>
