@@ -71,6 +71,9 @@ export default function AdminDashboard() {
   const [auditError, setAuditError] = useState("")
   const [auditQuery, setAuditQuery] = useState("")
   const [auditAction, setAuditAction] = useState("")
+  const [auditOffset, setAuditOffset] = useState(0)
+  const [auditLimit] = useState(100)
+  const [auditLastCount, setAuditLastCount] = useState(0)
 
   useEffect(() => {
     const rawToken = localStorage.getItem("token")
@@ -134,13 +137,15 @@ export default function AdminDashboard() {
     }
   }
 
-  async function fetchAuditLogs(activeToken = token) {
+  async function fetchAuditLogs(activeToken = token, append = false) {
     setAuditLoading(true)
     setAuditError("")
     try {
       const params = new URLSearchParams()
       if (auditQuery.trim()) params.set("query", auditQuery.trim())
       if (auditAction.trim()) params.set("action", auditAction.trim())
+      params.set("limit", String(auditLimit))
+      params.set("offset", String(append ? auditOffset : 0))
       const suffix = params.toString() ? `?${params.toString()}` : ""
       const res = await fetch(`${getApiPath("/users/audit-logs")}${suffix}`, {
         headers: { Authorization: `Bearer ${activeToken}` },
@@ -150,7 +155,15 @@ export default function AdminDashboard() {
         setAuditError(payload?.error?.message || "Could not load audit logs.")
         return
       }
-      setAuditLogs(payload.audit_logs || [])
+      const incoming = payload.audit_logs || []
+      setAuditLastCount(incoming.length)
+      if (append) {
+        setAuditLogs(prev => [...prev, ...incoming])
+        setAuditOffset(prev => prev + incoming.length)
+      } else {
+        setAuditLogs(incoming)
+        setAuditOffset(incoming.length)
+      }
     } finally {
       setAuditLoading(false)
     }
@@ -600,6 +613,13 @@ export default function AdminDashboard() {
           <div className="mt-3">
             <button onClick={() => fetchAuditLogs()} className="rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" disabled={auditLoading}>
               {auditLoading ? "Loading..." : "Refresh Logs"}
+            </button>
+            <button
+              onClick={() => fetchAuditLogs(token, true)}
+              className="ml-2 rounded-md border px-4 py-2 text-sm font-semibold disabled:opacity-60"
+              disabled={auditLoading || auditLastCount < auditLimit}
+            >
+              Load More
             </button>
           </div>
           {auditError && <p className="mt-2 text-sm text-red-600">{auditError}</p>}

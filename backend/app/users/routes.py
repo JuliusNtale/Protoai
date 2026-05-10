@@ -166,6 +166,13 @@ def list_audit_logs():
 
     action_filter = (request.args.get("action") or "").strip().lower()
     query_text = (request.args.get("query") or "").strip().lower()
+    try:
+        limit = int(request.args.get("limit") or 100)
+        offset = int(request.args.get("offset") or 0)
+    except ValueError:
+        return jsonify({"error": {"message": "limit and offset must be integers"}}), 400
+    limit = max(1, min(limit, 500))
+    offset = max(0, offset)
 
     query = (
         db.session.query(AuditLog, User)
@@ -181,7 +188,7 @@ def list_audit_logs():
             | (User.email.ilike(f"%{query_text}%"))
         )
 
-    rows = query.limit(200).all()
+    rows = query.offset(offset).limit(limit).all()
     return jsonify(
         {
             "audit_logs": [
@@ -197,6 +204,9 @@ def list_audit_logs():
                     "created_at": audit.created_at.isoformat() if audit.created_at else None,
                 }
                 for audit, actor in rows
-            ]
+            ],
+            "limit": limit,
+            "offset": offset,
+            "count": len(rows),
         }
     ), 200
