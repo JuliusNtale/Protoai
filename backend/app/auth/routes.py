@@ -230,6 +230,80 @@ def provision_credentials():
     )
 
 
+@auth_bp.post("/provision-bulk")
+@jwt_required()
+def provision_bulk_credentials():
+    role = get_jwt().get("role")
+    if role != "admin":
+        return jsonify({"error": {"message": "Forbidden"}}), 403
+
+    actor_user_id = int(get_jwt_identity())
+    data = request.get_json(silent=True) or {}
+    rows = data.get("users") or []
+    if not isinstance(rows, list) or not rows:
+        return jsonify({"error": {"message": "users must be a non-empty array"}}), 400
+
+    created = []
+    errors = []
+    for idx, row in enumerate(rows):
+        target_role = _normalize_role((row or {}).get("role"))
+        full_name = ((row or {}).get("full_name") or "").strip()
+        reg_number = ((row or {}).get("reg_number") or (row or {}).get("registration_number") or "").strip()
+        email = ((row or {}).get("email") or "").strip().lower()
+        username = ((row or {}).get("username") or "").strip()
+
+        if target_role not in {"student", "lecturer"}:
+            errors.append({"index": idx, "message": "Role must be student or lecturer"})
+            continue
+        if not full_name or not reg_number or not email:
+            errors.append({"index": idx, "message": "full_name, reg_number and email are required"})
+            continue
+        if target_role == "lecturer" and not username:
+            errors.append({"index": idx, "message": "username is required for lecturer"})
+            continue
+        if User.query.filter_by(reg_number=reg_number).first():
+            errors.append({"index": idx, "message": f"Registration number already exists: {reg_number}"})
+            continue
+        if User.query.filter_by(email=email).first():
+            errors.append({"index": idx, "message": f"Email already exists: {email}"})
+            continue
+        if username and User.query.filter_by(username=username).first():
+            errors.append({"index": idx, "message": f"Username already exists: {username}"})
+            continue
+
+        temp_password = _generate_temp_password()
+        user = User(
+            full_name=full_name,
+            reg_number=reg_number,
+            email=email,
+            department=((row or {}).get("department") or "").strip() or None,
+            phone_number=((row or {}).get("phone_number") or "").strip() or None,
+            role=target_role,
+            username=username or None,
+            credential_source="admin_provisioned",
+            must_change_password=True,
+        )
+        user.set_password(temp_password)
+        db.session.add(user)
+        db.session.flush()
+        log_audit(
+            action="admin.user_provisioned_bulk",
+            actor_user_id=actor_user_id,
+            target_user_id=user.user_id,
+            metadata={"role": user.role, "registration_number": user.reg_number, "username": user.username},
+        )
+        created.append(
+            {
+                "user": user.to_auth_user(),
+                "login_id": user.username or user.reg_number,
+                "temporary_password": temp_password,
+            }
+        )
+
+    db.session.commit()
+    return jsonify({"created": created, "errors": errors, "created_count": len(created), "error_count": len(errors)}), 200
+
+
 @auth_bp.get("/me")
 @jwt_required()
 def me():

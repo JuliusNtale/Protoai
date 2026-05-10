@@ -55,6 +55,9 @@ export default function AdminDashboard() {
   const [createError, setCreateError] = useState("")
   const [creating, setCreating] = useState(false)
   const [provisioned, setProvisioned] = useState<Provisioned[]>([])
+  const [bulkJson, setBulkJson] = useState("")
+  const [bulkMsg, setBulkMsg] = useState("")
+  const [bulkCreating, setBulkCreating] = useState(false)
 
   const [users, setUsers] = useState<ManagedUser[]>([])
   const [usersLoading, setUsersLoading] = useState(false)
@@ -236,6 +239,51 @@ export default function AdminDashboard() {
     }
   }
 
+  async function provisionBulkAccounts() {
+    setBulkMsg("")
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(bulkJson)
+    } catch {
+      setBulkMsg("Invalid JSON format.")
+      return
+    }
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      setBulkMsg("Provide a non-empty JSON array of users.")
+      return
+    }
+
+    setBulkCreating(true)
+    try {
+      const res = await fetch(getApiPath("/auth/provision-bulk"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ users: parsed }),
+      })
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setBulkMsg(payload?.error?.message || "Bulk provisioning failed.")
+        return
+      }
+
+      const created = payload.created || []
+      setProvisioned(prev => [
+        ...created.map((entry: { user?: { full_name?: string; role?: string }; login_id?: string; temporary_password?: string }) => ({
+          full_name: entry.user?.full_name || "",
+          role: entry.user?.role || "",
+          login_id: entry.login_id || "",
+          temporary_password: entry.temporary_password || "",
+        })),
+        ...prev,
+      ])
+      setBulkMsg(`Created ${payload.created_count || 0} users, ${payload.error_count || 0} errors.`)
+      await fetchUsers()
+      await fetchAuditLogs()
+    } finally {
+      setBulkCreating(false)
+    }
+  }
+
   async function toggleUserStatus(user: ManagedUser) {
     const res = await fetch(getApiPath(`/users/${user.user_id}/status`), {
       method: "PATCH",
@@ -348,6 +396,25 @@ export default function AdminDashboard() {
           {createError && <p className="text-sm text-red-600">{createError}</p>}
           <button onClick={provisionAccount} disabled={creating || mustChangePassword} className="rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
             {creating ? "Creating..." : "Create Account + Generate Temporary Credentials"}
+          </button>
+        </section>
+
+        <section className="rounded-xl bg-white p-5 shadow-sm border space-y-4">
+          <h2 className="text-lg font-semibold">Bulk Provision Accounts</h2>
+          <p className="text-sm text-gray-500">Paste JSON array. Each entry: role, full_name, reg_number, email, phone_number (optional), username (required for lecturer).</p>
+          <textarea
+            value={bulkJson}
+            onChange={e => setBulkJson(e.target.value)}
+            placeholder='[{"role":"student","full_name":"Jane Doe","reg_number":"T22-03-12345","email":"jane@example.com"}]'
+            className="min-h-36 w-full rounded-md border p-2 text-sm font-mono"
+          />
+          {bulkMsg && <p className="text-sm text-gray-700">{bulkMsg}</p>}
+          <button
+            onClick={provisionBulkAccounts}
+            disabled={bulkCreating || mustChangePassword}
+            className="rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+          >
+            {bulkCreating ? "Creating..." : "Run Bulk Provisioning"}
           </button>
         </section>
 
