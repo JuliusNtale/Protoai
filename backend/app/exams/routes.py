@@ -214,6 +214,49 @@ def delete_question(exam_id, question_id):
     return jsonify({"message": "Question deleted"}), 200
 
 
+@exams_bp.put("/<int:exam_id>/questions/<int:question_id>")
+@jwt_required()
+def update_question(exam_id, question_id):
+    role = get_jwt().get("role")
+    user_id = int(get_jwt_identity())
+    if role not in {"lecturer", "admin"}:
+        return jsonify({"error": {"message": "Forbidden"}}), 403
+
+    exam = Exam.query.get(exam_id)
+    if not exam:
+        return jsonify({"error": {"message": "Exam not found"}}), 404
+    if role == "lecturer" and exam.lecturer_id != user_id:
+        return jsonify({"error": {"message": "Forbidden"}}), 403
+
+    question = Question.query.filter_by(exam_id=exam_id, question_id=question_id).first()
+    if not question:
+        return jsonify({"error": {"message": "Question not found"}}), 404
+
+    data = request.get_json(silent=True) or {}
+    question_text = (data.get("question_text") or question.question_text).strip()
+    question_type = (data.get("question_type") or question.question_type).strip().lower()
+    correct_answer = (data.get("correct_answer") or question.correct_answer).strip().upper()
+    marks = int(data.get("marks") or question.marks or 1)
+    order_num = int(data.get("order_num") or question.order_num or 0)
+
+    if not question_text or question_type not in {"mcq", "true_false"}:
+        return jsonify({"error": {"message": "question_text and valid question_type are required"}}), 400
+    if not correct_answer:
+        return jsonify({"error": {"message": "correct_answer is required"}}), 400
+
+    question.question_text = question_text
+    question.question_type = question_type
+    question.option_a = (data.get("option_a") or "").strip() or None
+    question.option_b = (data.get("option_b") or "").strip() or None
+    question.option_c = (data.get("option_c") or "").strip() or None
+    question.option_d = (data.get("option_d") or "").strip() or None
+    question.correct_answer = correct_answer
+    question.marks = marks
+    question.order_num = order_num
+    db.session.commit()
+    return jsonify({"message": "Question updated"}), 200
+
+
 @exams_bp.get("/<int:exam_id>/students")
 @jwt_required()
 def list_exam_students(exam_id):

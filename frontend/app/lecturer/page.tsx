@@ -67,6 +67,7 @@ export default function LecturerDashboard() {
   const [optionD, setOptionD] = useState("")
   const [correctAnswer, setCorrectAnswer] = useState("")
   const [marks, setMarks] = useState("1")
+  const [editingQuestionId, setEditingQuestionId] = useState<number | null>(null)
 
   useEffect(() => {
     const rawToken = localStorage.getItem("token")
@@ -204,6 +205,39 @@ export default function LecturerDashboard() {
     if (res.ok) await loadExamDetails(token, selectedExamId)
   }
 
+  async function saveQuestionEdit(question: QuestionRow) {
+    if (!selectedExamId) return
+    const updatedText = window.prompt("Update question text", question.question_text)
+    if (!updatedText) return
+    const updatedCorrect = window.prompt("Update correct answer", question.correct_answer || "")
+    if (!updatedCorrect) return
+
+    setEditingQuestionId(question.question_id)
+    const res = await fetch(getApiPath(`/exams/${selectedExamId}/questions/${question.question_id}`), {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        question_text: updatedText,
+        question_type: question.question_type,
+        option_a: question.option_a || "",
+        option_b: question.option_b || "",
+        option_c: question.option_c || "",
+        option_d: question.option_d || "",
+        correct_answer: updatedCorrect,
+        marks: question.marks,
+        order_num: question.order_num,
+      }),
+    })
+    const payload = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      setError(payload?.error?.message || "Could not update question.")
+      setEditingQuestionId(null)
+      return
+    }
+    await loadExamDetails(token, selectedExamId)
+    setEditingQuestionId(null)
+  }
+
   const selectedExam = useMemo(
     () => exams.find(e => e.exam_id === selectedExamId) || null,
     [exams, selectedExamId]
@@ -325,6 +359,7 @@ export default function LecturerDashboard() {
                   <th>Type</th>
                   <th>Correct</th>
                   <th>Marks</th>
+                  <th>Edit</th>
                   <th>Delete</th>
                 </tr>
               </thead>
@@ -336,10 +371,19 @@ export default function LecturerDashboard() {
                     <td>{q.question_type}</td>
                     <td>{q.correct_answer}</td>
                     <td>{q.marks}</td>
+                    <td>
+                      <button
+                        onClick={() => saveQuestionEdit(q)}
+                        disabled={editingQuestionId === q.question_id}
+                        className="rounded border px-2 py-1 text-xs disabled:opacity-60"
+                      >
+                        {editingQuestionId === q.question_id ? "Saving..." : "Edit"}
+                      </button>
+                    </td>
                     <td><button onClick={() => deleteQuestion(q.question_id)} className="rounded border px-2 py-1 text-xs">Delete</button></td>
                   </tr>
                 ))}
-                {questions.length === 0 && <tr><td colSpan={6} className="py-3 text-gray-500">No questions for selected exam.</td></tr>}
+                {questions.length === 0 && <tr><td colSpan={7} className="py-3 text-gray-500">No questions for selected exam.</td></tr>}
               </tbody>
             </table>
           </div>
