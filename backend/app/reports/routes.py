@@ -120,6 +120,47 @@ def get_report(session_id):
     )
 
 
+@reports_bp.get("/my")
+@jwt_required()
+def my_reports():
+    user_role = get_jwt().get("role")
+    user_id = int(get_jwt_identity())
+    if user_role != "student":
+        return jsonify({"error": {"message": "Forbidden"}}), 403
+
+    rows = (
+        db.session.query(ExamSession, Exam)
+        .join(Exam, Exam.exam_id == ExamSession.exam_id)
+        .filter(ExamSession.student_id == user_id)
+        .order_by(ExamSession.session_id.desc())
+        .all()
+    )
+
+    payload = []
+    for session_row, exam_row in rows:
+        counts, total_anomalies, risk_level, _ = _build_report_snapshot(session_row)
+        payload.append(
+            {
+                "session_id": session_row.session_id,
+                "exam_id": exam_row.exam_id,
+                "exam_title": exam_row.title,
+                "course_code": exam_row.course_code,
+                "score": float(session_row.score) if session_row.score is not None else None,
+                "warning_count": session_row.warning_count or 0,
+                "risk_level": risk_level,
+                "total_anomalies": total_anomalies,
+                "gaze_away_count": counts["gaze_away"],
+                "head_turned_count": counts["head_turned"],
+                "tab_switch_count": counts["tab_switch"],
+                "face_absent_count": counts["face_absent"],
+                "multiple_faces_count": counts["multiple_faces"],
+                "session_status": session_row.session_status,
+            }
+        )
+
+    return jsonify({"reports": payload}), 200
+
+
 @reports_bp.get("/export/<int:exam_id>")
 @jwt_required()
 def export_exam_reports(exam_id):

@@ -35,12 +35,24 @@ type SessionRow = {
   scheduled_at?: string | null
 }
 
+type MyReportRow = {
+  session_id: number
+  exam_title: string
+  course_code: string
+  score?: number | null
+  warning_count: number
+  risk_level: string
+  total_anomalies: number
+  session_status: string
+}
+
 export default function StudentDashboard() {
   const router = useRouter()
   const [token, setToken] = useState("")
   const [me, setMe] = useState<MeUser | null>(null)
   const [exams, setExams] = useState<ExamRow[]>([])
   const [sessions, setSessions] = useState<SessionRow[]>([])
+  const [reports, setReports] = useState<MyReportRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [saving, setSaving] = useState(false)
@@ -62,14 +74,16 @@ export default function StudentDashboard() {
     setLoading(true)
     setError("")
     try {
-      const [meRes, examsRes, sessionsRes] = await Promise.all([
+      const [meRes, examsRes, sessionsRes, reportsRes] = await Promise.all([
         fetch(getApiPath("/auth/me"), { headers: { Authorization: `Bearer ${activeToken}` } }),
         fetch(getApiPath("/exams"), { headers: { Authorization: `Bearer ${activeToken}` } }),
         fetch(getApiPath("/sessions"), { headers: { Authorization: `Bearer ${activeToken}` } }),
+        fetch(getApiPath("/reports/my"), { headers: { Authorization: `Bearer ${activeToken}` } }),
       ])
       const mePayload = await meRes.json().catch(() => ({}))
       const examsPayload = await examsRes.json().catch(() => ({}))
       const sessionsPayload = await sessionsRes.json().catch(() => ({}))
+      const reportsPayload = await reportsRes.json().catch(() => ({}))
 
       if (!meRes.ok) {
         setError("Session expired. Sign in again.")
@@ -90,6 +104,7 @@ export default function StudentDashboard() {
       setMe(mePayload.user)
       setExams(examsPayload.exams || [])
       setSessions(sessionsPayload.sessions || [])
+      setReports(reportsPayload.reports || [])
     } finally {
       setLoading(false)
     }
@@ -224,6 +239,37 @@ export default function StudentDashboard() {
                   </tr>
                 ))}
                 {sessions.length === 0 && <tr><td colSpan={5} className="py-3 text-gray-500">No sessions yet.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section className="rounded-xl bg-white p-5 shadow-sm border">
+          <h2 className="text-lg font-semibold">My Proctoring Reports</h2>
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left">
+                  <th className="py-2">Exam</th>
+                  <th>Course</th>
+                  <th>Status</th>
+                  <th>Risk</th>
+                  <th>Anomalies</th>
+                  <th>Warnings</th>
+                </tr>
+              </thead>
+              <tbody>
+                {reports.map((r) => (
+                  <tr key={r.session_id} className="border-b">
+                    <td className="py-2">{r.exam_title}</td>
+                    <td>{r.course_code}</td>
+                    <td>{r.session_status}</td>
+                    <td>{r.risk_level}</td>
+                    <td>{r.total_anomalies}</td>
+                    <td>{r.warning_count}</td>
+                  </tr>
+                ))}
+                {reports.length === 0 && <tr><td colSpan={6} className="py-3 text-gray-500">No reports generated yet.</td></tr>}
               </tbody>
             </table>
           </div>
