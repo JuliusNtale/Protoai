@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt, get_jwt_identity, jwt_required
@@ -28,6 +28,13 @@ def start_session():
         return jsonify({"error": {"message": "Exam not found"}}), 404
     if (exam.status or "").lower() not in {"scheduled", "live", "active"}:
         return jsonify({"error": {"message": "Exam is not open for session start"}}), 409
+    if (exam.status or "").lower() == "scheduled" and exam.scheduled_at:
+        now_utc = datetime.now(timezone.utc)
+        scheduled_at = exam.scheduled_at
+        if scheduled_at.tzinfo is None:
+            scheduled_at = scheduled_at.replace(tzinfo=timezone.utc)
+        if now_utc < scheduled_at:
+            return jsonify({"error": {"message": "Exam has not started yet"}}), 409
 
     student_id = int(get_jwt_identity())
     if _password_change_required(student_id):
