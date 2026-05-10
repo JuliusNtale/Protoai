@@ -236,6 +236,14 @@ export default function StudentDashboard() {
     }
     try {
       const u = JSON.parse(raw)
+      if (u?.role === "admin" || u?.role === "administrator") {
+        router.push("/admin")
+        return
+      }
+      if (u?.role === "lecturer") {
+        router.push("/lecturer")
+        return
+      }
       const fullName: string = u.name || u.full_name || "Student"
       const parts = fullName.trim().split(" ")
       const initials = parts.length >= 2
