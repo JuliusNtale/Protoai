@@ -170,7 +170,7 @@ def export_exam_reports(exam_id):
     if user_role not in {"admin", "lecturer"}:
         return jsonify({"error": {"message": "Forbidden"}}), 403
 
-    exam = Exam.query.get(exam_id)
+    exam = db.session.get(Exam, exam_id)
     if not exam:
         return jsonify({"error": {"message": "Exam not found"}}), 404
     if user_role == "lecturer" and exam.lecturer_id != user_id:

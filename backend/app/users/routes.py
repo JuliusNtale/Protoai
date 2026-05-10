@@ -21,14 +21,14 @@ def _generate_temp_password(length=12):
 
 
 def _password_change_required(user_id: int) -> bool:
-    user = User.query.get(user_id)
+    user = db.session.get(User, user_id)
     return bool(user and user.must_change_password)
 
 
 @users_bp.put("/profile")
 @jwt_required()
 def update_profile():
-    user = User.query.get(int(get_jwt_identity()))
+    user = db.session.get(User, int(get_jwt_identity()))
     if not user:
         return jsonify({"error": {"message": "User not found"}}), 404
 
@@ -98,7 +98,7 @@ def update_user_status(user_id: int):
     if _password_change_required(actor_user_id):
         return jsonify({"error": {"message": "Password change required before admin actions"}}), 403
 
-    user = User.query.get(user_id)
+    user = db.session.get(User, user_id)
     if not user:
         return jsonify({"error": {"message": "User not found"}}), 404
     if user.role == "admin":
@@ -129,7 +129,7 @@ def reset_credentials(user_id: int):
     if _password_change_required(actor_user_id):
         return jsonify({"error": {"message": "Password change required before admin actions"}}), 403
 
-    user = User.query.get(user_id)
+    user = db.session.get(User, user_id)
     if not user:
         return jsonify({"error": {"message": "User not found"}}), 404
     if user.role == "admin":

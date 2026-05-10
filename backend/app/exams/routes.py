@@ -10,7 +10,7 @@ exams_bp = Blueprint("exams", __name__)
 
 
 def _password_change_required(user_id: int) -> bool:
-    user = User.query.get(user_id)
+    user = db.session.get(User, user_id)
     return bool(user and user.must_change_password)
 
 
@@ -97,7 +97,7 @@ def update_exam_status(exam_id):
     if _password_change_required(user_id):
         return jsonify({"error": {"message": "Password change required before exam management"}}), 403
 
-    exam = Exam.query.get(exam_id)
+    exam = db.session.get(Exam, exam_id)
     if not exam:
         return jsonify({"error": {"message": "Exam not found"}}), 404
     if role == "lecturer" and exam.lecturer_id != user_id:
@@ -122,7 +122,7 @@ def update_exam(exam_id):
     if _password_change_required(user_id):
         return jsonify({"error": {"message": "Password change required before exam management"}}), 403
 
-    exam = Exam.query.get(exam_id)
+    exam = db.session.get(Exam, exam_id)
     if not exam:
         return jsonify({"error": {"message": "Exam not found"}}), 404
     if role == "lecturer" and exam.lecturer_id != user_id:
@@ -163,7 +163,7 @@ def delete_exam(exam_id):
     if _password_change_required(user_id):
         return jsonify({"error": {"message": "Password change required before exam management"}}), 403
 
-    exam = Exam.query.get(exam_id)
+    exam = db.session.get(Exam, exam_id)
     if not exam:
         return jsonify({"error": {"message": "Exam not found"}}), 404
     if role == "lecturer" and exam.lecturer_id != user_id:
@@ -182,7 +182,7 @@ def delete_exam(exam_id):
 @exams_bp.get("/<int:exam_id>")
 @jwt_required()
 def get_exam(exam_id):
-    exam = Exam.query.get(exam_id)
+    exam = db.session.get(Exam, exam_id)
     if not exam:
         return jsonify({"error": {"message": "Exam not found"}}), 404
 
@@ -235,7 +235,7 @@ def create_question(exam_id):
     if _password_change_required(user_id):
         return jsonify({"error": {"message": "Password change required before exam management"}}), 403
 
-    exam = Exam.query.get(exam_id)
+    exam = db.session.get(Exam, exam_id)
     if not exam:
         return jsonify({"error": {"message": "Exam not found"}}), 404
     if role == "lecturer" and exam.lecturer_id != user_id:
@@ -280,7 +280,7 @@ def delete_question(exam_id, question_id):
     if _password_change_required(user_id):
         return jsonify({"error": {"message": "Password change required before exam management"}}), 403
 
-    exam = Exam.query.get(exam_id)
+    exam = db.session.get(Exam, exam_id)
     if not exam:
         return jsonify({"error": {"message": "Exam not found"}}), 404
     if role == "lecturer" and exam.lecturer_id != user_id:
@@ -304,7 +304,7 @@ def update_question(exam_id, question_id):
     if _password_change_required(user_id):
         return jsonify({"error": {"message": "Password change required before exam management"}}), 403
 
-    exam = Exam.query.get(exam_id)
+    exam = db.session.get(Exam, exam_id)
     if not exam:
         return jsonify({"error": {"message": "Exam not found"}}), 404
     if role == "lecturer" and exam.lecturer_id != user_id:
@@ -347,7 +347,7 @@ def list_exam_students(exam_id):
     if role not in {"lecturer", "admin"}:
         return jsonify({"error": {"message": "Forbidden"}}), 403
 
-    exam = Exam.query.get(exam_id)
+    exam = db.session.get(Exam, exam_id)
     if not exam:
         return jsonify({"error": {"message": "Exam not found"}}), 404
     if role == "lecturer" and exam.lecturer_id != user_id:

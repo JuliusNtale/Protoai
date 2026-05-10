@@ -152,7 +152,7 @@ def change_password():
     if len(new_password) < 8:
         return jsonify({"error": {"message": "New password must be at least 8 characters"}}), 400
 
-    user = User.query.get(int(get_jwt_identity()))
+    user = db.session.get(User, int(get_jwt_identity()))
     if not user:
         return jsonify({"error": {"message": "User not found"}}), 404
     if not user.verify_password(current_password):
@@ -233,7 +233,7 @@ def provision_credentials():
 @auth_bp.get("/me")
 @jwt_required()
 def me():
-    user = User.query.get(int(get_jwt_identity()))
+    user = db.session.get(User, int(get_jwt_identity()))
     if not user:
         return jsonify({"error": "User not found"}), 404
     return jsonify({"user": user.to_auth_user(), "server_time": datetime.utcnow().isoformat()}), 200

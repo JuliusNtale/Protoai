@@ -11,7 +11,7 @@ VALID_EVENTS = {"gaze_away", "head_turned", "face_absent", "tab_switch", "multip
 
 
 def _password_change_required(user_id: int) -> bool:
-    user = User.query.get(user_id)
+    user = db.session.get(User, user_id)
     return bool(user and user.must_change_password)
 
 
@@ -23,7 +23,7 @@ def start_session():
     if not exam_id:
         return jsonify({"error": {"message": "exam_id is required"}}), 400
 
-    exam = Exam.query.get(int(exam_id))
+    exam = db.session.get(Exam, int(exam_id))
     if not exam:
         return jsonify({"error": {"message": "Exam not found"}}), 404
     if (exam.status or "").lower() not in {"scheduled", "live", "active"}:
@@ -72,7 +72,7 @@ def verify_session_identity():
     if not session_id:
         return jsonify({"error": {"message": "session_id is required"}}), 400
 
-    session = ExamSession.query.get(int(session_id))
+    session = db.session.get(ExamSession, int(session_id))
     if not session:
         return jsonify({"error": {"message": "Session not found"}}), 404
 
@@ -95,7 +95,7 @@ def log_event():
     if not session_id or event_type not in VALID_EVENTS:
         return jsonify({"error": {"message": "Invalid session_id or event_type"}}), 400
 
-    session = ExamSession.query.get(int(session_id))
+    session = db.session.get(ExamSession, int(session_id))
     if not session:
         return jsonify({"error": {"message": "Session not found"}}), 404
 
@@ -125,7 +125,7 @@ def log_event():
 @sessions_bp.post("/<int:session_id>/submit")
 @jwt_required()
 def submit_session(session_id):
-    session = ExamSession.query.get(session_id)
+    session = db.session.get(ExamSession, session_id)
     if not session:
         return jsonify({"error": {"message": "Session not found"}}), 404
     if session.student_id != int(get_jwt_identity()):
@@ -179,7 +179,7 @@ def submit_session(session_id):
 @sessions_bp.get("/<int:session_id>/answers")
 @jwt_required()
 def get_session_answers(session_id):
-    session = ExamSession.query.get(session_id)
+    session = db.session.get(ExamSession, session_id)
     if not session:
         return jsonify({"error": {"message": "Session not found"}}), 404
     if session.student_id != int(get_jwt_identity()):
