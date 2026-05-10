@@ -398,21 +398,21 @@ export default function AdminDashboard() {
 
   if (loadingMe) {
     return (
-      <main className="min-h-screen bg-[#f4f5f7] p-6">
-        <div className="mx-auto max-w-5xl rounded-xl border bg-white p-6 text-sm text-gray-500">Validating admin session...</div>
+      <main className="min-h-screen bg-[#f4f5f7] p-6 text-slate-900">
+        <div className="mx-auto max-w-5xl rounded-xl border bg-white p-6 text-sm text-slate-700">Validating admin session...</div>
       </main>
     )
   }
 
   return (
-    <main className="min-h-screen bg-[#f4f5f7] p-6">
+    <main className="min-h-screen bg-[#f4f5f7] p-6 text-slate-900">
       <div className="mx-auto max-w-6xl space-y-6">
         <section className="rounded-xl bg-white p-5 shadow-sm border">
           <div className="flex items-center gap-2">
             <Shield className="h-5 w-5 text-blue-700" />
             <h1 className="text-xl font-semibold">Admin Console</h1>
           </div>
-          <p className="mt-2 text-sm text-gray-500">Manage account lifecycle: provision users, enforce first-login password change, activate/deactivate accounts, and reset credentials.</p>
+          <p className="mt-2 text-sm text-slate-700">Manage account lifecycle: provision users, enforce first-login password change, activate/deactivate accounts, and reset credentials.</p>
           {adminError && <p className="mt-2 text-sm text-red-600">{adminError}</p>}
         </section>
 
@@ -431,8 +431,8 @@ export default function AdminDashboard() {
             </div>
             <p className="mt-1 text-sm text-amber-700">You must change your temporary password before regular admin operations.</p>
             <div className="mt-4 grid gap-3 md:grid-cols-2">
-              <input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} placeholder="Current temporary password" className="rounded-md border p-2 text-sm" />
-              <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="New strong password" className="rounded-md border p-2 text-sm" />
+              <input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} placeholder="Current temporary password" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />
+              <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="New strong password" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />
             </div>
             {passwordMsg && <p className="mt-2 text-sm text-amber-800">{passwordMsg}</p>}
             <button onClick={submitPasswordChange} disabled={loadingPassword} className="mt-3 rounded-md bg-amber-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
@@ -451,12 +451,12 @@ export default function AdminDashboard() {
               <option value="student">student</option>
               <option value="lecturer">lecturer</option>
             </select>
-            <input value={fullName} onChange={e => setFullName(e.target.value)} placeholder="Full name" className="rounded-md border p-2 text-sm" />
-            <input value={regNumber} onChange={e => setRegNumber(e.target.value)} placeholder="Registration number" className="rounded-md border p-2 text-sm" />
-            <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email" className="rounded-md border p-2 text-sm" />
-            <input value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)} placeholder="Phone number (optional)" className="rounded-md border p-2 text-sm" />
+            <input value={fullName} onChange={e => setFullName(e.target.value)} placeholder="Full name" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />
+            <input value={regNumber} onChange={e => setRegNumber(e.target.value)} placeholder="Registration number" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />
+            <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />
+            <input value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)} placeholder="Phone number (optional)" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />
             {role === "lecturer" && (
-              <input value={username} onChange={e => setUsername(e.target.value)} placeholder="Username (required for lecturer)" className="rounded-md border p-2 text-sm" />
+              <input value={username} onChange={e => setUsername(e.target.value)} placeholder="Username (required for lecturer)" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />
             )}
           </div>
           {createError && <p className="text-sm text-red-600">{createError}</p>}
@@ -467,7 +467,7 @@ export default function AdminDashboard() {
 
         <section className="rounded-xl bg-white p-5 shadow-sm border space-y-4">
           <h2 className="text-lg font-semibold">Bulk Provision Accounts</h2>
-          <p className="text-sm text-gray-500">Paste JSON array. Each entry: role, full_name, reg_number, email, phone_number (optional), username (required for lecturer).</p>
+          <p className="text-sm text-slate-700">Paste JSON array. Each entry: role, full_name, reg_number, email, phone_number (optional), username (required for lecturer).</p>
           <button
             onClick={() => setBulkJson(
               JSON.stringify(
@@ -487,7 +487,7 @@ export default function AdminDashboard() {
             value={bulkJson}
             onChange={e => setBulkJson(e.target.value)}
             placeholder='[{"role":"student","full_name":"Jane Doe","reg_number":"T22-03-12345","email":"jane@example.com"}]'
-            className="min-h-36 w-full rounded-md border p-2 text-sm font-mono"
+            className="min-h-36 w-full rounded-md border bg-white p-2 text-sm font-mono text-slate-900 placeholder:text-slate-500"
           />
           {bulkMsg && <p className="text-sm text-gray-700">{bulkMsg}</p>}
           {bulkErrors.length > 0 && (
@@ -515,7 +515,7 @@ export default function AdminDashboard() {
             <h2 className="text-lg font-semibold">Manage Users</h2>
           </div>
           <div className="grid gap-3 md:grid-cols-4">
-            <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search name/email/reg number" className="rounded-md border p-2 text-sm md:col-span-2" />
+            <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search name/email/reg number" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500 md:col-span-2" />
             <select value={roleFilter} onChange={e => setRoleFilter(e.target.value as "all" | "student" | "lecturer")} className="rounded-md border p-2 text-sm">
               <option value="all">all roles</option>
               <option value="student">student</option>
@@ -567,7 +567,7 @@ export default function AdminDashboard() {
                 ))}
                 {users.length === 0 && (
                   <tr>
-                    <td className="py-3 text-gray-500" colSpan={6}>No users found.</td>
+                    <td className="py-3 text-slate-600" colSpan={6}>No users found.</td>
                   </tr>
                 )}
               </tbody>
@@ -577,7 +577,7 @@ export default function AdminDashboard() {
 
         <section className="rounded-xl bg-white p-5 shadow-sm border">
           <h2 className="text-lg font-semibold">Generated Temporary Credentials</h2>
-          <p className="text-sm text-gray-500 mt-1">Share manually. Each user is forced to set a new password on first login.</p>
+          <p className="text-sm text-slate-700 mt-1">Share manually. Each user is forced to set a new password on first login.</p>
           <div className="mt-3">
             <button
               onClick={exportGeneratedCredentialsCsv}
@@ -608,7 +608,7 @@ export default function AdminDashboard() {
                 ))}
                 {provisioned.length === 0 && (
                   <tr>
-                    <td className="py-3 text-gray-500" colSpan={4}>No credentials generated yet.</td>
+                    <td className="py-3 text-slate-600" colSpan={4}>No credentials generated yet.</td>
                   </tr>
                 )}
               </tbody>
@@ -618,19 +618,19 @@ export default function AdminDashboard() {
 
         <section className="rounded-xl bg-white p-5 shadow-sm border">
           <h2 className="text-lg font-semibold">Security Audit Logs</h2>
-          <p className="text-sm text-gray-500 mt-1">Tracks authentication and admin lifecycle actions.</p>
+          <p className="text-sm text-slate-700 mt-1">Tracks authentication and admin lifecycle actions.</p>
           <div className="mt-3 grid gap-2 md:grid-cols-2">
             <input
               value={auditQuery}
               onChange={e => setAuditQuery(e.target.value)}
               placeholder="Search actor/email/action"
-              className="rounded-md border p-2 text-sm"
+              className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500"
             />
             <input
               value={auditAction}
               onChange={e => setAuditAction(e.target.value)}
               placeholder="Filter action (e.g. auth.login)"
-              className="rounded-md border p-2 text-sm"
+              className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500"
             />
           </div>
           <div className="mt-3">
@@ -676,7 +676,7 @@ export default function AdminDashboard() {
                 ))}
                 {auditLogs.length === 0 && (
                   <tr>
-                    <td className="py-3 text-gray-500" colSpan={5}>No audit logs found.</td>
+                    <td className="py-3 text-slate-600" colSpan={5}>No audit logs found.</td>
                   </tr>
                 )}
               </tbody>
@@ -691,7 +691,7 @@ export default function AdminDashboard() {
 function StatCard({ label, value }: { label: string; value: number }) {
   return (
     <div className="rounded-xl border bg-white p-4">
-      <p className="text-xs uppercase tracking-wider text-gray-500">{label}</p>
+      <p className="text-xs uppercase tracking-wider text-slate-600">{label}</p>
       <p className="mt-1 text-2xl font-semibold text-gray-900">{value}</p>
     </div>
   )
