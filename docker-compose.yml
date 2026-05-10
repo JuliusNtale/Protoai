@@ -22,6 +22,8 @@ services:
     image: ${DOCKERHUB_USERNAME:-local}/proctoring-backend:${IMAGE_TAG:-latest}
     ports:
       - "5000:5000"
+    env_file:
+      - ./backend/.env
     environment:
       PYTHONPATH: /app
       DATABASE_URL: postgresql://proctoring_user:proctoring_pass@postgres:5432/proctoring_db
