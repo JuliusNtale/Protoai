@@ -200,15 +200,20 @@ def get_session_answers(session_id):
 @jwt_required()
 def list_sessions():
     role = get_jwt().get("role")
-    if role not in {"lecturer", "admin"}:
-        return jsonify({"error": {"message": "Forbidden"}}), 403
+    user_id = int(get_jwt_identity())
 
     sessions = (
         db.session.query(ExamSession, Exam)
         .join(Exam, Exam.exam_id == ExamSession.exam_id)
         .order_by(ExamSession.session_id.desc())
-        .all()
     )
+    if role == "lecturer":
+        sessions = sessions.filter(Exam.lecturer_id == user_id)
+    elif role == "student":
+        sessions = sessions.filter(ExamSession.student_id == user_id)
+    elif role != "admin":
+        return jsonify({"error": {"message": "Forbidden"}}), 403
+    sessions = sessions.all()
 
     payload = []
     for session, exam in sessions:
@@ -222,7 +227,13 @@ def list_sessions():
             {
                 "session_id": session.session_id,
                 "student_name": f"Student #{session.student_id}",
+                "student_id": session.student_id,
                 "exam_title": exam.title,
+                "exam_id": exam.exam_id,
+                "course_code": exam.course_code,
+                "scheduled_at": exam.scheduled_at.isoformat() if exam.scheduled_at else None,
+                "session_status": session.session_status,
+                "score": float(session.score) if session.score is not None else None,
                 "warning_count": session.warning_count,
                 "risk_level": risk_level,
             }
