@@ -5,6 +5,8 @@ from app.auth.routes import auth_bp
 from app.config import Config
 from app.exams.routes import exams_bp
 from app.extensions import db, jwt, migrate
+from app.images.routes import images_bp
+from app.reports.routes import reports_bp
 from app.sessions.routes import sessions_bp
 from app.users.routes import users_bp
 
@@ -23,6 +25,8 @@ def create_app() -> Flask:
     app.register_blueprint(users_bp, url_prefix="/api/users")
     app.register_blueprint(exams_bp, url_prefix="/api/exams")
     app.register_blueprint(sessions_bp, url_prefix="/api/sessions")
+    app.register_blueprint(reports_bp, url_prefix="/api/reports")
+    app.register_blueprint(images_bp, url_prefix="/api/images")
 
     @app.get("/health")
     def health_check():
