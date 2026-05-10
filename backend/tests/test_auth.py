@@ -54,3 +54,43 @@ def test_change_password_flow(client):
         json={"registration_number": "T22-03-22222", "password": "NewPassword123"},
     )
     assert relogin_new.status_code == 200
+
+
+def test_admin_provisions_instructor_credentials(client):
+    client.post(
+        "/api/auth/register",
+        json={
+            "name": "System Admin",
+            "registration_number": "A22-00-00001",
+            "password": "AdminPass123",
+            "role": "admin",
+        },
+    )
+    admin_login = client.post(
+        "/api/auth/login",
+        json={"login_id": "A22-00-00001", "password": "AdminPass123"},
+    )
+    admin_token = admin_login.get_json()["token"]
+
+    provision = client.post(
+        "/api/auth/provision-credentials",
+        json={
+            "role": "lecturer",
+            "full_name": "Lecturer Jane",
+            "registration_number": "L22-03-90001",
+            "email": "lecturer.jane@udom.ac.tz",
+            "username": "lecturer.jane",
+        },
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert provision.status_code == 201
+    body = provision.get_json()
+    assert body["temporary_password"]
+    assert body["login_id"] == "lecturer.jane"
+    assert body["user"]["must_change_password"] is True
+
+    lecturer_login = client.post(
+        "/api/auth/login",
+        json={"login_id": "lecturer.jane", "password": body["temporary_password"]},
+    )
+    assert lecturer_login.status_code == 200

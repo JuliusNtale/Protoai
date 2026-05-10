@@ -31,7 +31,7 @@ export default function LoginPage() {
       const res = await fetch(getApiPath("/auth/login"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ registration_number: regNum, password }),
+        body: JSON.stringify({ login_id: regNum, password }),
       })
 
       const data = await res.json()
@@ -136,14 +136,14 @@ export default function LoginPage() {
                 htmlFor="regnum"
                 className="text-[11px] font-semibold tracking-widest text-gray-400 uppercase"
               >
-                User Name
+                Login ID
               </label>
               <input
                 id="regnum"
                 type="text"
                 value={regNum}
                 onChange={e => setRegNum(e.target.value)}
-                placeholder="T22-03-92323"
+                placeholder="Reg No / Username / Email"
                 required
                 className="w-full rounded-md border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all"
               />

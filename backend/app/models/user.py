@@ -15,6 +15,9 @@ class User(db.Model):
     department = db.Column(db.String(100))
     password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(20), nullable=False, default="student")
+    username = db.Column(db.String(80), unique=True)
+    credential_source = db.Column(db.String(30), nullable=False, default="self_register")
+    must_change_password = db.Column(db.Boolean, nullable=False, default=False)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     is_active = db.Column(db.Boolean, nullable=False, default=True)
 
@@ -31,6 +34,8 @@ class User(db.Model):
             "full_name": self.full_name,
             "name": self.full_name,
             "registration_number": self.reg_number,
+            "username": self.username,
+            "must_change_password": self.must_change_password,
             "email": self.email,
             "role": role_value,
         }

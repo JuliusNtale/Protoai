@@ -1,10 +1,13 @@
 import base64
 import os
+import random
+import string
 from datetime import datetime
 from uuid import uuid4
 
 from flask import Blueprint, jsonify, request
-from flask_jwt_extended import create_access_token, get_jwt_identity, jwt_required
+from flask_jwt_extended import create_access_token, get_jwt, get_jwt_identity, jwt_required
+from sqlalchemy import or_
 
 from app.extensions import db
 from app.models import FacialImage, User
@@ -17,6 +20,11 @@ def _normalize_role(role):
         return "student"
     lower = role.lower()
     return "admin" if lower == "administrator" else lower
+
+
+def _generate_temp_password(length=12):
+    alphabet = string.ascii_letters + string.digits
+    return "".join(random.choice(alphabet) for _ in range(length))
 
 
 @auth_bp.post("/register")
@@ -50,6 +58,8 @@ def register():
         email=email,
         department=department,
         role=_normalize_role(data.get("role")),
+        credential_source="self_register",
+        must_change_password=False,
     )
     user.set_password(password)
     db.session.add(user)
@@ -78,11 +88,13 @@ def register():
 @auth_bp.post("/login")
 def login():
     data = request.get_json(silent=True) or {}
-    reg_number = (data.get("reg_number") or data.get("registration_number") or "").strip()
+    login_id = (data.get("login_id") or data.get("reg_number") or data.get("registration_number") or "").strip()
     password = data.get("password") or ""
     requested_role = _normalize_role(data.get("role")) if data.get("role") else None
 
-    user = User.query.filter_by(reg_number=reg_number).first()
+    user = User.query.filter(
+        or_(User.reg_number == login_id, User.email == login_id.lower(), User.username == login_id)
+    ).first()
     if not user or not user.verify_password(password) or not user.is_active or (requested_role and requested_role != user.role):
         return jsonify({"error": "Invalid credentials"}), 401
 
@@ -129,8 +141,65 @@ def change_password():
         return jsonify({"error": {"message": "Current password is incorrect"}}), 401
 
     user.set_password(new_password)
+    user.must_change_password = False
     db.session.commit()
     return jsonify({"message": "Password updated successfully"}), 200
+
+
+@auth_bp.post("/provision-credentials")
+@jwt_required()
+def provision_credentials():
+    role = get_jwt().get("role")
+    if role != "admin":
+        return jsonify({"error": {"message": "Forbidden"}}), 403
+
+    data = request.get_json(silent=True) or {}
+    target_role = _normalize_role(data.get("role"))
+    full_name = (data.get("full_name") or "").strip()
+    reg_number = (data.get("reg_number") or data.get("registration_number") or "").strip()
+    email = (data.get("email") or "").strip().lower()
+    username = (data.get("username") or "").strip()
+
+    if target_role not in {"student", "lecturer"}:
+        return jsonify({"error": {"message": "Role must be student or lecturer"}}), 400
+    if not full_name or not reg_number or not email:
+        return jsonify({"error": {"message": "full_name, reg_number and email are required"}}), 400
+    if target_role == "lecturer" and not username:
+        return jsonify({"error": {"message": "username is required for lecturer credentials"}}), 400
+    if User.query.filter_by(reg_number=reg_number).first():
+        return jsonify({"error": {"message": "Registration number already exists"}}), 409
+    if User.query.filter_by(email=email).first():
+        return jsonify({"error": {"message": "Email already exists"}}), 409
+    if username and User.query.filter_by(username=username).first():
+        return jsonify({"error": {"message": "Username already exists"}}), 409
+
+    temp_password = _generate_temp_password()
+    user = User(
+        full_name=full_name,
+        reg_number=reg_number,
+        email=email,
+        department=(data.get("department") or "").strip() or None,
+        role=target_role,
+        username=username or None,
+        credential_source="admin_provisioned",
+        must_change_password=True,
+    )
+    user.set_password(temp_password)
+    db.session.add(user)
+    db.session.commit()
+
+    return (
+        jsonify(
+            {
+                "message": "Credentials provisioned",
+                "user": user.to_auth_user(),
+                "login_id": user.username or user.reg_number,
+                "temporary_password": temp_password,
+                "delivery_channel": "admin_out_of_band",
+            }
+        ),
+        201,
+    )
 
 
 @auth_bp.get("/me")
