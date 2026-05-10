@@ -23,6 +23,7 @@ services:
     ports:
       - "5000:5000"
     environment:
+      PYTHONPATH: /app
       DATABASE_URL: postgresql://proctoring_user:proctoring_pass@postgres:5432/proctoring_db
       JWT_SECRET: change-this-in-production-256-bit-secret
       JWT_EXPIRY_HOURS: "8"
