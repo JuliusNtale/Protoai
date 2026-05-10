@@ -69,6 +69,8 @@ export default function AdminDashboard() {
   const [auditLogs, setAuditLogs] = useState<AuditLogRow[]>([])
   const [auditLoading, setAuditLoading] = useState(false)
   const [auditError, setAuditError] = useState("")
+  const [auditQuery, setAuditQuery] = useState("")
+  const [auditAction, setAuditAction] = useState("")
 
   useEffect(() => {
     const rawToken = localStorage.getItem("token")
@@ -136,7 +138,11 @@ export default function AdminDashboard() {
     setAuditLoading(true)
     setAuditError("")
     try {
-      const res = await fetch(getApiPath("/users/audit-logs"), {
+      const params = new URLSearchParams()
+      if (auditQuery.trim()) params.set("query", auditQuery.trim())
+      if (auditAction.trim()) params.set("action", auditAction.trim())
+      const suffix = params.toString() ? `?${params.toString()}` : ""
+      const res = await fetch(`${getApiPath("/users/audit-logs")}${suffix}`, {
         headers: { Authorization: `Bearer ${activeToken}` },
       })
       const payload = await res.json().catch(() => ({}))
@@ -577,6 +583,20 @@ export default function AdminDashboard() {
         <section className="rounded-xl bg-white p-5 shadow-sm border">
           <h2 className="text-lg font-semibold">Security Audit Logs</h2>
           <p className="text-sm text-gray-500 mt-1">Tracks authentication and admin lifecycle actions.</p>
+          <div className="mt-3 grid gap-2 md:grid-cols-2">
+            <input
+              value={auditQuery}
+              onChange={e => setAuditQuery(e.target.value)}
+              placeholder="Search actor/email/action"
+              className="rounded-md border p-2 text-sm"
+            />
+            <input
+              value={auditAction}
+              onChange={e => setAuditAction(e.target.value)}
+              placeholder="Filter action (e.g. auth.login)"
+              className="rounded-md border p-2 text-sm"
+            />
+          </div>
           <div className="mt-3">
             <button onClick={() => fetchAuditLogs()} className="rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" disabled={auditLoading}>
               {auditLoading ? "Loading..." : "Refresh Logs"}
