@@ -12,6 +12,7 @@ if str(ROOT) not in sys.path:
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 os.environ["JWT_SECRET"] = "test-secret"
 os.environ["JWT_EXPIRY_HOURS"] = "8"
+os.environ["ALLOW_PUBLIC_REGISTRATION"] = "true"
 
 from app import create_app  # noqa: E402
 from app.extensions import db  # noqa: E402

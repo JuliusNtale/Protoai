@@ -12,6 +12,7 @@ class User(db.Model):
     full_name = db.Column(db.String(100), nullable=False)
     reg_number = db.Column(db.String(20), unique=True, nullable=False)
     email = db.Column(db.String(150), unique=True, nullable=False)
+    phone_number = db.Column(db.String(30))
     department = db.Column(db.String(100))
     password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(20), nullable=False, default="student")
@@ -37,5 +38,6 @@ class User(db.Model):
             "username": self.username,
             "must_change_password": self.must_change_password,
             "email": self.email,
+            "phone_number": self.phone_number,
             "role": role_value,
         }

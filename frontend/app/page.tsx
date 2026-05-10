@@ -237,12 +237,8 @@ export default function LoginPage() {
             University SSO
           </button>
 
-          {/* Register link */}
           <p className="mt-7 text-center text-sm text-gray-500">
-            {"Don't have an account? "}
-            <Link href="/register" className="font-semibold text-blue-600 hover:underline">
-              Register here
-            </Link>
+            Account access is provisioned by your administrator.
           </p>
         </div>
       </main>

@@ -5,7 +5,7 @@ import string
 from datetime import datetime
 from uuid import uuid4
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, current_app, jsonify, request
 from flask_jwt_extended import create_access_token, get_jwt, get_jwt_identity, jwt_required
 from sqlalchemy import or_
 
@@ -29,6 +29,9 @@ def _generate_temp_password(length=12):
 
 @auth_bp.post("/register")
 def register():
+    if not current_app.config.get("ALLOW_PUBLIC_REGISTRATION", False):
+        return jsonify({"error": {"message": "Public registration is disabled. Contact administrator."}}), 403
+
     data = request.get_json(silent=True) or {}
     full_name = (data.get("full_name") or data.get("name") or "").strip()
     reg_number = (data.get("reg_number") or data.get("registration_number") or "").strip()
@@ -57,6 +60,7 @@ def register():
         reg_number=reg_number,
         email=email,
         department=department,
+        phone_number=(data.get("phone_number") or "").strip() or None,
         role=_normalize_role(data.get("role")),
         credential_source="self_register",
         must_change_password=False,
@@ -179,6 +183,7 @@ def provision_credentials():
         reg_number=reg_number,
         email=email,
         department=(data.get("department") or "").strip() or None,
+        phone_number=(data.get("phone_number") or "").strip() or None,
         role=target_role,
         username=username or None,
         credential_source="admin_provisioned",
