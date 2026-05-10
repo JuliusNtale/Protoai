@@ -169,6 +169,29 @@ export default function AdminDashboard() {
     }
   }
 
+  function exportAuditLogsCsv() {
+    if (auditLogs.length === 0) return
+    const header = ["created_at", "action", "actor_user_id", "actor_name", "target_user_id", "ip_address"]
+    const rows = auditLogs.map((row) => [
+      row.created_at || "",
+      row.action || "",
+      row.actor_user_id ?? "",
+      row.actor_name || "",
+      row.target_user_id ?? "",
+      row.ip_address || "",
+    ])
+    const csv = [header, ...rows]
+      .map((r) => r.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+      .join("\n")
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `audit_logs_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   async function submitPasswordChange() {
     setPasswordMsg("")
     if (!currentPassword || !newPassword) {
@@ -620,6 +643,13 @@ export default function AdminDashboard() {
               disabled={auditLoading || auditLastCount < auditLimit}
             >
               Load More
+            </button>
+            <button
+              onClick={exportAuditLogsCsv}
+              className="ml-2 rounded-md border px-4 py-2 text-sm font-semibold disabled:opacity-60"
+              disabled={auditLogs.length === 0}
+            >
+              Export CSV
             </button>
           </div>
           {auditError && <p className="mt-2 text-sm text-red-600">{auditError}</p>}
