@@ -20,6 +20,11 @@ def _generate_temp_password(length=12):
     return "".join(random.choice(alphabet) for _ in range(length))
 
 
+def _password_change_required(user_id: int) -> bool:
+    user = User.query.get(user_id)
+    return bool(user and user.must_change_password)
+
+
 @users_bp.put("/profile")
 @jwt_required()
 def update_profile():
@@ -59,6 +64,8 @@ def update_profile():
 def list_users():
     if not _is_admin():
         return jsonify({"error": {"message": "Forbidden"}}), 403
+    if _password_change_required(int(get_jwt_identity())):
+        return jsonify({"error": {"message": "Password change required before admin actions"}}), 403
 
     role = (request.args.get("role") or "").strip().lower()
     query = (request.args.get("query") or "").strip().lower()
@@ -88,6 +95,8 @@ def update_user_status(user_id: int):
     if not _is_admin():
         return jsonify({"error": {"message": "Forbidden"}}), 403
     actor_user_id = int(get_jwt_identity())
+    if _password_change_required(actor_user_id):
+        return jsonify({"error": {"message": "Password change required before admin actions"}}), 403
 
     user = User.query.get(user_id)
     if not user:
@@ -117,6 +126,8 @@ def reset_credentials(user_id: int):
     if not _is_admin():
         return jsonify({"error": {"message": "Forbidden"}}), 403
     actor_user_id = int(get_jwt_identity())
+    if _password_change_required(actor_user_id):
+        return jsonify({"error": {"message": "Password change required before admin actions"}}), 403
 
     user = User.query.get(user_id)
     if not user:
@@ -150,6 +161,8 @@ def reset_credentials(user_id: int):
 def list_audit_logs():
     if not _is_admin():
         return jsonify({"error": {"message": "Forbidden"}}), 403
+    if _password_change_required(int(get_jwt_identity())):
+        return jsonify({"error": {"message": "Password change required before admin actions"}}), 403
 
     action_filter = (request.args.get("action") or "").strip().lower()
     query_text = (request.args.get("query") or "").strip().lower()

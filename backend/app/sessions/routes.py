@@ -10,6 +10,11 @@ sessions_bp = Blueprint("sessions", __name__)
 VALID_EVENTS = {"gaze_away", "head_turned", "face_absent", "tab_switch", "multiple_faces"}
 
 
+def _password_change_required(user_id: int) -> bool:
+    user = User.query.get(user_id)
+    return bool(user and user.must_change_password)
+
+
 @sessions_bp.post("/start")
 @jwt_required()
 def start_session():
@@ -25,6 +30,8 @@ def start_session():
         return jsonify({"error": {"message": "Exam is not open for session start"}}), 409
 
     student_id = int(get_jwt_identity())
+    if _password_change_required(student_id):
+        return jsonify({"error": {"message": "Password change required before exam start"}}), 403
     existing = ExamSession.query.filter_by(student_id=student_id, exam_id=exam.exam_id).first()
     if existing:
         return jsonify({"error": "Session already exists for this exam", "session_id": existing.session_id}), 409

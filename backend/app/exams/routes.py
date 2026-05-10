@@ -9,6 +9,11 @@ from app.models import Exam, ExamSession, Question, User
 exams_bp = Blueprint("exams", __name__)
 
 
+def _password_change_required(user_id: int) -> bool:
+    user = User.query.get(user_id)
+    return bool(user and user.must_change_password)
+
+
 @exams_bp.get("")
 @jwt_required()
 def list_exams():
@@ -49,6 +54,8 @@ def create_exam():
     role = get_jwt().get("role")
     if role not in {"lecturer", "admin"}:
         return jsonify({"error": {"message": "Forbidden"}}), 403
+    if _password_change_required(int(get_jwt_identity())):
+        return jsonify({"error": {"message": "Password change required before exam management"}}), 403
 
     data = request.get_json(silent=True) or {}
     title = (data.get("title") or "").strip()
@@ -87,6 +94,8 @@ def update_exam_status(exam_id):
     user_id = int(get_jwt_identity())
     if role not in {"lecturer", "admin"}:
         return jsonify({"error": {"message": "Forbidden"}}), 403
+    if _password_change_required(user_id):
+        return jsonify({"error": {"message": "Password change required before exam management"}}), 403
 
     exam = Exam.query.get(exam_id)
     if not exam:
@@ -110,6 +119,8 @@ def update_exam(exam_id):
     user_id = int(get_jwt_identity())
     if role not in {"lecturer", "admin"}:
         return jsonify({"error": {"message": "Forbidden"}}), 403
+    if _password_change_required(user_id):
+        return jsonify({"error": {"message": "Password change required before exam management"}}), 403
 
     exam = Exam.query.get(exam_id)
     if not exam:
@@ -149,6 +160,8 @@ def delete_exam(exam_id):
     user_id = int(get_jwt_identity())
     if role not in {"lecturer", "admin"}:
         return jsonify({"error": {"message": "Forbidden"}}), 403
+    if _password_change_required(user_id):
+        return jsonify({"error": {"message": "Password change required before exam management"}}), 403
 
     exam = Exam.query.get(exam_id)
     if not exam:
@@ -219,6 +232,8 @@ def create_question(exam_id):
     user_id = int(get_jwt_identity())
     if role not in {"lecturer", "admin"}:
         return jsonify({"error": {"message": "Forbidden"}}), 403
+    if _password_change_required(user_id):
+        return jsonify({"error": {"message": "Password change required before exam management"}}), 403
 
     exam = Exam.query.get(exam_id)
     if not exam:
@@ -262,6 +277,8 @@ def delete_question(exam_id, question_id):
     user_id = int(get_jwt_identity())
     if role not in {"lecturer", "admin"}:
         return jsonify({"error": {"message": "Forbidden"}}), 403
+    if _password_change_required(user_id):
+        return jsonify({"error": {"message": "Password change required before exam management"}}), 403
 
     exam = Exam.query.get(exam_id)
     if not exam:
@@ -284,6 +301,8 @@ def update_question(exam_id, question_id):
     user_id = int(get_jwt_identity())
     if role not in {"lecturer", "admin"}:
         return jsonify({"error": {"message": "Forbidden"}}), 403
+    if _password_change_required(user_id):
+        return jsonify({"error": {"message": "Password change required before exam management"}}), 403
 
     exam = Exam.query.get(exam_id)
     if not exam:
