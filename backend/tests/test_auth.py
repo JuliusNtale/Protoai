@@ -1,3 +1,6 @@
+from app.auth import routes as auth_routes
+
+
 def test_register_and_login_success(client):
     register_payload = {
         "name": "Jane Doe",
@@ -94,3 +97,33 @@ def test_admin_provisions_instructor_credentials(client):
         json={"login_id": "lecturer.jane", "password": body["temporary_password"]},
     )
     assert lecturer_login.status_code == 200
+
+
+def test_login_bruteforce_lockout(client):
+    auth_routes._LOGIN_ATTEMPTS.clear()
+    try:
+        client.post(
+            "/api/auth/register",
+            json={
+                "name": "Lockout Target",
+                "registration_number": "T22-03-33333",
+                "password": "CorrectPassword123",
+            },
+        )
+
+        for _ in range(5):
+            failed = client.post(
+                "/api/auth/login",
+                json={"registration_number": "T22-03-33333", "password": "WrongPassword123"},
+            )
+            assert failed.status_code == 401
+
+        locked = client.post(
+            "/api/auth/login",
+            json={"registration_number": "T22-03-33333", "password": "CorrectPassword123"},
+        )
+        assert locked.status_code == 429
+        payload = locked.get_json()
+        assert "Too many failed attempts" in payload["error"]["message"]
+    finally:
+        auth_routes._LOGIN_ATTEMPTS.clear()
