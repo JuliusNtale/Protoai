@@ -245,6 +245,9 @@ def provision_bulk_credentials():
 
     created = []
     errors = []
+    seen_reg_numbers = set()
+    seen_emails = set()
+    seen_usernames = set()
     for idx, row in enumerate(rows):
         target_role = _normalize_role((row or {}).get("role"))
         full_name = ((row or {}).get("full_name") or "").strip()
@@ -261,6 +264,15 @@ def provision_bulk_credentials():
         if target_role == "lecturer" and not username:
             errors.append({"index": idx, "message": "username is required for lecturer"})
             continue
+        if reg_number in seen_reg_numbers:
+            errors.append({"index": idx, "message": f"Duplicate registration number in request: {reg_number}"})
+            continue
+        if email in seen_emails:
+            errors.append({"index": idx, "message": f"Duplicate email in request: {email}"})
+            continue
+        if username and username in seen_usernames:
+            errors.append({"index": idx, "message": f"Duplicate username in request: {username}"})
+            continue
         if User.query.filter_by(reg_number=reg_number).first():
             errors.append({"index": idx, "message": f"Registration number already exists: {reg_number}"})
             continue
@@ -270,6 +282,10 @@ def provision_bulk_credentials():
         if username and User.query.filter_by(username=username).first():
             errors.append({"index": idx, "message": f"Username already exists: {username}"})
             continue
+        seen_reg_numbers.add(reg_number)
+        seen_emails.add(email)
+        if username:
+            seen_usernames.add(username)
 
         temp_password = _generate_temp_password()
         user = User(
