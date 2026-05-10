@@ -1,7 +1,10 @@
 import json
 import logging
 import time
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
+from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfoNotFoundError
 
 from flask import Flask
 from flask import g
@@ -21,6 +24,11 @@ from app.reports.routes import reports_bp
 from app.sessions.routes import sessions_bp
 from app.users.routes import users_bp
 from app.models import User
+
+try:
+    EAT_TZ = ZoneInfo("Africa/Nairobi")
+except ZoneInfoNotFoundError:
+    EAT_TZ = timezone(timedelta(hours=3), name="EAT")
 
 
 def create_app() -> Flask:
@@ -80,7 +88,6 @@ def create_app() -> Flask:
         except (OperationalError, ProgrammingError):
             db.session.rollback()
 
-    return app
     @app.before_request
     def begin_request_logging():
         g.request_id = request.headers.get("X-Request-Id") or str(uuid4())
@@ -102,8 +109,11 @@ def create_app() -> Flask:
         except Exception:
             user_id = None
 
+        eat_now = datetime.now(timezone.utc).astimezone(EAT_TZ)
         log_payload = {
             "event": "http_request",
+            "timestamp_eat": eat_now.isoformat(),
+            "timezone": getattr(EAT_TZ, "key", "EAT"),
             "request_id": getattr(g, "request_id", None),
             "method": request.method,
             "path": request.path,
@@ -116,3 +126,5 @@ def create_app() -> Flask:
         app.logger.info(json.dumps(log_payload))
         response.headers["X-Request-Id"] = str(getattr(g, "request_id", ""))
         return response
+
+    return app

@@ -1,5 +1,8 @@
 import random
 import string
+from datetime import timedelta, timezone
+from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfoNotFoundError
 
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt, get_jwt_identity, jwt_required
@@ -9,6 +12,11 @@ from app.extensions import db
 from app.models import AuditLog, User
 
 users_bp = Blueprint("users", __name__)
+
+try:
+    EAT_TZ = ZoneInfo("Africa/Nairobi")
+except ZoneInfoNotFoundError:
+    EAT_TZ = timezone(timedelta(hours=3), name="EAT")
 
 
 def _is_admin() -> bool:
@@ -202,6 +210,11 @@ def list_audit_logs():
                     "user_agent": audit.user_agent,
                     "metadata": audit.details or {},
                     "created_at": audit.created_at.isoformat() if audit.created_at else None,
+                    "created_at_eat": (
+                        audit.created_at.replace(tzinfo=timezone.utc).astimezone(EAT_TZ).isoformat()
+                        if audit.created_at
+                        else None
+                    ),
                 }
                 for audit, actor in rows
             ],
