@@ -52,6 +52,7 @@ type CourseStudentRow = {
 
 type SessionResultRow = {
   session_id: number
+  exam_id: number
   student_name: string
   registration_number: string
   student_email: string
@@ -81,6 +82,7 @@ export default function LecturerDashboard() {
   const [students, setStudents] = useState<StudentRow[]>([])
   const [courseStudents, setCourseStudents] = useState<CourseStudentRow[]>([])
   const [sessionResults, setSessionResults] = useState<SessionResultRow[]>([])
+  const [exporting, setExporting] = useState(false)
   const [questionText, setQuestionText] = useState("")
   const [questionType, setQuestionType] = useState<"mcq" | "true_false">("mcq")
   const [optionA, setOptionA] = useState("")
@@ -276,6 +278,34 @@ export default function LecturerDashboard() {
     () => exams.find(e => e.exam_id === selectedExamId) || null,
     [exams, selectedExamId]
   )
+  const filteredSessionResults = useMemo(() => {
+    if (!selectedExamId) return sessionResults
+    return sessionResults.filter((row) => row.exam_id === selectedExamId)
+  }, [selectedExamId, sessionResults])
+
+  async function exportSelectedExamReport() {
+    if (!selectedExamId) return
+    setExporting(true)
+    try {
+      const res = await fetch(getApiPath(`/reports/export/${selectedExamId}`), {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}))
+        setError(payload?.error?.message || "Failed to export report.")
+        return
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `exam_report_${selectedExamId}.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+    } finally {
+      setExporting(false)
+    }
+  }
 
   if (loading) {
     return <main className="min-h-screen bg-[#f4f5f7] p-6"><div className="mx-auto max-w-6xl rounded-xl border bg-white p-5 text-sm text-gray-500">Loading lecturer dashboard...</div></main>
@@ -362,6 +392,15 @@ export default function LecturerDashboard() {
                 {exams.length === 0 && <tr><td colSpan={6} className="py-3 text-gray-500">No exams created yet.</td></tr>}
               </tbody>
             </table>
+          </div>
+          <div className="mt-3">
+            <button
+              onClick={exportSelectedExamReport}
+              disabled={!selectedExamId || exporting}
+              className="rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              {exporting ? "Exporting..." : "Export Selected Exam CSV"}
+            </button>
           </div>
         </section>
 
@@ -502,7 +541,7 @@ export default function LecturerDashboard() {
                 </tr>
               </thead>
               <tbody>
-                {sessionResults.map((row) => (
+                {filteredSessionResults.map((row) => (
                   <tr key={row.session_id} className="border-b">
                     <td className="py-2">{row.student_name}</td>
                     <td>{row.registration_number}</td>
@@ -514,7 +553,7 @@ export default function LecturerDashboard() {
                     <td>{row.risk_level}</td>
                   </tr>
                 ))}
-                {sessionResults.length === 0 && <tr><td colSpan={8} className="py-3 text-gray-500">No session results yet.</td></tr>}
+                {filteredSessionResults.length === 0 && <tr><td colSpan={8} className="py-3 text-gray-500">No session results for selected scope.</td></tr>}
               </tbody>
             </table>
           </div>
