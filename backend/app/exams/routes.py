@@ -18,6 +18,8 @@ def list_exams():
     query = Exam.query
     if role == "lecturer":
         query = query.filter_by(lecturer_id=user_id)
+    if role == "student":
+        query = query.filter(Exam.status.in_(["scheduled", "live", "completed"]))
     if status_filter:
         query = query.filter_by(status=status_filter)
 
@@ -76,6 +78,29 @@ def create_exam():
     db.session.commit()
 
     return jsonify({"exam_id": exam.exam_id, "id": exam.exam_id}), 201
+
+
+@exams_bp.patch("/<int:exam_id>/status")
+@jwt_required()
+def update_exam_status(exam_id):
+    role = get_jwt().get("role")
+    user_id = int(get_jwt_identity())
+    if role not in {"lecturer", "admin"}:
+        return jsonify({"error": {"message": "Forbidden"}}), 403
+
+    exam = Exam.query.get(exam_id)
+    if not exam:
+        return jsonify({"error": {"message": "Exam not found"}}), 404
+    if role == "lecturer" and exam.lecturer_id != user_id:
+        return jsonify({"error": {"message": "Forbidden"}}), 403
+
+    data = request.get_json(silent=True) or {}
+    status = (data.get("status") or "").strip().lower()
+    if status not in {"draft", "scheduled", "live", "completed"}:
+        return jsonify({"error": {"message": "Invalid status"}}), 400
+    exam.status = status
+    db.session.commit()
+    return jsonify({"message": "Exam status updated", "status": exam.status}), 200
 
 
 @exams_bp.get("/<int:exam_id>")

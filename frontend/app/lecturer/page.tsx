@@ -181,6 +181,20 @@ export default function LecturerDashboard() {
     await loadExamDetails(token, selectedExamId)
   }
 
+  async function updateExamStatus(examId: number, status: string) {
+    const res = await fetch(getApiPath(`/exams/${examId}/status`), {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ status }),
+    })
+    const payload = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      setError(payload?.error?.message || "Could not update exam status.")
+      return
+    }
+    await load(token)
+  }
+
   async function deleteQuestion(questionId: number) {
     if (!selectedExamId) return
     const res = await fetch(getApiPath(`/exams/${selectedExamId}/questions/${questionId}`), {
@@ -241,6 +255,7 @@ export default function LecturerDashboard() {
                   <th>Course</th>
                   <th>Schedule</th>
                   <th>Status</th>
+                  <th>Set Status</th>
                   <th>Open</th>
                 </tr>
               </thead>
@@ -251,6 +266,18 @@ export default function LecturerDashboard() {
                     <td>{exam.course_code}</td>
                     <td>{exam.scheduled_at ? new Date(exam.scheduled_at).toLocaleString() : "TBD"}</td>
                     <td>{exam.status}</td>
+                    <td>
+                      <select
+                        className="rounded border p-1 text-xs"
+                        value={exam.status}
+                        onChange={async (e) => updateExamStatus(exam.exam_id, e.target.value)}
+                      >
+                        <option value="draft">draft</option>
+                        <option value="scheduled">scheduled</option>
+                        <option value="live">live</option>
+                        <option value="completed">completed</option>
+                      </select>
+                    </td>
                     <td>
                       <button
                         onClick={async () => {
@@ -264,7 +291,7 @@ export default function LecturerDashboard() {
                     </td>
                   </tr>
                 ))}
-                {exams.length === 0 && <tr><td colSpan={5} className="py-3 text-gray-500">No exams created yet.</td></tr>}
+                {exams.length === 0 && <tr><td colSpan={6} className="py-3 text-gray-500">No exams created yet.</td></tr>}
               </tbody>
             </table>
           </div>
