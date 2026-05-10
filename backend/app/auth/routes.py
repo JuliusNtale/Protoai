@@ -32,6 +32,9 @@ def _generate_temp_password(length=12):
     alphabet = string.ascii_letters + string.digits
     return "".join(random.choice(alphabet) for _ in range(length))
 
+def _generate_lecturer_reg_number() -> str:
+    return f"LEC-{uuid4().hex[:8].upper()}"
+
 
 def _attempt_key(login_id: str, ip: str) -> str:
     return f"{(login_id or '').lower()}|{ip or ''}"
@@ -229,10 +232,16 @@ def provision_credentials():
 
     if target_role not in {"student", "lecturer"}:
         return jsonify({"error": {"message": "Role must be student or lecturer"}}), 400
-    if not full_name or not reg_number or not email:
-        return jsonify({"error": {"message": "full_name, reg_number and email are required"}}), 400
+    if not full_name or not email:
+        return jsonify({"error": {"message": "full_name and email are required"}}), 400
+    if target_role == "student" and not reg_number:
+        return jsonify({"error": {"message": "reg_number is required for student credentials"}}), 400
     if target_role == "lecturer" and not username:
         return jsonify({"error": {"message": "username is required for lecturer credentials"}}), 400
+    if target_role == "lecturer" and not reg_number:
+        reg_number = _generate_lecturer_reg_number()
+        while User.query.filter_by(reg_number=reg_number).first():
+            reg_number = _generate_lecturer_reg_number()
     if User.query.filter_by(reg_number=reg_number).first():
         return jsonify({"error": {"message": "Registration number already exists"}}), 409
     if User.query.filter_by(email=email).first():
@@ -306,12 +315,19 @@ def provision_bulk_credentials():
         if target_role not in {"student", "lecturer"}:
             errors.append({"index": idx, "message": "Role must be student or lecturer"})
             continue
-        if not full_name or not reg_number or not email:
-            errors.append({"index": idx, "message": "full_name, reg_number and email are required"})
+        if not full_name or not email:
+            errors.append({"index": idx, "message": "full_name and email are required"})
+            continue
+        if target_role == "student" and not reg_number:
+            errors.append({"index": idx, "message": "reg_number is required for student"})
             continue
         if target_role == "lecturer" and not username:
             errors.append({"index": idx, "message": "username is required for lecturer"})
             continue
+        if target_role == "lecturer" and not reg_number:
+            reg_number = _generate_lecturer_reg_number()
+            while User.query.filter_by(reg_number=reg_number).first() or reg_number in seen_reg_numbers:
+                reg_number = _generate_lecturer_reg_number()
         if reg_number in seen_reg_numbers:
             errors.append({"index": idx, "message": f"Duplicate registration number in request: {reg_number}"})
             continue

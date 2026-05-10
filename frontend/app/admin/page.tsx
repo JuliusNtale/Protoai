@@ -33,6 +33,7 @@ type AuditLogRow = {
   target_user_id?: number | null
   ip_address?: string | null
   created_at?: string | null
+  created_at_eat?: string | null
 }
 
 export default function AdminDashboard() {
@@ -231,8 +232,12 @@ export default function AdminDashboard() {
 
   async function provisionAccount() {
     setCreateError("")
-    if (!fullName || !regNumber || !email) {
-      setCreateError("full name, reg number and email are required.")
+    if (!fullName || !email) {
+      setCreateError("full name and email are required.")
+      return
+    }
+    if (role === "student" && !regNumber) {
+      setCreateError("registration number is required for student.")
       return
     }
     if (role === "lecturer" && !username) {
@@ -248,7 +253,7 @@ export default function AdminDashboard() {
         body: JSON.stringify({
           role,
           full_name: fullName,
-          registration_number: regNumber,
+          registration_number: role === "student" ? regNumber : undefined,
           email,
           phone_number: phoneNumber,
           username: role === "lecturer" ? username : undefined,
@@ -396,6 +401,12 @@ export default function AdminDashboard() {
     return { students, lecturers, active, total: users.length }
   }, [users])
 
+  function logout() {
+    localStorage.removeItem("token")
+    localStorage.removeItem("user")
+    router.push("/")
+  }
+
   if (loadingMe) {
     return (
       <main className="min-h-screen bg-[#f4f5f7] p-6 text-slate-900">
@@ -411,6 +422,11 @@ export default function AdminDashboard() {
           <div className="flex items-center gap-2">
             <Shield className="h-5 w-5 text-blue-700" />
             <h1 className="text-xl font-semibold">Admin Console</h1>
+          </div>
+          <div className="mt-3">
+            <button onClick={logout} className="rounded-md border px-3 py-1.5 text-sm font-semibold">
+              Logout
+            </button>
           </div>
           <p className="mt-2 text-sm text-slate-700">Manage account lifecycle: provision users, enforce first-login password change, activate/deactivate accounts, and reset credentials.</p>
           {adminError && <p className="mt-2 text-sm text-red-600">{adminError}</p>}
@@ -452,7 +468,9 @@ export default function AdminDashboard() {
               <option value="lecturer">lecturer</option>
             </select>
             <input value={fullName} onChange={e => setFullName(e.target.value)} placeholder="Full name" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />
-            <input value={regNumber} onChange={e => setRegNumber(e.target.value)} placeholder="Registration number" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />
+            {role === "student" && (
+              <input value={regNumber} onChange={e => setRegNumber(e.target.value)} placeholder="Registration number" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />
+            )}
             <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />
             <input value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)} placeholder="Phone number (optional)" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />
             {role === "lecturer" && (
@@ -467,13 +485,13 @@ export default function AdminDashboard() {
 
         <section className="rounded-xl bg-white p-5 shadow-sm border space-y-4">
           <h2 className="text-lg font-semibold">Bulk Provision Accounts</h2>
-          <p className="text-sm text-slate-700">Paste JSON array. Each entry: role, full_name, reg_number, email, phone_number (optional), username (required for lecturer).</p>
+          <p className="text-sm text-slate-700">Paste JSON array. Each entry: role, full_name, email, phone_number (optional), reg_number (required for students), username (required for lecturers).</p>
           <button
             onClick={() => setBulkJson(
               JSON.stringify(
                 [
                   { role: "student", full_name: "Jane Doe", reg_number: "T22-03-12345", email: "jane@example.com", phone_number: "+255700000001" },
-                  { role: "lecturer", full_name: "Dr John Mushi", reg_number: "L22-03-20001", email: "john.mushi@example.com", username: "john.mushi" },
+                  { role: "lecturer", full_name: "Dr John Mushi", email: "john.mushi@example.com", username: "john.mushi" },
                 ],
                 null,
                 2
@@ -667,7 +685,7 @@ export default function AdminDashboard() {
               <tbody>
                 {auditLogs.map((row) => (
                   <tr key={row.audit_id} className="border-b">
-                    <td className="py-2">{row.created_at ? new Date(row.created_at).toLocaleString() : "-"}</td>
+                    <td className="py-2">{row.created_at_eat ? new Date(row.created_at_eat).toLocaleString() : row.created_at ? new Date(row.created_at).toLocaleString() : "-"}</td>
                     <td>{row.action}</td>
                     <td>{row.actor_name || row.actor_user_id || "-"}</td>
                     <td>{row.target_user_id || "-"}</td>
