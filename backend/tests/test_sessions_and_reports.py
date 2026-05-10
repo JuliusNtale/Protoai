@@ -31,6 +31,21 @@ def test_start_session_returns_409_if_existing(client, app):
         headers={"Authorization": f"Bearer {lecturer_token}"},
     )
     exam_id = create_exam.get_json()["exam_id"]
+    client.post(
+        f"/api/exams/{exam_id}/questions",
+        json={
+            "question_text": "2 + 2 = ?",
+            "question_type": "mcq",
+            "option_a": "3",
+            "option_b": "4",
+            "option_c": "5",
+            "option_d": "6",
+            "correct_answer": "B",
+            "marks": 1,
+            "order_num": 1,
+        },
+        headers={"Authorization": f"Bearer {lecturer_token}"},
+    )
     client.patch(
         f"/api/exams/{exam_id}/status",
         json={"status": "scheduled"},

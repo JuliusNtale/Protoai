@@ -107,6 +107,10 @@ def update_exam_status(exam_id):
     status = (data.get("status") or "").strip().lower()
     if status not in {"draft", "scheduled", "live", "completed"}:
         return jsonify({"error": {"message": "Invalid status"}}), 400
+    if status in {"scheduled", "live"}:
+        question_exists = Question.query.filter_by(exam_id=exam.exam_id).first() is not None
+        if not question_exists:
+            return jsonify({"error": {"message": "Add at least one question before scheduling or going live"}}), 409
     exam.status = status
     db.session.commit()
     return jsonify({"message": "Exam status updated", "status": exam.status}), 200
