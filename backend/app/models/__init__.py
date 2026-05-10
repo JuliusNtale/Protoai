@@ -1,4 +1,5 @@
 from app.extensions import db
+from app.models.audit_log import AuditLog
 from app.models.behavioral_log import BehavioralLog
 from app.models.exam import Exam
 from app.models.exam_session import ExamSession
@@ -10,6 +11,7 @@ from app.models.user import User
 
 __all__ = [
     "db",
+    "AuditLog",
     "User",
     "FacialImage",
     "Exam",

@@ -10,6 +10,7 @@ from flask_jwt_extended import create_access_token, get_jwt, get_jwt_identity, j
 from sqlalchemy import or_
 
 from app.extensions import db
+from app.audit import log_audit
 from app.models import FacialImage, User
 
 auth_bp = Blueprint("auth", __name__)
@@ -100,9 +101,22 @@ def login():
         or_(User.reg_number == login_id, User.email == login_id.lower(), User.username == login_id)
     ).first()
     if not user or not user.verify_password(password) or not user.is_active or (requested_role and requested_role != user.role):
+        log_audit(
+            action="auth.login_failed",
+            target_user_id=user.user_id if user else None,
+            metadata={"login_id": login_id, "requested_role": requested_role},
+        )
+        db.session.commit()
         return jsonify({"error": "Invalid credentials"}), 401
 
     token = create_access_token(identity=str(user.user_id), additional_claims={"role": user.role})
+    log_audit(
+        action="auth.login_succeeded",
+        actor_user_id=user.user_id,
+        target_user_id=user.user_id,
+        metadata={"login_id": login_id, "role": user.role},
+    )
+    db.session.commit()
     return jsonify({"token": token, "user": user.to_auth_user()}), 200
 
 
@@ -146,6 +160,7 @@ def change_password():
 
     user.set_password(new_password)
     user.must_change_password = False
+    log_audit(action="auth.password_changed", actor_user_id=user.user_id, target_user_id=user.user_id)
     db.session.commit()
     return jsonify({"message": "Password updated successfully"}), 200
 
@@ -178,6 +193,7 @@ def provision_credentials():
         return jsonify({"error": {"message": "Username already exists"}}), 409
 
     temp_password = _generate_temp_password()
+    actor_user_id = int(get_jwt_identity())
     user = User(
         full_name=full_name,
         reg_number=reg_number,
@@ -191,6 +207,13 @@ def provision_credentials():
     )
     user.set_password(temp_password)
     db.session.add(user)
+    db.session.flush()
+    log_audit(
+        action="admin.user_provisioned",
+        actor_user_id=actor_user_id,
+        target_user_id=user.user_id,
+        metadata={"role": user.role, "registration_number": user.reg_number, "username": user.username},
+    )
     db.session.commit()
 
     return (

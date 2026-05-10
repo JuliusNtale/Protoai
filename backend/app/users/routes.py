@@ -4,6 +4,7 @@ import string
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt, get_jwt_identity, jwt_required
 
+from app.audit import log_audit
 from app.extensions import db
 from app.models import User
 
@@ -41,6 +42,12 @@ def update_profile():
         user.email = email
     user.phone_number = phone_number or None
 
+    log_audit(
+        action="user.profile_updated",
+        actor_user_id=user.user_id,
+        target_user_id=user.user_id,
+        metadata={"email_changed": bool(email), "phone_changed": True},
+    )
     db.session.commit()
 
     response_user = user.to_auth_user()
@@ -80,6 +87,7 @@ def list_users():
 def update_user_status(user_id: int):
     if not _is_admin():
         return jsonify({"error": {"message": "Forbidden"}}), 403
+    actor_user_id = int(get_jwt_identity())
 
     user = User.query.get(user_id)
     if not user:
@@ -93,6 +101,12 @@ def update_user_status(user_id: int):
         return jsonify({"error": {"message": "is_active must be boolean"}}), 400
 
     user.is_active = is_active
+    log_audit(
+        action="admin.user_status_updated",
+        actor_user_id=actor_user_id,
+        target_user_id=user.user_id,
+        metadata={"is_active": user.is_active},
+    )
     db.session.commit()
     return jsonify({"message": "User status updated", "user": user.to_auth_user() | {"is_active": user.is_active}}), 200
 
@@ -102,6 +116,7 @@ def update_user_status(user_id: int):
 def reset_credentials(user_id: int):
     if not _is_admin():
         return jsonify({"error": {"message": "Forbidden"}}), 403
+    actor_user_id = int(get_jwt_identity())
 
     user = User.query.get(user_id)
     if not user:
@@ -112,6 +127,12 @@ def reset_credentials(user_id: int):
     temp_password = _generate_temp_password()
     user.set_password(temp_password)
     user.must_change_password = True
+    log_audit(
+        action="admin.user_credentials_reset",
+        actor_user_id=actor_user_id,
+        target_user_id=user.user_id,
+        metadata={"login_id": user.username or user.reg_number},
+    )
     db.session.commit()
 
     return jsonify(
