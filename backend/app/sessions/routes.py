@@ -4,7 +4,7 @@ from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt, get_jwt_identity, jwt_required
 
 from app.extensions import db
-from app.models import BehavioralLog, Exam, ExamSession, Question, SessionAnswer
+from app.models import BehavioralLog, Exam, ExamSession, Question, SessionAnswer, User
 
 sessions_bp = Blueprint("sessions", __name__)
 VALID_EVENTS = {"gaze_away", "head_turned", "face_absent", "tab_switch", "multiple_faces"}
@@ -203,8 +203,9 @@ def list_sessions():
     user_id = int(get_jwt_identity())
 
     sessions = (
-        db.session.query(ExamSession, Exam)
+        db.session.query(ExamSession, Exam, User)
         .join(Exam, Exam.exam_id == ExamSession.exam_id)
+        .join(User, User.user_id == ExamSession.student_id)
         .order_by(ExamSession.session_id.desc())
     )
     if role == "lecturer":
@@ -216,7 +217,7 @@ def list_sessions():
     sessions = sessions.all()
 
     payload = []
-    for session, exam in sessions:
+    for session, exam, student in sessions:
         if session.warning_count >= 3:
             risk_level = "high"
         elif session.warning_count > 1:
@@ -226,8 +227,10 @@ def list_sessions():
         payload.append(
             {
                 "session_id": session.session_id,
-                "student_name": f"Student #{session.student_id}",
+                "student_name": student.full_name,
                 "student_id": session.student_id,
+                "registration_number": student.reg_number,
+                "student_email": student.email,
                 "exam_title": exam.title,
                 "exam_id": exam.exam_id,
                 "course_code": exam.course_code,

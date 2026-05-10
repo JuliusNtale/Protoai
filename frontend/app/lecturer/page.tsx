@@ -50,6 +50,19 @@ type CourseStudentRow = {
   email: string
 }
 
+type SessionResultRow = {
+  session_id: number
+  student_name: string
+  registration_number: string
+  student_email: string
+  exam_title: string
+  course_code: string
+  session_status: string
+  score?: number | null
+  warning_count: number
+  risk_level: string
+}
+
 export default function LecturerDashboard() {
   const router = useRouter()
   const [token, setToken] = useState("")
@@ -67,6 +80,7 @@ export default function LecturerDashboard() {
   const [questions, setQuestions] = useState<QuestionRow[]>([])
   const [students, setStudents] = useState<StudentRow[]>([])
   const [courseStudents, setCourseStudents] = useState<CourseStudentRow[]>([])
+  const [sessionResults, setSessionResults] = useState<SessionResultRow[]>([])
   const [questionText, setQuestionText] = useState("")
   const [questionType, setQuestionType] = useState<"mcq" | "true_false">("mcq")
   const [optionA, setOptionA] = useState("")
@@ -90,12 +104,14 @@ export default function LecturerDashboard() {
   async function load(activeToken: string) {
     setLoading(true)
     try {
-      const [meRes, examsRes] = await Promise.all([
+      const [meRes, examsRes, sessionsRes] = await Promise.all([
         fetch(getApiPath("/auth/me"), { headers: { Authorization: `Bearer ${activeToken}` } }),
         fetch(getApiPath("/exams"), { headers: { Authorization: `Bearer ${activeToken}` } }),
+        fetch(getApiPath("/sessions"), { headers: { Authorization: `Bearer ${activeToken}` } }),
       ])
       const mePayload = await meRes.json().catch(() => ({}))
       const examsPayload = await examsRes.json().catch(() => ({}))
+      const sessionsPayload = await sessionsRes.json().catch(() => ({}))
       if (!meRes.ok) {
         localStorage.removeItem("token")
         localStorage.removeItem("user")
@@ -113,6 +129,7 @@ export default function LecturerDashboard() {
       setMe(mePayload.user)
       const rows = examsPayload.exams || []
       setExams(rows)
+      setSessionResults(sessionsPayload.sessions || [])
       if (rows.length > 0) {
         const first = rows[0].exam_id
         setSelectedExamId(first)
@@ -463,6 +480,41 @@ export default function LecturerDashboard() {
                   </tr>
                 ))}
                 {courseStudents.length === 0 && <tr><td colSpan={3} className="py-3 text-gray-500">No course students yet.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section className="rounded-xl bg-white p-5 shadow-sm border">
+          <h2 className="text-lg font-semibold">Session Results (Live Data)</h2>
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left">
+                  <th className="py-2">Student</th>
+                  <th>Reg Number</th>
+                  <th>Course</th>
+                  <th>Exam</th>
+                  <th>Status</th>
+                  <th>Score</th>
+                  <th>Warnings</th>
+                  <th>Risk</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sessionResults.map((row) => (
+                  <tr key={row.session_id} className="border-b">
+                    <td className="py-2">{row.student_name}</td>
+                    <td>{row.registration_number}</td>
+                    <td>{row.course_code}</td>
+                    <td>{row.exam_title}</td>
+                    <td>{row.session_status}</td>
+                    <td>{row.score ?? "-"}</td>
+                    <td>{row.warning_count}</td>
+                    <td>{row.risk_level}</td>
+                  </tr>
+                ))}
+                {sessionResults.length === 0 && <tr><td colSpan={8} className="py-3 text-gray-500">No session results yet.</td></tr>}
               </tbody>
             </table>
           </div>
