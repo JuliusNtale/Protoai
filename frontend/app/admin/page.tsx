@@ -287,6 +287,27 @@ export default function AdminDashboard() {
     }
   }
 
+  function exportGeneratedCredentialsCsv() {
+    if (provisioned.length === 0) return
+    const header = ["full_name", "role", "login_id", "temporary_password"]
+    const rows = provisioned.map((row) => [
+      row.full_name,
+      row.role,
+      row.login_id,
+      row.temporary_password,
+    ])
+    const csv = [header, ...rows]
+      .map((r) => r.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+      .join("\n")
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `generated_credentials_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   async function toggleUserStatus(user: ManagedUser) {
     const res = await fetch(getApiPath(`/users/${user.user_id}/status`), {
       method: "PATCH",
@@ -515,6 +536,15 @@ export default function AdminDashboard() {
         <section className="rounded-xl bg-white p-5 shadow-sm border">
           <h2 className="text-lg font-semibold">Generated Temporary Credentials</h2>
           <p className="text-sm text-gray-500 mt-1">Share manually. Each user is forced to set a new password on first login.</p>
+          <div className="mt-3">
+            <button
+              onClick={exportGeneratedCredentialsCsv}
+              disabled={provisioned.length === 0}
+              className="rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              Export Credentials CSV
+            </button>
+          </div>
           <div className="mt-4 overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
