@@ -58,6 +58,7 @@ export default function AdminDashboard() {
   const [bulkJson, setBulkJson] = useState("")
   const [bulkMsg, setBulkMsg] = useState("")
   const [bulkCreating, setBulkCreating] = useState(false)
+  const [bulkErrors, setBulkErrors] = useState<Array<{ index: number; message: string }>>([])
 
   const [users, setUsers] = useState<ManagedUser[]>([])
   const [usersLoading, setUsersLoading] = useState(false)
@@ -241,6 +242,7 @@ export default function AdminDashboard() {
 
   async function provisionBulkAccounts() {
     setBulkMsg("")
+    setBulkErrors([])
     let parsed: unknown
     try {
       parsed = JSON.parse(bulkJson)
@@ -267,6 +269,7 @@ export default function AdminDashboard() {
       }
 
       const created = payload.created || []
+      setBulkErrors(payload.errors || [])
       setProvisioned(prev => [
         ...created.map((entry: { user?: { full_name?: string; role?: string }; login_id?: string; temporary_password?: string }) => ({
           full_name: entry.user?.full_name || "",
@@ -402,6 +405,21 @@ export default function AdminDashboard() {
         <section className="rounded-xl bg-white p-5 shadow-sm border space-y-4">
           <h2 className="text-lg font-semibold">Bulk Provision Accounts</h2>
           <p className="text-sm text-gray-500">Paste JSON array. Each entry: role, full_name, reg_number, email, phone_number (optional), username (required for lecturer).</p>
+          <button
+            onClick={() => setBulkJson(
+              JSON.stringify(
+                [
+                  { role: "student", full_name: "Jane Doe", reg_number: "T22-03-12345", email: "jane@example.com", phone_number: "+255700000001" },
+                  { role: "lecturer", full_name: "Dr John Mushi", reg_number: "L22-03-20001", email: "john.mushi@example.com", username: "john.mushi" },
+                ],
+                null,
+                2
+              )
+            )}
+            className="rounded border px-3 py-1.5 text-xs"
+          >
+            Insert Sample JSON
+          </button>
           <textarea
             value={bulkJson}
             onChange={e => setBulkJson(e.target.value)}
@@ -409,6 +427,16 @@ export default function AdminDashboard() {
             className="min-h-36 w-full rounded-md border p-2 text-sm font-mono"
           />
           {bulkMsg && <p className="text-sm text-gray-700">{bulkMsg}</p>}
+          {bulkErrors.length > 0 && (
+            <div className="rounded-md border border-red-200 bg-red-50 p-3">
+              <p className="text-sm font-semibold text-red-700">Rows with errors</p>
+              <ul className="mt-2 text-xs text-red-700">
+                {bulkErrors.map((err, idx) => (
+                  <li key={`${err.index}-${idx}`}>Row {err.index + 1}: {err.message}</li>
+                ))}
+              </ul>
+            </div>
+          )}
           <button
             onClick={provisionBulkAccounts}
             disabled={bulkCreating || mustChangePassword}
