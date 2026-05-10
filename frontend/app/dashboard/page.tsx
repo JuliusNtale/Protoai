@@ -59,6 +59,9 @@ export default function StudentDashboard() {
   const [currentPassword, setCurrentPassword] = useState("")
   const [newPassword, setNewPassword] = useState("")
   const [passwordMsg, setPasswordMsg] = useState("")
+  const [email, setEmail] = useState("")
+  const [phone, setPhone] = useState("")
+  const [profileMsg, setProfileMsg] = useState("")
 
   useEffect(() => {
     const rawToken = localStorage.getItem("token")
@@ -102,6 +105,8 @@ export default function StudentDashboard() {
       }
 
       setMe(mePayload.user)
+      setEmail(mePayload.user?.email || "")
+      setPhone(mePayload.user?.phone_number || "")
       setExams(examsPayload.exams || [])
       setSessions(sessionsPayload.sessions || [])
       setReports(reportsPayload.reports || [])
@@ -157,6 +162,25 @@ export default function StudentDashboard() {
     }
   }
 
+  async function updateProfile() {
+    setProfileMsg("")
+    const res = await fetch(getApiPath("/users/profile"), {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ email, phone_number: phone }),
+    })
+    const payload = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      setProfileMsg(payload?.error?.message || "Could not update profile.")
+      return
+    }
+    setProfileMsg("Profile updated successfully.")
+    if (payload?.user) {
+      setMe(payload.user)
+      localStorage.setItem("user", JSON.stringify(payload.user))
+    }
+  }
+
   const completed = useMemo(() => sessions.filter(s => s.session_status === "completed").length, [sessions])
 
   if (loading) {
@@ -174,6 +198,13 @@ export default function StudentDashboard() {
           <p className="mt-2 text-sm text-gray-500">{me?.full_name} ({me?.registration_number})</p>
           {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
         </section>
+
+        {me?.must_change_password && (
+          <section className="rounded-xl border border-amber-300 bg-amber-50 p-5">
+            <p className="text-sm font-semibold text-amber-800">First Login Policy</p>
+            <p className="mt-1 text-sm text-amber-700">You must change your temporary password before continuing regular exam usage.</p>
+          </section>
+        )}
 
         <section className="grid gap-3 md:grid-cols-3">
           <StatCard label="Available Exams" value={exams.length} />
@@ -273,6 +304,18 @@ export default function StudentDashboard() {
               </tbody>
             </table>
           </div>
+        </section>
+
+        <section className="rounded-xl bg-white p-5 shadow-sm border">
+          <h2 className="text-lg font-semibold">Profile</h2>
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email" className="rounded-md border p-2 text-sm" />
+            <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="Phone number" className="rounded-md border p-2 text-sm" />
+          </div>
+          {profileMsg && <p className="mt-2 text-sm text-gray-700">{profileMsg}</p>}
+          <button onClick={updateProfile} className="mt-3 rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white">
+            Save Profile
+          </button>
         </section>
 
         <section className="rounded-xl bg-white p-5 shadow-sm border">
