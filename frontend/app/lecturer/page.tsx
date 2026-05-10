@@ -186,6 +186,35 @@ export default function LecturerDashboard() {
     await load(token)
   }
 
+  async function editExam(exam: ExamRow) {
+    const title = window.prompt("Exam title", exam.title)
+    if (!title) return
+    const courseCode = window.prompt("Course code", exam.course_code)
+    if (!courseCode) return
+    const durationRaw = window.prompt("Duration (minutes)", String(exam.duration_min))
+    if (!durationRaw) return
+    const duration = Number(durationRaw)
+    if (!Number.isFinite(duration) || duration <= 0) return
+    const schedule = window.prompt("Scheduled at (ISO, optional)", exam.scheduled_at || "")
+
+    const res = await fetch(getApiPath(`/exams/${exam.exam_id}`), {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        title,
+        course_code: courseCode,
+        duration_min: duration,
+        scheduled_at: schedule || undefined,
+      }),
+    })
+    const payload = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      setError(payload?.error?.message || "Could not update exam.")
+      return
+    }
+    await load(token)
+  }
+
   async function createQuestion() {
     if (!selectedExamId || !questionText || !correctAnswer) return
     const res = await fetch(getApiPath(`/exams/${selectedExamId}/questions`), {
@@ -354,6 +383,7 @@ export default function LecturerDashboard() {
                   <th>Schedule</th>
                   <th>Status</th>
                   <th>Set Status</th>
+                  <th>Edit</th>
                   <th>Open</th>
                 </tr>
               </thead>
@@ -377,6 +407,9 @@ export default function LecturerDashboard() {
                       </select>
                     </td>
                     <td>
+                      <button onClick={() => editExam(exam)} className="rounded border px-2 py-1 text-xs">Edit</button>
+                    </td>
+                    <td>
                       <button
                         onClick={async () => {
                           setSelectedExamId(exam.exam_id)
@@ -389,7 +422,7 @@ export default function LecturerDashboard() {
                     </td>
                   </tr>
                 ))}
-                {exams.length === 0 && <tr><td colSpan={6} className="py-3 text-gray-500">No exams created yet.</td></tr>}
+                {exams.length === 0 && <tr><td colSpan={7} className="py-3 text-gray-500">No exams created yet.</td></tr>}
               </tbody>
             </table>
           </div>

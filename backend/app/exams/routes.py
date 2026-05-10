@@ -103,6 +103,45 @@ def update_exam_status(exam_id):
     return jsonify({"message": "Exam status updated", "status": exam.status}), 200
 
 
+@exams_bp.put("/<int:exam_id>")
+@jwt_required()
+def update_exam(exam_id):
+    role = get_jwt().get("role")
+    user_id = int(get_jwt_identity())
+    if role not in {"lecturer", "admin"}:
+        return jsonify({"error": {"message": "Forbidden"}}), 403
+
+    exam = Exam.query.get(exam_id)
+    if not exam:
+        return jsonify({"error": {"message": "Exam not found"}}), 404
+    if role == "lecturer" and exam.lecturer_id != user_id:
+        return jsonify({"error": {"message": "Forbidden"}}), 403
+
+    data = request.get_json(silent=True) or {}
+    title = (data.get("title") or exam.title).strip()
+    course_code = (data.get("course_code") or exam.course_code).strip()
+    duration_min = int(data.get("duration_min") or exam.duration_min)
+    scheduled_raw = data.get("scheduled_at")
+
+    scheduled_at = exam.scheduled_at
+    if scheduled_raw:
+        try:
+            scheduled_at = datetime.fromisoformat(str(scheduled_raw).replace("Z", "+00:00"))
+        except ValueError:
+            return jsonify({"error": {"message": "Invalid scheduled_at format"}}), 400
+
+    if not title or not course_code or duration_min <= 0:
+        return jsonify({"error": {"message": "title, course_code and positive duration_min are required"}}), 400
+
+    exam.title = title
+    exam.course_code = course_code
+    exam.duration_min = duration_min
+    exam.scheduled_at = scheduled_at
+    db.session.commit()
+
+    return jsonify({"message": "Exam updated successfully"}), 200
+
+
 @exams_bp.get("/<int:exam_id>")
 @jwt_required()
 def get_exam(exam_id):
