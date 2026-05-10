@@ -4,7 +4,7 @@ from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt, get_jwt_identity, jwt_required
 
 from app.extensions import db
-from app.models import BehavioralLog, Exam, ExamSession, Question
+from app.models import BehavioralLog, Exam, ExamSession, Question, SessionAnswer
 
 sessions_bp = Blueprint("sessions", __name__)
 VALID_EVENTS = {"gaze_away", "head_turned", "face_absent", "tab_switch", "multiple_faces"}
@@ -140,12 +140,23 @@ def submit_session(session_id):
     exam_questions = Question.query.filter_by(exam_id=session.exam_id).all()
     by_qid = {str(question.question_id): question for question in exam_questions}
 
+    SessionAnswer.query.filter_by(session_id=session.session_id).delete()
+
     score = 0.0
     for key, selected in answer_map.items():
         question = by_qid.get(key)
         if not question:
             continue
-        if str(question.correct_answer).upper() == str(selected).upper():
+        is_correct = str(question.correct_answer).upper() == str(selected).upper()
+        db.session.add(
+            SessionAnswer(
+                session_id=session.session_id,
+                question_id=question.question_id,
+                selected_answer=str(selected),
+                is_correct=is_correct,
+            )
+        )
+        if is_correct:
             score += float(question.marks or 1)
 
     session.score = score
