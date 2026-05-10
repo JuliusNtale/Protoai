@@ -167,6 +167,35 @@ def submit_session(session_id):
     return jsonify({"score": float(score), "session_id": session.session_id}), 200
 
 
+@sessions_bp.get("/<int:session_id>/answers")
+@jwt_required()
+def get_session_answers(session_id):
+    session = ExamSession.query.get(session_id)
+    if not session:
+        return jsonify({"error": {"message": "Session not found"}}), 404
+    if session.student_id != int(get_jwt_identity()):
+        return jsonify({"error": {"message": "Forbidden"}}), 403
+
+    stored = SessionAnswer.query.filter_by(session_id=session.session_id).all()
+    return (
+        jsonify(
+            {
+                "session_id": session.session_id,
+                "answers": [
+                    {
+                        "question_id": row.question_id,
+                        "selected_answer": row.selected_answer,
+                        "is_correct": row.is_correct,
+                        "answered_at": row.answered_at.isoformat() if row.answered_at else None,
+                    }
+                    for row in stored
+                ],
+            }
+        ),
+        200,
+    )
+
+
 @sessions_bp.get("")
 @jwt_required()
 def list_sessions():

@@ -241,6 +241,41 @@ export default function ExamPage() {
   }, [examId])
 
   useEffect(() => {
+    if (!sessionId || questions.length === 0) return
+    const token = localStorage.getItem("token")
+    if (!token) return
+
+    let mounted = true
+    void (async () => {
+      const res = await fetch(getApiPath(`/sessions/${sessionId}/answers`), {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const payload = await res.json().catch(() => ({}))
+      if (!mounted || !res.ok || !Array.isArray(payload?.answers)) return
+
+      const restored: Record<number, number> = {}
+      payload.answers.forEach((row: any) => {
+        const questionId = Number(row.question_id)
+        const selected = String(row.selected_answer || "").toUpperCase()
+        const questionIdx = questions.findIndex(q => q.id === questionId)
+        if (questionIdx < 0) return
+
+        if (["A", "B", "C", "D"].includes(selected)) {
+          restored[questionIdx] = selected.charCodeAt(0) - 65
+        } else if (!Number.isNaN(Number(selected))) {
+          restored[questionIdx] = Number(selected)
+        }
+      })
+
+      setAnswers(restored)
+    })()
+
+    return () => {
+      mounted = false
+    }
+  }, [sessionId, questions])
+
+  useEffect(() => {
     const id = setInterval(() => {
       setTimeLeft(t => (t <= 0 ? 0 : t - 1))
     }, 1000)

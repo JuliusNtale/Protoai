@@ -108,4 +108,5 @@ jobs:
             docker compose pull
             pm2 delete all 2>/dev/null || true
             docker ps -aq | xargs -r docker rm -f
+            docker compose run --rm backend alembic upgrade head
             docker compose up -d --build
