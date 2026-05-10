@@ -31,6 +31,11 @@ def test_start_session_returns_409_if_existing(client, app):
         headers={"Authorization": f"Bearer {lecturer_token}"},
     )
     exam_id = create_exam.get_json()["exam_id"]
+    client.patch(
+        f"/api/exams/{exam_id}/status",
+        json={"status": "scheduled"},
+        headers={"Authorization": f"Bearer {lecturer_token}"},
+    )
 
     first = client.post(
         "/api/sessions/start",

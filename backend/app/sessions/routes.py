@@ -21,6 +21,8 @@ def start_session():
     exam = Exam.query.get(int(exam_id))
     if not exam:
         return jsonify({"error": {"message": "Exam not found"}}), 404
+    if (exam.status or "").lower() not in {"scheduled", "live", "active"}:
+        return jsonify({"error": {"message": "Exam is not open for session start"}}), 409
 
     student_id = int(get_jwt_identity())
     existing = ExamSession.query.filter_by(student_id=student_id, exam_id=exam.exam_id).first()
