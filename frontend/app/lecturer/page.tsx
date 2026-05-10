@@ -43,6 +43,13 @@ type StudentRow = {
   warning_count: number
 }
 
+type CourseStudentRow = {
+  user_id: number
+  full_name: string
+  registration_number: string
+  email: string
+}
+
 export default function LecturerDashboard() {
   const router = useRouter()
   const [token, setToken] = useState("")
@@ -59,6 +66,7 @@ export default function LecturerDashboard() {
   const [selectedExamId, setSelectedExamId] = useState<number | null>(null)
   const [questions, setQuestions] = useState<QuestionRow[]>([])
   const [students, setStudents] = useState<StudentRow[]>([])
+  const [courseStudents, setCourseStudents] = useState<CourseStudentRow[]>([])
   const [questionText, setQuestionText] = useState("")
   const [questionType, setQuestionType] = useState<"mcq" | "true_false">("mcq")
   const [optionA, setOptionA] = useState("")
@@ -108,14 +116,14 @@ export default function LecturerDashboard() {
       if (rows.length > 0) {
         const first = rows[0].exam_id
         setSelectedExamId(first)
-        await loadExamDetails(activeToken, first)
+        await loadExamDetails(activeToken, first, rows[0].course_code)
       }
     } finally {
       setLoading(false)
     }
   }
 
-  async function loadExamDetails(activeToken: string, examId: number) {
+  async function loadExamDetails(activeToken: string, examId: number, courseCode?: string) {
     const [examRes, studentsRes] = await Promise.all([
       fetch(getApiPath(`/exams/${examId}`), { headers: { Authorization: `Bearer ${activeToken}` } }),
       fetch(getApiPath(`/exams/${examId}/students`), { headers: { Authorization: `Bearer ${activeToken}` } }),
@@ -124,6 +132,15 @@ export default function LecturerDashboard() {
     const studentsPayload = await studentsRes.json().catch(() => ({}))
     if (examRes.ok) setQuestions(examPayload.questions || [])
     if (studentsRes.ok) setStudents(studentsPayload.students || [])
+
+    const resolvedCourseCode = courseCode || exams.find(e => e.exam_id === examId)?.course_code
+    if (resolvedCourseCode) {
+      const courseRes = await fetch(getApiPath(`/exams/course/${encodeURIComponent(resolvedCourseCode)}/students`), {
+        headers: { Authorization: `Bearer ${activeToken}` },
+      })
+      const coursePayload = await courseRes.json().catch(() => ({}))
+      if (courseRes.ok) setCourseStudents(coursePayload.students || [])
+    }
   }
 
   async function createExam() {
@@ -316,7 +333,7 @@ export default function LecturerDashboard() {
                       <button
                         onClick={async () => {
                           setSelectedExamId(exam.exam_id)
-                          await loadExamDetails(token, exam.exam_id)
+                          await loadExamDetails(token, exam.exam_id, exam.course_code)
                         }}
                         className="rounded border px-2 py-1 text-xs"
                       >
@@ -418,6 +435,34 @@ export default function LecturerDashboard() {
                   </tr>
                 ))}
                 {students.length === 0 && <tr><td colSpan={6} className="py-3 text-gray-500">No students enrolled yet (students appear after starting session).</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section className="rounded-xl bg-white p-5 shadow-sm border">
+          <div className="flex items-center gap-2">
+            <Users className="h-5 w-5 text-blue-700" />
+            <h2 className="text-lg font-semibold">Students In Course {selectedExam ? `- ${selectedExam.course_code}` : ""}</h2>
+          </div>
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left">
+                  <th className="py-2">Name</th>
+                  <th>Reg Number</th>
+                  <th>Email</th>
+                </tr>
+              </thead>
+              <tbody>
+                {courseStudents.map((s) => (
+                  <tr key={s.user_id} className="border-b">
+                    <td className="py-2">{s.full_name}</td>
+                    <td>{s.registration_number}</td>
+                    <td>{s.email}</td>
+                  </tr>
+                ))}
+                {courseStudents.length === 0 && <tr><td colSpan={3} className="py-3 text-gray-500">No course students yet.</td></tr>}
               </tbody>
             </table>
           </div>

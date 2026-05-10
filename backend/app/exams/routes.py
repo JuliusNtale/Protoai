@@ -296,3 +296,43 @@ def list_exam_students(exam_id):
             ]
         }
     ), 200
+
+
+@exams_bp.get("/course/<string:course_code>/students")
+@jwt_required()
+def list_course_students(course_code: str):
+    role = get_jwt().get("role")
+    user_id = int(get_jwt_identity())
+    if role not in {"lecturer", "admin"}:
+        return jsonify({"error": {"message": "Forbidden"}}), 403
+
+    exams_query = Exam.query.filter(Exam.course_code == course_code)
+    if role == "lecturer":
+        exams_query = exams_query.filter(Exam.lecturer_id == user_id)
+    exams = exams_query.all()
+    exam_ids = [exam.exam_id for exam in exams]
+    if not exam_ids:
+        return jsonify({"students": []}), 200
+
+    rows = (
+        db.session.query(User.user_id, User.full_name, User.reg_number, User.email)
+        .join(ExamSession, ExamSession.student_id == User.user_id)
+        .filter(ExamSession.exam_id.in_(exam_ids))
+        .distinct(User.user_id)
+        .order_by(User.full_name.asc())
+        .all()
+    )
+
+    return jsonify(
+        {
+            "students": [
+                {
+                    "user_id": row.user_id,
+                    "full_name": row.full_name,
+                    "registration_number": row.reg_number,
+                    "email": row.email,
+                }
+                for row in rows
+            ]
+        }
+    ), 200
