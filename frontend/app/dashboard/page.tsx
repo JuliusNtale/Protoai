@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { BookOpen, KeyRound, User } from "lucide-react"
 import { getApiPath } from "@/lib/api-url"
+import { DashboardPanel, DashboardShell, MetricCard } from "@/components/dashboard-shell"
 
 type MeUser = {
   user_id: number
@@ -188,34 +189,38 @@ export default function StudentDashboard() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f4f5f7] p-6 text-slate-900">
-      <div className="mx-auto max-w-6xl space-y-6">
-        <section className="rounded-xl bg-white p-5 shadow-sm border">
-          <div className="flex items-center gap-2">
-            <User className="h-5 w-5 text-blue-700" />
-            <h1 className="text-xl font-semibold">Student Dashboard</h1>
-          </div>
-          <p className="mt-2 text-sm text-slate-700">{me?.full_name} ({me?.registration_number})</p>
-          {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
-        </section>
+    <DashboardShell
+      appName="ProctorAI Student"
+      title="Student Dashboard"
+      subtitle={`${me?.full_name || ""} (${me?.registration_number || ""})`}
+      sidebarItems={[
+        { label: "Dashboard", active: true },
+        { label: "Exams" },
+        { label: "Sessions" },
+        { label: "Reports" },
+        { label: "Profile" },
+      ]}
+      rightTopSlot={<User className="h-5 w-5 text-slate-600" />}
+    >
+      {error && <p className="text-sm text-red-600">{error}</p>}
 
         {me?.must_change_password && (
-          <section className="rounded-xl border border-amber-300 bg-amber-50 p-5">
+          <DashboardPanel title="First Login Policy">
             <p className="text-sm font-semibold text-amber-800">First Login Policy</p>
             <p className="mt-1 text-sm text-amber-700">You must change your temporary password before continuing regular exam usage.</p>
-          </section>
+          </DashboardPanel>
         )}
 
         <section className="grid gap-3 md:grid-cols-3">
-          <StatCard label="Available Exams" value={exams.length} />
-          <StatCard label="Completed Sessions" value={completed} />
-          <StatCard label="Must Change Password" value={me?.must_change_password ? 1 : 0} />
+          <MetricCard label="Available Exams" value={exams.length} />
+          <MetricCard label="Completed Sessions" value={completed} />
+          <MetricCard label="Must Change Password" value={me?.must_change_password ? 1 : 0} />
         </section>
 
-        <section className="rounded-xl bg-white p-5 shadow-sm border">
+        <DashboardPanel title="Assigned Exams">
           <div className="flex items-center gap-2">
             <BookOpen className="h-5 w-5 text-blue-700" />
-            <h2 className="text-lg font-semibold">Assigned Exams</h2>
+            <h2 className="text-base font-semibold">Assigned Exams</h2>
           </div>
           <div className="mt-4 overflow-x-auto">
             <table className="w-full text-sm">
@@ -244,10 +249,9 @@ export default function StudentDashboard() {
               </tbody>
             </table>
           </div>
-        </section>
+        </DashboardPanel>
 
-        <section className="rounded-xl bg-white p-5 shadow-sm border">
-          <h2 className="text-lg font-semibold">My Sessions & Results</h2>
+        <DashboardPanel title="My Sessions & Results">
           <div className="mt-4 overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -273,10 +277,9 @@ export default function StudentDashboard() {
               </tbody>
             </table>
           </div>
-        </section>
+        </DashboardPanel>
 
-        <section className="rounded-xl bg-white p-5 shadow-sm border">
-          <h2 className="text-lg font-semibold">My Proctoring Reports</h2>
+        <DashboardPanel title="My Proctoring Reports">
           <div className="mt-4 overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -304,10 +307,9 @@ export default function StudentDashboard() {
               </tbody>
             </table>
           </div>
-        </section>
+        </DashboardPanel>
 
-        <section className="rounded-xl bg-white p-5 shadow-sm border">
-          <h2 className="text-lg font-semibold">Profile</h2>
+        <DashboardPanel title="Profile">
           <div className="mt-4 grid gap-3 md:grid-cols-2">
             <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />
             <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="Phone number" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />
@@ -316,12 +318,12 @@ export default function StudentDashboard() {
           <button onClick={updateProfile} className="mt-3 rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white">
             Save Profile
           </button>
-        </section>
+        </DashboardPanel>
 
-        <section className="rounded-xl bg-white p-5 shadow-sm border">
+        <DashboardPanel title="Change Password">
           <div className="flex items-center gap-2">
             <KeyRound className="h-5 w-5 text-blue-700" />
-            <h2 className="text-lg font-semibold">Change Password</h2>
+            <h2 className="text-base font-semibold">Change Password</h2>
           </div>
           <div className="mt-4 grid gap-3 md:grid-cols-2">
             <input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} placeholder="Current password" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />
@@ -331,17 +333,7 @@ export default function StudentDashboard() {
           <button onClick={changePassword} disabled={saving} className="mt-3 rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
             {saving ? "Updating..." : "Update Password"}
           </button>
-        </section>
-      </div>
-    </main>
-  )
-}
-
-function StatCard({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-xl border bg-white p-4">
-      <p className="text-xs uppercase tracking-wider text-slate-600">{label}</p>
-      <p className="mt-1 text-2xl font-semibold text-gray-900">{value}</p>
-    </div>
+        </DashboardPanel>
+    </DashboardShell>
   )
 }
