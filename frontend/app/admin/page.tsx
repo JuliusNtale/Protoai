@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { KeyRound, Shield, UserPlus, Users } from "lucide-react"
 import { getApiPath } from "@/lib/api-url"
 
@@ -423,7 +424,10 @@ export default function AdminDashboard() {
             <Shield className="h-5 w-5 text-blue-700" />
             <h1 className="text-xl font-semibold">Admin Console</h1>
           </div>
-          <div className="mt-3">
+          <div className="mt-3 flex gap-2">
+            <Link href="/admin/system-logs" className="rounded-md border px-3 py-1.5 text-sm font-semibold">
+              View Logs
+            </Link>
             <button onClick={logout} className="rounded-md border px-3 py-1.5 text-sm font-semibold">
               Logout
             </button>
@@ -483,49 +487,6 @@ export default function AdminDashboard() {
           </button>
         </section>
 
-        <section className="rounded-xl bg-white p-5 shadow-sm border space-y-4">
-          <h2 className="text-lg font-semibold">Bulk Provision Accounts</h2>
-          <p className="text-sm text-slate-700">Paste JSON array. Each entry: role, full_name, email, phone_number (optional), reg_number (required for students), username (required for lecturers).</p>
-          <button
-            onClick={() => setBulkJson(
-              JSON.stringify(
-                [
-                  { role: "student", full_name: "Jane Doe", reg_number: "T22-03-12345", email: "jane@example.com", phone_number: "+255700000001" },
-                  { role: "lecturer", full_name: "Dr John Mushi", email: "john.mushi@example.com", username: "john.mushi" },
-                ],
-                null,
-                2
-              )
-            )}
-            className="rounded border px-3 py-1.5 text-xs"
-          >
-            Insert Sample JSON
-          </button>
-          <textarea
-            value={bulkJson}
-            onChange={e => setBulkJson(e.target.value)}
-            placeholder='[{"role":"student","full_name":"Jane Doe","reg_number":"T22-03-12345","email":"jane@example.com"}]'
-            className="min-h-36 w-full rounded-md border bg-white p-2 text-sm font-mono text-slate-900 placeholder:text-slate-500"
-          />
-          {bulkMsg && <p className="text-sm text-gray-700">{bulkMsg}</p>}
-          {bulkErrors.length > 0 && (
-            <div className="rounded-md border border-red-200 bg-red-50 p-3">
-              <p className="text-sm font-semibold text-red-700">Rows with errors</p>
-              <ul className="mt-2 text-xs text-red-700">
-                {bulkErrors.map((err, idx) => (
-                  <li key={`${err.index}-${idx}`}>Row {err.index + 1}: {err.message}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-          <button
-            onClick={provisionBulkAccounts}
-            disabled={bulkCreating || mustChangePassword}
-            className="rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-          >
-            {bulkCreating ? "Creating..." : "Run Bulk Provisioning"}
-          </button>
-        </section>
 
         <section className="rounded-xl bg-white p-5 shadow-sm border space-y-4">
           <div className="flex items-center gap-2">
@@ -635,70 +596,12 @@ export default function AdminDashboard() {
         </section>
 
         <section className="rounded-xl bg-white p-5 shadow-sm border">
-          <h2 className="text-lg font-semibold">Security Audit Logs</h2>
-          <p className="text-sm text-slate-700 mt-1">Tracks authentication and admin lifecycle actions.</p>
-          <div className="mt-3 grid gap-2 md:grid-cols-2">
-            <input
-              value={auditQuery}
-              onChange={e => setAuditQuery(e.target.value)}
-              placeholder="Search actor/email/action"
-              className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500"
-            />
-            <input
-              value={auditAction}
-              onChange={e => setAuditAction(e.target.value)}
-              placeholder="Filter action (e.g. auth.login)"
-              className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500"
-            />
-          </div>
+          <h2 className="text-lg font-semibold">System Logs</h2>
+          <p className="text-sm text-slate-700 mt-1">Audit and session logs were moved to a dedicated page with filters and CSV export.</p>
           <div className="mt-3">
-            <button onClick={() => fetchAuditLogs()} className="rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" disabled={auditLoading}>
-              {auditLoading ? "Loading..." : "Refresh Logs"}
-            </button>
-            <button
-              onClick={() => fetchAuditLogs(token, true)}
-              className="ml-2 rounded-md border px-4 py-2 text-sm font-semibold disabled:opacity-60"
-              disabled={auditLoading || auditLastCount < auditLimit}
-            >
-              Load More
-            </button>
-            <button
-              onClick={exportAuditLogsCsv}
-              className="ml-2 rounded-md border px-4 py-2 text-sm font-semibold disabled:opacity-60"
-              disabled={auditLogs.length === 0}
-            >
-              Export CSV
-            </button>
-          </div>
-          {auditError && <p className="mt-2 text-sm text-red-600">{auditError}</p>}
-          <div className="mt-4 overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-left">
-                  <th className="py-2">Time</th>
-                  <th>Action</th>
-                  <th>Actor</th>
-                  <th>Target User</th>
-                  <th>IP</th>
-                </tr>
-              </thead>
-              <tbody>
-                {auditLogs.map((row) => (
-                  <tr key={row.audit_id} className="border-b">
-                    <td className="py-2">{row.created_at_eat ? new Date(row.created_at_eat).toLocaleString() : row.created_at ? new Date(row.created_at).toLocaleString() : "-"}</td>
-                    <td>{row.action}</td>
-                    <td>{row.actor_name || row.actor_user_id || "-"}</td>
-                    <td>{row.target_user_id || "-"}</td>
-                    <td>{row.ip_address || "-"}</td>
-                  </tr>
-                ))}
-                {auditLogs.length === 0 && (
-                  <tr>
-                    <td className="py-3 text-slate-600" colSpan={5}>No audit logs found.</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+            <Link href="/admin/system-logs" className="rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white">
+              Open Logs Page
+            </Link>
           </div>
         </section>
       </div>
