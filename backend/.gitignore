@@ -3,3 +3,6 @@ node_modules/
 storage/faces/*
 !storage/faces/.gitkeep
 logs/*.log
+__pycache__/
+*.pyc
+.pycache_tmp/

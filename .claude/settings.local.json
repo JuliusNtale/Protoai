@@ -1,7 +1,19 @@
 {
   "permissions": {
     "allow": [
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(Get-ChildItem -Recurse -Depth 3)",
+      "Bash(Select-Object FullName)",
+      "Bash(ConvertTo-Json)",
+      "Bash(xargs basename -a)",
+      "Bash(grep -E \"\\\\.\\(json|md\\)$\")",
+      "Bash(ssh-keygen -t ed25519 -C \"cicd-deploy\" -f ./deploy_key -N \"\")",
+      "Bash(npm install *)",
+      "Bash(npm ci *)",
+      "Bash(npm test *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(git commit *)"
     ]
   }
 }

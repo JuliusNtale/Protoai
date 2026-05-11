@@ -1,246 +1,561 @@
 "use client"
 
-import { useState } from "react"
-import {
-  Users, ShieldAlert, ShieldCheck, Activity, Search, Filter,
-  TrendingUp, Eye, Move, Monitor, AlertTriangle, Download
-} from "lucide-react"
-import { Navbar } from "@/components/navbar"
-import { Button } from "@/components/ui/button"
-import { cn } from "@/lib/utils"
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend
-} from "recharts"
+import { useEffect, useMemo, useState } from "react"
+import { useRouter } from "next/navigation"
+import Link from "next/link"
+import { KeyRound, LogOut, UserPlus, Users } from "lucide-react"
+import { getApiPath } from "@/lib/api-url"
+import { DashboardPanel, DashboardShell, MetricCard } from "@/components/dashboard-shell"
 
-const students = [
-  { id: 1, name: "Amara Osei", regNum: "CS/2021/001", gaze: 12, headMove: 5, tabSwitch: 3, risk: "High" },
-  { id: 2, name: "David Kim", regNum: "CS/2021/002", gaze: 4, headMove: 2, tabSwitch: 0, risk: "Low" },
-  { id: 3, name: "Fatima Al-Hassan", regNum: "CS/2021/003", gaze: 7, headMove: 6, tabSwitch: 1, risk: "Medium" },
-  { id: 4, name: "James Thornton", regNum: "CS/2021/004", gaze: 0, headMove: 1, tabSwitch: 0, risk: "Low" },
-  { id: 5, name: "Layla Nkosi", regNum: "CS/2021/005", gaze: 15, headMove: 9, tabSwitch: 5, risk: "High" },
-  { id: 6, name: "Marcus Chen", regNum: "CS/2021/006", gaze: 3, headMove: 2, tabSwitch: 0, risk: "Low" },
-  { id: 7, name: "Nina Petrov", regNum: "CS/2021/007", gaze: 8, headMove: 4, tabSwitch: 2, risk: "Medium" },
-  { id: 8, name: "Omar Diallo", regNum: "CS/2021/008", gaze: 11, headMove: 7, tabSwitch: 4, risk: "High" },
-  { id: 9, name: "Priya Sharma", regNum: "CS/2021/009", gaze: 2, headMove: 1, tabSwitch: 0, risk: "Low" },
-  { id: 10, name: "Tomás Rivera", regNum: "CS/2021/010", gaze: 6, headMove: 5, tabSwitch: 1, risk: "Medium" },
-]
-
-const barData = students.map(s => ({ name: s.name.split(" ")[0], gaze: s.gaze, head: s.headMove, tab: s.tabSwitch }))
-
-const pieData = [
-  { name: "Low Risk", value: students.filter(s => s.risk === "Low").length },
-  { name: "Medium Risk", value: students.filter(s => s.risk === "Medium").length },
-  { name: "High Risk", value: students.filter(s => s.risk === "High").length },
-]
-const PIE_COLORS = ["#22c55e", "#f59e0b", "#ef4444"]
-
-const riskConfig = {
-  High: { className: "bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/30", dot: "bg-red-500" },
-  Medium: { className: "bg-yellow-500/15 text-yellow-600 dark:text-yellow-400 border-yellow-500/30", dot: "bg-yellow-500" },
-  Low: { className: "bg-green-500/15 text-green-600 dark:text-green-400 border-green-500/30", dot: "bg-green-500" },
+type Provisioned = {
+  user_id?: number
+  full_name: string
+  role: string
+  login_id: string
+  temporary_password: string
 }
 
-const stats = [
-  { label: "Total Sessions", value: "24", sub: "Active exam sessions", icon: Activity, color: "text-primary bg-primary/10" },
-  { label: "Flagged Students", value: "3", sub: "High risk detected", icon: ShieldAlert, color: "text-destructive bg-destructive/10" },
-  { label: "Clean Sessions", value: "18", sub: "No violations", icon: ShieldCheck, color: "text-green-600 dark:text-green-400 bg-green-500/10" },
-  { label: "Total Students", value: students.length.toString(), sub: "Enrolled this exam", icon: Users, color: "text-primary bg-primary/10" },
-]
+type ManagedUser = {
+  user_id: number
+  full_name: string
+  registration_number: string
+  username?: string | null
+  email: string
+  phone_number?: string | null
+  role: string
+  must_change_password: boolean
+  is_active: boolean
+}
+
+type AuditLogRow = {
+  audit_id: number
+  action: string
+  actor_user_id?: number | null
+  actor_name?: string | null
+  target_user_id?: number | null
+  ip_address?: string | null
+  created_at?: string | null
+  created_at_eat?: string | null
+}
 
 export default function AdminDashboard() {
-  const [search, setSearch] = useState("")
-  const [riskFilter, setRiskFilter] = useState<"All" | "High" | "Medium" | "Low">("All")
+  const router = useRouter()
+  const [token, setToken] = useState("")
+  const [mustChangePassword, setMustChangePassword] = useState(false)
+  const [currentPassword, setCurrentPassword] = useState("")
+  const [newPassword, setNewPassword] = useState("")
+  const [passwordMsg, setPasswordMsg] = useState("")
+  const [loadingPassword, setLoadingPassword] = useState(false)
+  const [loadingMe, setLoadingMe] = useState(true)
+  const [adminError, setAdminError] = useState("")
 
-  const filtered = students.filter(s => {
-    const matchSearch = s.name.toLowerCase().includes(search.toLowerCase()) || s.regNum.toLowerCase().includes(search.toLowerCase())
-    const matchRisk = riskFilter === "All" || s.risk === riskFilter
-    return matchSearch && matchRisk
-  })
+  const [role, setRole] = useState<"student" | "lecturer">("student")
+  const [fullName, setFullName] = useState("")
+  const [regNumber, setRegNumber] = useState("")
+  const [email, setEmail] = useState("")
+  const [phoneNumber, setPhoneNumber] = useState("")
+  const [username, setUsername] = useState("")
+  const [createError, setCreateError] = useState("")
+  const [creating, setCreating] = useState(false)
+  const [provisioned, setProvisioned] = useState<Provisioned[]>([])
+
+  const [users, setUsers] = useState<ManagedUser[]>([])
+  const [usersLoading, setUsersLoading] = useState(false)
+  const [usersError, setUsersError] = useState("")
+  const [query, setQuery] = useState("")
+  const [roleFilter, setRoleFilter] = useState<"all" | "student" | "lecturer">("all")
+  const [activeFilter, setActiveFilter] = useState<"all" | "active" | "inactive">("all")
+  const [auditLogs, setAuditLogs] = useState<AuditLogRow[]>([])
+  const [auditLoading, setAuditLoading] = useState(false)
+  const [auditError, setAuditError] = useState("")
+  const [auditQuery, setAuditQuery] = useState("")
+  const [auditAction, setAuditAction] = useState("")
+  const [auditOffset, setAuditOffset] = useState(0)
+  const [auditLimit] = useState(100)
+  const [auditLastCount, setAuditLastCount] = useState(0)
+
+  useEffect(() => {
+    const rawToken = localStorage.getItem("token")
+    if (!rawToken) {
+      router.push("/")
+      return
+    }
+    setToken(rawToken)
+    void verifySession(rawToken)
+  }, [router])
+
+  async function verifySession(activeToken: string) {
+    setLoadingMe(true)
+    setAdminError("")
+    try {
+      const res = await fetch(getApiPath("/auth/me"), {
+        headers: { Authorization: `Bearer ${activeToken}` },
+      })
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setAdminError(payload?.error?.message || "Session expired. Please sign in again.")
+        localStorage.removeItem("token")
+        localStorage.removeItem("user")
+        router.push("/")
+        return
+      }
+      const user = payload?.user
+      if (user?.role !== "administrator" && user?.role !== "admin") {
+        router.push("/")
+        return
+      }
+      localStorage.setItem("user", JSON.stringify(user))
+      setMustChangePassword(Boolean(user?.must_change_password))
+      await fetchUsers(activeToken)
+      await fetchAuditLogs(activeToken)
+    } finally {
+      setLoadingMe(false)
+    }
+  }
+
+  async function fetchUsers(activeToken = token) {
+    setUsersLoading(true)
+    setUsersError("")
+    try {
+      const params = new URLSearchParams()
+      if (query.trim()) params.set("query", query.trim())
+      if (roleFilter !== "all") params.set("role", roleFilter)
+      if (activeFilter !== "all") params.set("active", String(activeFilter === "active"))
+      const suffix = params.toString() ? `?${params.toString()}` : ""
+      const res = await fetch(`${getApiPath("/users")}${suffix}`, {
+        headers: { Authorization: `Bearer ${activeToken}` },
+      })
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setUsersError(payload?.error?.message || "Could not load users.")
+        return
+      }
+      setUsers(payload.users || [])
+    } finally {
+      setUsersLoading(false)
+    }
+  }
+
+  async function fetchAuditLogs(activeToken = token, append = false) {
+    setAuditLoading(true)
+    setAuditError("")
+    try {
+      const params = new URLSearchParams()
+      if (auditQuery.trim()) params.set("query", auditQuery.trim())
+      if (auditAction.trim()) params.set("action", auditAction.trim())
+      params.set("limit", String(auditLimit))
+      params.set("offset", String(append ? auditOffset : 0))
+      const suffix = params.toString() ? `?${params.toString()}` : ""
+      const res = await fetch(`${getApiPath("/users/audit-logs")}${suffix}`, {
+        headers: { Authorization: `Bearer ${activeToken}` },
+      })
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setAuditError(payload?.error?.message || "Could not load audit logs.")
+        return
+      }
+      const incoming = payload.audit_logs || []
+      setAuditLastCount(incoming.length)
+      if (append) {
+        setAuditLogs(prev => [...prev, ...incoming])
+        setAuditOffset(prev => prev + incoming.length)
+      } else {
+        setAuditLogs(incoming)
+        setAuditOffset(incoming.length)
+      }
+    } finally {
+      setAuditLoading(false)
+    }
+  }
+
+  function exportAuditLogsCsv() {
+    if (auditLogs.length === 0) return
+    const header = ["created_at", "action", "actor_user_id", "actor_name", "target_user_id", "ip_address"]
+    const rows = auditLogs.map((row) => [
+      row.created_at || "",
+      row.action || "",
+      row.actor_user_id ?? "",
+      row.actor_name || "",
+      row.target_user_id ?? "",
+      row.ip_address || "",
+    ])
+    const csv = [header, ...rows]
+      .map((r) => r.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+      .join("\n")
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `audit_logs_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  async function submitPasswordChange() {
+    setPasswordMsg("")
+    if (!currentPassword || !newPassword) {
+      setPasswordMsg("Provide current and new password.")
+      return
+    }
+    if (newPassword.length < 8) {
+      setPasswordMsg("New password must be at least 8 characters.")
+      return
+    }
+    setLoadingPassword(true)
+    try {
+      const res = await fetch(getApiPath("/auth/change-password"), {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+      })
+      const payload = await res.json()
+      if (!res.ok) {
+        setPasswordMsg(payload?.error?.message || "Could not update password.")
+        return
+      }
+      const rawUser = localStorage.getItem("user")
+      if (rawUser) {
+        const user = JSON.parse(rawUser)
+        user.must_change_password = false
+        localStorage.setItem("user", JSON.stringify(user))
+      }
+      setMustChangePassword(false)
+      setCurrentPassword("")
+      setNewPassword("")
+      setPasswordMsg("Password updated successfully.")
+    } finally {
+      setLoadingPassword(false)
+    }
+  }
+
+  async function provisionAccount() {
+    setCreateError("")
+    if (!fullName || !email) {
+      setCreateError("full name and email are required.")
+      return
+    }
+    if (role === "student" && !regNumber) {
+      setCreateError("registration number is required for student.")
+      return
+    }
+    if (role === "lecturer" && !username) {
+      setCreateError("username is required for lecturer.")
+      return
+    }
+
+    setCreating(true)
+    try {
+      const res = await fetch(getApiPath("/auth/provision-credentials"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          role,
+          full_name: fullName,
+          registration_number: role === "student" ? regNumber : undefined,
+          email,
+          phone_number: phoneNumber,
+          username: role === "lecturer" ? username : undefined,
+        }),
+      })
+      const payload = await res.json()
+      if (!res.ok) {
+        setCreateError(payload?.error?.message || "Failed to create account.")
+        return
+      }
+
+      setProvisioned(prev => [
+        {
+          user_id: payload.user?.user_id,
+          full_name: payload.user?.full_name || fullName,
+          role: payload.user?.role || role,
+          login_id: payload.login_id,
+          temporary_password: payload.temporary_password,
+        },
+        ...prev,
+      ])
+      setFullName("")
+      setRegNumber("")
+      setEmail("")
+      setPhoneNumber("")
+      setUsername("")
+      await fetchUsers()
+      await fetchAuditLogs()
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  function exportGeneratedCredentialsCsv() {
+    if (provisioned.length === 0) return
+    const header = ["full_name", "role", "login_id", "temporary_password"]
+    const rows = provisioned.map((row) => [
+      row.full_name,
+      row.role,
+      row.login_id,
+      row.temporary_password,
+    ])
+    const csv = [header, ...rows]
+      .map((r) => r.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+      .join("\n")
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `generated_credentials_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  async function toggleUserStatus(user: ManagedUser) {
+    const res = await fetch(getApiPath(`/users/${user.user_id}/status`), {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ is_active: !user.is_active }),
+    })
+    const payload = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      setUsersError(payload?.error?.message || "Failed to update user status.")
+      return
+    }
+    await fetchUsers()
+    await fetchAuditLogs()
+  }
+
+  async function resetCredentials(user: ManagedUser) {
+    const res = await fetch(getApiPath(`/users/${user.user_id}/reset-credentials`), {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    const payload = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      setUsersError(payload?.error?.message || "Failed to reset credentials.")
+      return
+    }
+    setProvisioned(prev => [
+      {
+        user_id: user.user_id,
+        full_name: user.full_name,
+        role: user.role,
+        login_id: payload.login_id,
+        temporary_password: payload.temporary_password,
+      },
+      ...prev,
+    ])
+    await fetchUsers()
+    await fetchAuditLogs()
+  }
+
+  const summary = useMemo(() => {
+    const students = users.filter(u => u.role === "student").length
+    const lecturers = users.filter(u => u.role === "lecturer").length
+    const active = users.filter(u => u.is_active).length
+    return { students, lecturers, active, total: users.length }
+  }, [users])
+
+  function logout() {
+    localStorage.removeItem("token")
+    localStorage.removeItem("user")
+    router.push("/")
+  }
+
+  if (loadingMe) {
+    return (
+      <main className="min-h-screen bg-[#f4f5f7] p-6 text-slate-900">
+        <div className="mx-auto max-w-5xl rounded-xl border bg-white p-6 text-sm text-slate-700">Validating admin session...</div>
+      </main>
+    )
+  }
 
   return (
-    <div className="min-h-screen bg-background">
-      <Navbar role="admin" userName="Dr. Admin" />
-
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
-        {/* Header */}
-        <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">Admin Dashboard</h1>
-            <p className="mt-1 text-sm text-muted-foreground">Real-time proctoring overview — Computer Science Final Exam 2024</p>
-          </div>
-          <Button variant="outline" size="sm" className="gap-2">
-            <Download className="h-4 w-4" /> Export Report
-          </Button>
+    <DashboardShell
+      appName="ProctorAI Admin"
+      title="Admin Console"
+      subtitle="Manage account lifecycle: provision users, enforce first-login password change, activate/deactivate accounts, and reset credentials."
+      sidebarItems={[
+        { label: "Dashboard", active: true },
+        { label: "Users" },
+        { label: "Credentials" },
+        { label: "Logs", href: "/admin/system-logs" },
+      ]}
+      rightTopSlot={
+        <div className="flex gap-2">
+          <Link href="/admin/system-logs" className="rounded-md border px-3 py-1.5 text-sm font-semibold">
+            View Logs
+          </Link>
+          <button onClick={logout} className="inline-flex items-center gap-1 rounded-md border px-3 py-1.5 text-sm font-semibold">
+            <LogOut className="h-4 w-4" /> Logout
+          </button>
         </div>
+      }
+    >
+      {adminError && <p className="text-sm text-red-600">{adminError}</p>}
 
-        {/* Stats grid */}
-        <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {stats.map(s => (
-            <div key={s.label} className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">{s.label}</p>
-                  <p className="mt-1 text-3xl font-bold text-foreground">{s.value}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">{s.sub}</p>
-                </div>
-                <div className={cn("flex h-10 w-10 items-center justify-center rounded-xl", s.color)}>
-                  <s.icon className="h-5 w-5" />
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+      <section className="grid gap-3 md:grid-cols-4">
+        <MetricCard label="Total Users" value={summary.total} />
+        <MetricCard label="Students" value={summary.students} />
+        <MetricCard label="Lecturers" value={summary.lecturers} />
+        <MetricCard label="Active Users" value={summary.active} />
+      </section>
 
-        {/* Charts row */}
-        <div className="mb-8 grid gap-6 lg:grid-cols-3">
-          {/* Bar chart */}
-          <div className="lg:col-span-2 rounded-2xl border border-border bg-card p-5 shadow-sm">
-            <div className="mb-4 flex items-center justify-between">
-              <div>
-                <h2 className="font-semibold text-foreground">Violation Breakdown</h2>
-                <p className="text-xs text-muted-foreground">Gaze, head movement, and tab switches per student</p>
-              </div>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+        {mustChangePassword && (
+          <DashboardPanel title="Change Temporary Admin Password">
+            <div className="flex items-center gap-2 text-amber-800 font-semibold">
+              <KeyRound className="h-4 w-4" />
+              First-login password update required
             </div>
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={barData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }} barSize={6} barGap={2}>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                <XAxis dataKey="name" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} />
-                <Tooltip
-                  contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }}
-                  labelStyle={{ color: "var(--foreground)", fontWeight: 600 }}
-                />
-                <Bar dataKey="gaze" name="Gaze Alerts" fill="var(--color-chart-1)" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="head" name="Head Moves" fill="var(--color-chart-3)" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="tab" name="Tab Switches" fill="var(--color-chart-4)" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            <p className="mt-1 text-sm text-amber-700">You must change your temporary password before regular admin operations.</p>
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} placeholder="Current temporary password" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />
+              <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="New strong password" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />
+            </div>
+            {passwordMsg && <p className="mt-2 text-sm text-amber-800">{passwordMsg}</p>}
+            <button onClick={submitPasswordChange} disabled={loadingPassword} className="mt-3 rounded-md bg-amber-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
+              {loadingPassword ? "Updating..." : "Update Password"}
+            </button>
+          </DashboardPanel>
+        )}
+
+        <DashboardPanel title="Create Lecturer/Student Account">
+          <div className="flex items-center gap-2">
+            <UserPlus className="h-5 w-5 text-blue-700" />
+            <h2 className="text-base font-semibold">Create Lecturer/Student Account</h2>
           </div>
-
-          {/* Pie chart */}
-          <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-            <div className="mb-4">
-              <h2 className="font-semibold text-foreground">Risk Distribution</h2>
-              <p className="text-xs text-muted-foreground">Students by risk level</p>
-            </div>
-            <ResponsiveContainer width="100%" height={180}>
-              <PieChart>
-                <Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={75} paddingAngle={3} dataKey="value">
-                  {pieData.map((_, i) => (
-                    <Cell key={i} fill={PIE_COLORS[i]} />
-                  ))}
-                </Pie>
-                <Tooltip contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }} />
-                <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12, color: "var(--muted-foreground)" }} />
-              </PieChart>
-            </ResponsiveContainer>
+          <div className="grid gap-3 md:grid-cols-2">
+            <select value={role} onChange={e => setRole(e.target.value as "student" | "lecturer")} className="rounded-md border p-2 text-sm">
+              <option value="student">student</option>
+              <option value="lecturer">lecturer</option>
+            </select>
+            <input value={fullName} onChange={e => setFullName(e.target.value)} placeholder="Full name" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />
+            {role === "student" && (
+              <input value={regNumber} onChange={e => setRegNumber(e.target.value)} placeholder="Registration number" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />
+            )}
+            <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />
+            <input value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)} placeholder="Phone number (optional)" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />
+            {role === "lecturer" && (
+              <input value={username} onChange={e => setUsername(e.target.value)} placeholder="Username (required for lecturer)" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />
+            )}
           </div>
-        </div>
+          {createError && <p className="text-sm text-red-600">{createError}</p>}
+          <button onClick={provisionAccount} disabled={creating || mustChangePassword} className="rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
+            {creating ? "Creating..." : "Create Account + Generate Temporary Credentials"}
+          </button>
+        </DashboardPanel>
 
-        {/* Table */}
-        <div className="rounded-2xl border border-border bg-card shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4">
-            <h2 className="font-semibold text-foreground">Student Sessions</h2>
-            <div className="flex flex-wrap items-center gap-2">
-              {/* Search */}
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                <input
-                  type="text"
-                  placeholder="Search student…"
-                  value={search}
-                  onChange={e => setSearch(e.target.value)}
-                  className="w-48 rounded-lg border border-input bg-background py-1.5 pl-8 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-                />
-              </div>
 
-              {/* Risk filter */}
-              <div className="flex items-center gap-1">
-                <Filter className="h-3.5 w-3.5 text-muted-foreground" />
-                {(["All", "High", "Medium", "Low"] as const).map(f => (
-                  <button
-                    key={f}
-                    onClick={() => setRiskFilter(f)}
-                    className={cn(
-                      "rounded-md px-2.5 py-1 text-xs font-medium transition-all",
-                      riskFilter === f ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-accent"
-                    )}
-                  >
-                    {f}
-                  </button>
-                ))}
-              </div>
-            </div>
+        <DashboardPanel title="Manage Users">
+          <div className="flex items-center gap-2">
+            <Users className="h-5 w-5 text-blue-700" />
+            <h2 className="text-base font-semibold">Manage Users</h2>
           </div>
-
+          <div className="grid gap-3 md:grid-cols-4">
+            <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search name/email/reg number" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500 md:col-span-2" />
+            <select value={roleFilter} onChange={e => setRoleFilter(e.target.value as "all" | "student" | "lecturer")} className="rounded-md border p-2 text-sm">
+              <option value="all">all roles</option>
+              <option value="student">student</option>
+              <option value="lecturer">lecturer</option>
+            </select>
+            <select value={activeFilter} onChange={e => setActiveFilter(e.target.value as "all" | "active" | "inactive")} className="rounded-md border p-2 text-sm">
+              <option value="all">all status</option>
+              <option value="active">active</option>
+              <option value="inactive">inactive</option>
+            </select>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={() => fetchUsers()} className="rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" disabled={usersLoading}>
+              {usersLoading ? "Loading..." : "Refresh"}
+            </button>
+          </div>
+          {usersError && <p className="text-sm text-red-600">{usersError}</p>}
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-border bg-muted/30">
-                  {["Student", "Reg. Number", "Gaze Alerts", "Head Moves", "Tab Switches", "Risk Level", "Actions"].map(h => (
-                    <th key={h} className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">{h}</th>
-                  ))}
+                <tr className="border-b text-left">
+                  <th className="py-2">Name</th>
+                  <th>Role</th>
+                  <th>Login ID</th>
+                  <th>Email</th>
+                  <th>Status</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border">
-                {filtered.map(s => (
-                  <tr key={s.id} className="group hover:bg-accent/30 transition-colors">
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
-                          {s.name.split(" ").map(n => n[0]).join("")}
-                        </div>
-                        <span className="font-medium text-foreground">{s.name}</span>
+              <tbody>
+                {users.map((user) => (
+                  <tr key={user.user_id} className="border-b">
+                    <td className="py-2">{user.full_name}</td>
+                    <td>{user.role}</td>
+                    <td className="font-mono">{user.username || user.registration_number}</td>
+                    <td>{user.email}</td>
+                    <td>{user.is_active ? "active" : "inactive"}</td>
+                    <td>
+                      <div className="flex gap-2">
+                        <button onClick={() => toggleUserStatus(user)} className="rounded border px-2 py-1 text-xs">
+                          {user.is_active ? "Deactivate" : "Activate"}
+                        </button>
+                        <button onClick={() => resetCredentials(user)} className="rounded border px-2 py-1 text-xs">
+                          Reset Credentials
+                        </button>
                       </div>
-                    </td>
-                    <td className="px-5 py-3.5 font-mono text-xs text-muted-foreground">{s.regNum}</td>
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center gap-1.5">
-                        <Eye className="h-3.5 w-3.5 text-muted-foreground" />
-                        <span className={cn("font-medium", s.gaze > 8 ? "text-destructive" : "text-foreground")}>{s.gaze}</span>
-                      </div>
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center gap-1.5">
-                        <Move className="h-3.5 w-3.5 text-muted-foreground" />
-                        <span className={cn("font-medium", s.headMove > 6 ? "text-yellow-600 dark:text-yellow-400" : "text-foreground")}>{s.headMove}</span>
-                      </div>
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center gap-1.5">
-                        <Monitor className="h-3.5 w-3.5 text-muted-foreground" />
-                        <span className={cn("font-medium", s.tabSwitch > 2 ? "text-destructive" : "text-foreground")}>{s.tabSwitch}</span>
-                      </div>
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <span className={cn("inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold", riskConfig[s.risk as keyof typeof riskConfig].className)}>
-                        <span className={cn("h-1.5 w-1.5 rounded-full", riskConfig[s.risk as keyof typeof riskConfig].dot)} />
-                        {s.risk}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <Button variant="ghost" size="sm" className="h-7 px-2 text-xs opacity-0 group-hover:opacity-100 transition-opacity">
-                        <AlertTriangle className="mr-1 h-3 w-3" /> Review
-                      </Button>
                     </td>
                   </tr>
                 ))}
-                {filtered.length === 0 && (
+                {users.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="px-5 py-10 text-center text-sm text-muted-foreground">No students match your search or filter.</td>
+                    <td className="py-3 text-slate-600" colSpan={6}>No users found.</td>
                   </tr>
                 )}
               </tbody>
             </table>
           </div>
+        </DashboardPanel>
 
-          <div className="border-t border-border px-5 py-3">
-            <p className="text-xs text-muted-foreground">Showing {filtered.length} of {students.length} students</p>
+        <DashboardPanel title="Generated Temporary Credentials" subtitle="Share manually. Each user is forced to set a new password on first login.">
+          <p className="text-sm text-slate-700 mt-1">Share manually. Each user is forced to set a new password on first login.</p>
+          <div className="mt-3">
+            <button
+              onClick={exportGeneratedCredentialsCsv}
+              disabled={provisioned.length === 0}
+              className="rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              Export Credentials CSV
+            </button>
           </div>
-        </div>
-      </main>
-    </div>
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left">
+                  <th className="py-2">Name</th>
+                  <th>Role</th>
+                  <th>Login ID</th>
+                  <th>Temporary Password</th>
+                </tr>
+              </thead>
+              <tbody>
+                {provisioned.map((row, idx) => (
+                  <tr key={`${row.login_id}-${idx}`} className="border-b">
+                    <td className="py-2">{row.full_name}</td>
+                    <td>{row.role}</td>
+                    <td className="font-mono">{row.login_id}</td>
+                    <td className="font-mono">{row.temporary_password}</td>
+                  </tr>
+                ))}
+                {provisioned.length === 0 && (
+                  <tr>
+                    <td className="py-3 text-slate-600" colSpan={4}>No credentials generated yet.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </DashboardPanel>
+
+        <DashboardPanel title="System Logs" subtitle="Audit and session logs were moved to a dedicated page with filters and CSV export.">
+          <p className="text-sm text-slate-700 mt-1">Audit and session logs were moved to a dedicated page with filters and CSV export.</p>
+          <div className="mt-3">
+            <Link href="/admin/system-logs" className="rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white">
+              Open Logs Page
+            </Link>
+          </div>
+        </DashboardPanel>
+    </DashboardShell>
   )
 }

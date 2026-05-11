@@ -8,194 +8,27 @@ import { useBrowserLockdown } from "@/hooks/use-browser-lockdown"
 import { SystemStatusIndicators } from "@/components/system-status-indicators"
 import { useNetworkStatus } from "@/hooks/use-network-status"
 import { Calculator } from "@/components/calculator"
+import { getApiPath } from "@/lib/api-url"
 
-const questions = [
-  {
-    id: 1,
-    text: "Which of the following best describes the time complexity of QuickSort in the average case?",
-    options: [
-      "O(n²) — quadratic, sorted input worst case",
-      "O(n log n) — linearithmic; expected average performance",
-      "O(n) — linear, restricted inputs only",
-      "O(log n) — logarithmic; applies to search not sort",
-    ],
-    correct: 1,
-    marks: 5,
-  },
-  {
-    id: 2,
-    text: "Which data structure uses FIFO (First In, First Out) ordering?",
-    options: ["Stack", "Queue", "Tree", "Graph"],
-    correct: 1,
-    marks: 5,
-  },
-  {
-    id: 3,
-    text: "What is the time complexity of binary search on a sorted array?",
-    options: ["O(n)", "O(n²)", "O(log n)", "O(1)"],
-    correct: 2,
-    marks: 5,
-  },
-  {
-    id: 4,
-    text: "Which of the following is NOT an object-oriented programming concept?",
-    options: ["Inheritance", "Polymorphism", "Compilation", "Encapsulation"],
-    correct: 2,
-    marks: 5,
-  },
-  {
-    id: 5,
-    text: "What does SQL stand for?",
-    options: [
-      "Structured Query Language",
-      "Simple Query Logic",
-      "System Query Language",
-      "Structured Question Lookup",
-    ],
-    correct: 0,
-    marks: 5,
-  },
-  {
-    id: 6,
-    text: "Which protocol is used to send email?",
-    options: ["FTP", "HTTP", "SMTP", "POP3"],
-    correct: 2,
-    marks: 5,
-  },
-  {
-    id: 7,
-    text: "What is a deadlock in operating systems?",
-    options: [
-      "A process that runs indefinitely",
-      "Two processes waiting on each other indefinitely",
-      "A kernel crash condition",
-      "Memory overflow error",
-    ],
-    correct: 1,
-    marks: 5,
-  },
-  {
-    id: 8,
-    text: "In machine learning, overfitting refers to:",
-    options: [
-      "A model too simple for the data",
-      "A model that memorises training data and fails on new data",
-      "When training loss is very high",
-      "A model with too few parameters",
-    ],
-    correct: 1,
-    marks: 5,
-  },
-  {
-    id: 9,
-    text: "Which sorting algorithm has O(n log n) average time complexity?",
-    options: ["Bubble Sort", "Insertion Sort", "Merge Sort", "Selection Sort"],
-    correct: 2,
-    marks: 5,
-  },
-  {
-    id: 10,
-    text: "What is the primary purpose of a compiler?",
-    options: [
-      "To run source code directly",
-      "To translate source code into machine code",
-      "To manage memory allocation",
-      "To optimise database queries",
-    ],
-    correct: 1,
-    marks: 5,
-  },
-  {
-    id: 11,
-    text: "Which HTTP method is used to update an existing resource?",
-    options: ["GET", "POST", "PUT", "DELETE"],
-    correct: 2,
-    marks: 5,
-  },
-  {
-    id: 12,
-    text: "What is the main difference between TCP and UDP?",
-    options: [
-      "TCP is connectionless, UDP is connection-oriented",
-      "TCP guarantees delivery; UDP does not",
-      "UDP is slower than TCP",
-      "TCP does not support multiplexing",
-    ],
-    correct: 1,
-    marks: 5,
-  },
-  {
-    id: 13,
-    text: "Which normal form eliminates transitive dependencies?",
-    options: ["1NF", "2NF", "3NF", "BCNF"],
-    correct: 2,
-    marks: 5,
-  },
-  {
-    id: 14,
-    text: "What is the role of an operating system kernel?",
-    options: [
-      "Provide a graphical user interface",
-      "Manage hardware resources and system calls",
-      "Compile high-level programs",
-      "Store user data persistently",
-    ],
-    correct: 1,
-    marks: 5,
-  },
-  {
-    id: 15,
-    text: "Which traversal visits nodes in Left-Root-Right order?",
-    options: ["Pre-order", "Post-order", "In-order", "Level-order"],
-    correct: 2,
-    marks: 5,
-  },
-  {
-    id: 16,
-    text: "What does the CAP theorem state?",
-    options: [
-      "A system can be consistent, available, and partition-tolerant simultaneously",
-      "A distributed system can guarantee at most two of: Consistency, Availability, Partition tolerance",
-      "Caches Always Persist data",
-      "Concurrency Avoids Problems in distributed computing",
-    ],
-    correct: 1,
-    marks: 5,
-  },
-  {
-    id: 17,
-    text: "Which design pattern defines a one-to-many dependency so that when one object changes state all dependants are notified?",
-    options: ["Factory", "Singleton", "Observer", "Adapter"],
-    correct: 2,
-    marks: 5,
-  },
-  {
-    id: 18,
-    text: "What is the output of 5 XOR 3 in binary?",
-    options: ["6", "7", "1", "2"],
-    correct: 0,
-    marks: 5,
-  },
-  {
-    id: 19,
-    text: "Which Python data structure is immutable?",
-    options: ["List", "Dictionary", "Set", "Tuple"],
-    correct: 3,
-    marks: 5,
-  },
-  {
-    id: 20,
-    text: "What is virtual memory?",
-    options: [
-      "RAM that is soldered to the motherboard",
-      "A technique that uses disk space to extend the apparent size of RAM",
-      "Cache memory on the CPU",
-      "A type of flash storage",
-    ],
-    correct: 1,
-    marks: 5,
-  },
-]
+type SocketLike = {
+  on: (event: string, callback: (...args: any[]) => void) => void
+  emit: (event: string, payload: unknown) => void
+  disconnect: () => void
+}
+
+declare global {
+  interface Window {
+    io?: (url: string, options?: Record<string, unknown>) => SocketLike
+  }
+}
+
+type LiveQuestion = {
+  id: number
+  text: string
+  options: string[]
+  marks: number
+  questionType: string
+}
 
 // Grid layout: 4 columns of 5 rows = 20
 const COLS = 4
@@ -230,6 +63,9 @@ export default function ExamPage() {
   const router = useRouter()
   const examVideoRef = useRef<HTMLVideoElement>(null)
   const examStreamRef = useRef<MediaStream | null>(null)
+  const answersRef = useRef<Record<number, number>>({})
+  const frameCanvasRef = useRef<HTMLCanvasElement>(null)
+  const socketRef = useRef<SocketLike | null>(null)
   const [current, setCurrent] = useState(0)
   const [answers, setAnswers] = useState<Record<number, number>>({})
   const [flagged, setFlagged] = useState<Set<number>>(new Set())
@@ -246,8 +82,18 @@ export default function ExamPage() {
   const [securityAlert, setSecurityAlert] = useState<string | null>(null)
   const [examCameraReady, setExamCameraReady] = useState(false)
   const [examCameraError, setExamCameraError] = useState<string | null>(null)
+  const [sessionId, setSessionId] = useState<number | null>(null)
+  const [examId, setExamId] = useState<number | null>(null)
+  const [examTitle, setExamTitle] = useState("Exam")
+  const [examDateLabel, setExamDateLabel] = useState("Scheduled session")
+  const [examDurationLabel, setExamDurationLabel] = useState("—")
+  const [questions, setQuestions] = useState<LiveQuestion[]>([])
+  const [loadingQuestions, setLoadingQuestions] = useState(true)
+  const [socketConnected, setSocketConnected] = useState(false)
+  const [sessionLocked, setSessionLocked] = useState(false)
   const maxWarnings = 3
   const stats = useProctoringStats()
+  const setTabSwitches = stats.setTabSwitches
   const networkStatus = useNetworkStatus()
   const { devtoolsLikelyOpen } = useBrowserLockdown({
     onBlockedAction: message => setSecurityAlert(message),
@@ -329,6 +175,107 @@ export default function ExamPage() {
   }
 
   useEffect(() => {
+    const raw = localStorage.getItem("session_id")
+    if (!raw) return
+    const parsed = Number(raw)
+    if (Number.isFinite(parsed) && parsed > 0) {
+      setSessionId(parsed)
+    }
+    const rawExam = localStorage.getItem("exam_id")
+    if (!rawExam) return
+    const parsedExam = Number(rawExam)
+    if (Number.isFinite(parsedExam) && parsedExam > 0) {
+      setExamId(parsedExam)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!examId) {
+      setLoadingQuestions(false)
+      return
+    }
+    const token = localStorage.getItem("token")
+    if (!token) {
+      setLoadingQuestions(false)
+      return
+    }
+
+    let mounted = true
+    void (async () => {
+      try {
+        const res = await fetch(getApiPath(`/exams/${examId}`), {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        const payload = await res.json().catch(() => ({}))
+        if (!res.ok || !payload?.exam || !Array.isArray(payload?.questions)) {
+          if (mounted) setLoadingQuestions(false)
+          return
+        }
+
+        const mapped: LiveQuestion[] = payload.questions.map((q: any) => ({
+          id: Number(q.question_id),
+          text: String(q.question_text ?? ""),
+          options: [q.option_a, q.option_b, q.option_c, q.option_d].filter((v: unknown) => typeof v === "string" && v.length > 0),
+          marks: Number(q.marks ?? 1),
+          questionType: String(q.question_type ?? "mcq"),
+        }))
+
+        if (!mounted) return
+        setExamTitle(String(payload.exam.title ?? "Exam"))
+        setExamDurationLabel(`${Number(payload.exam.duration_min ?? 0)} mins`)
+        setExamDateLabel(
+          payload.exam.scheduled_at
+            ? new Date(payload.exam.scheduled_at).toLocaleDateString()
+            : "Scheduled session"
+        )
+        setQuestions(mapped)
+        setCurrent(0)
+      } finally {
+        if (mounted) setLoadingQuestions(false)
+      }
+    })()
+
+    return () => {
+      mounted = false
+    }
+  }, [examId])
+
+  useEffect(() => {
+    if (!sessionId || questions.length === 0) return
+    const token = localStorage.getItem("token")
+    if (!token) return
+
+    let mounted = true
+    void (async () => {
+      const res = await fetch(getApiPath(`/sessions/${sessionId}/answers`), {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const payload = await res.json().catch(() => ({}))
+      if (!mounted || !res.ok || !Array.isArray(payload?.answers)) return
+
+      const restored: Record<number, number> = {}
+      payload.answers.forEach((row: any) => {
+        const questionId = Number(row.question_id)
+        const selected = String(row.selected_answer || "").toUpperCase()
+        const questionIdx = questions.findIndex(q => q.id === questionId)
+        if (questionIdx < 0) return
+
+        if (["A", "B", "C", "D"].includes(selected)) {
+          restored[questionIdx] = selected.charCodeAt(0) - 65
+        } else if (!Number.isNaN(Number(selected))) {
+          restored[questionIdx] = Number(selected)
+        }
+      })
+
+      setAnswers(restored)
+    })()
+
+    return () => {
+      mounted = false
+    }
+  }, [sessionId, questions])
+
+  useEffect(() => {
     const id = setInterval(() => {
       setTimeLeft(t => (t <= 0 ? 0 : t - 1))
     }, 1000)
@@ -359,16 +306,66 @@ export default function ExamPage() {
     }
   }, [])
 
-  const triggerWarning = useCallback(() => {
-    const next = warnings + 1
+  const applyWarning = useCallback((incomingCount: number) => {
+    const next = Math.max(incomingCount, 0)
     setWarnings(next)
-    stats.setTabSwitches(s => s + 1)
+    setTabSwitches(next)
     setWarningModal(next >= maxWarnings ? "final" : "warning")
-  }, [warnings, stats])
+  }, [maxWarnings, setTabSwitches])
+
+  async function submitSessionToServer() {
+    if (!sessionId) return
+    const token = localStorage.getItem("token")
+    if (!token) return
+
+    const payloadAnswers = Object.fromEntries(
+      Object.entries(answersRef.current)
+        .map(([idx, optionIdx]) => {
+          const question = questions[Number(idx)]
+          if (!question) return null
+          const selectedAnswer = String.fromCharCode(65 + Number(optionIdx))
+          return [String(question.id), selectedAnswer]
+        })
+        .filter((entry): entry is [string, string] => Array.isArray(entry))
+    )
+
+    await fetch(getApiPath(`/sessions/${sessionId}/submit`), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ answers: payloadAnswers }),
+    })
+  }
+
+  async function ensureSocketClientLoaded() {
+    if (window.io) return
+    await new Promise<void>((resolve, reject) => {
+      const existing = document.querySelector('script[data-socket-io-client="true"]') as HTMLScriptElement | null
+      if (existing) {
+        existing.addEventListener("load", () => resolve(), { once: true })
+        existing.addEventListener("error", () => reject(new Error("Failed to load Socket.IO client")), { once: true })
+        return
+      }
+
+      const script = document.createElement("script")
+      script.src = "https://cdn.socket.io/4.7.5/socket.io.min.js"
+      script.async = true
+      script.dataset.socketIoClient = "true"
+      script.addEventListener("load", () => resolve(), { once: true })
+      script.addEventListener("error", () => reject(new Error("Failed to load Socket.IO client")), { once: true })
+      document.head.appendChild(script)
+    })
+  }
 
   function handleAnswer(optIdx: number) {
     setAnswers(a => ({ ...a, [current]: optIdx }))
   }
+
+  useEffect(() => {
+    answersRef.current = answers
+  }, [answers])
 
   function toggleFlag() {
     setFlagged(f => {
@@ -386,7 +383,7 @@ export default function ExamPage() {
   }
 
   const answered = Object.keys(answers).length
-  const isLast = current === questions.length - 1
+  const isLast = questions.length > 0 && current === questions.length - 1
   const timerDanger = timeLeft < 5 * 60
   const q = questions[current]
 
@@ -394,14 +391,78 @@ export default function ExamPage() {
     setShowSubmitConfirm(true)
   }
 
-  function handleConfirmSubmit() {
+  async function handleConfirmSubmit() {
     setSubmitting(true)
-    setTimeout(() => {
+    try {
+      await submitSessionToServer()
+    } finally {
       setSubmitting(false)
       setShowSubmitConfirm(false)
       setShowCongrats(true)
-    }, 900)
+    }
   }
+
+  useEffect(() => {
+    if (!examCameraReady || !sessionId || sessionLocked) return
+
+    let cancelled = false
+    let interval: ReturnType<typeof setInterval> | null = null
+    let socket: SocketLike | null = null
+
+    void (async () => {
+      try {
+        await ensureSocketClientLoaded()
+        if (cancelled || !window.io) return
+
+        const wsUrl = process.env.NEXT_PUBLIC_WS_URL || "http://localhost:8000"
+        socket = window.io(wsUrl, { transports: ["websocket", "polling"] })
+        socketRef.current = socket
+
+        socket.on("connect", () => setSocketConnected(true))
+        socket.on("disconnect", () => setSocketConnected(false))
+
+        socket.on("anomaly_result", (event) => {
+          if (!event || Number(event.session_id) !== sessionId) return
+          const count = Number(event.warning_count || 0)
+          applyWarning(count)
+          if (Array.isArray(event.anomalies) && event.anomalies.length > 0) {
+            setTabSwitches(count)
+          }
+        })
+
+        socket.on("session_locked", async (event) => {
+          if (!event || Number(event.session_id) !== sessionId) return
+          setSessionLocked(true)
+          applyWarning(maxWarnings)
+          await submitSessionToServer()
+        })
+
+        interval = setInterval(() => {
+          if (!examVideoRef.current || !frameCanvasRef.current || !socket) return
+          const ctx = frameCanvasRef.current.getContext("2d")
+          if (!ctx) return
+
+          ctx.drawImage(examVideoRef.current, 0, 0, 320, 240)
+          const frameBase64 = frameCanvasRef.current.toDataURL("image/jpeg", 0.6)
+          socket.emit("webcam_frame", {
+            session_id: sessionId,
+            frame_base64: frameBase64,
+            timestamp: new Date().toISOString(),
+          })
+        }, 3000)
+      } catch {
+        setSocketConnected(false)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+      if (interval) clearInterval(interval)
+      if (socket) socket.disconnect()
+      socketRef.current = null
+      setSocketConnected(false)
+    }
+  }, [applyWarning, examCameraReady, maxWarnings, sessionId, sessionLocked, setTabSwitches])
 
   // Status for each question bubble
   function bubbleStatus(i: number) {
@@ -431,8 +492,8 @@ export default function ExamPage() {
         {/* Left: title */}
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="min-w-0">
-            <span className="block truncate text-sm font-semibold leading-tight text-white">Advanced Algorithms in Computer Science</span>
-            <span className="mt-0.5 block text-[10px] text-blue-200/70">Duration: 2 hrs &nbsp;&middot;&nbsp; 24 February 2026</span>
+            <span className="block truncate text-sm font-semibold leading-tight text-white">{examTitle}</span>
+            <span className="mt-0.5 block text-[10px] text-blue-200/70">Duration: {examDurationLabel} &nbsp;&middot;&nbsp; {examDateLabel}</span>
           </div>
 
           <div className="order-3 flex w-full flex-col items-start sm:order-none sm:w-auto sm:items-center">
@@ -448,11 +509,11 @@ export default function ExamPage() {
           <div className="flex items-center gap-2 sm:gap-3">
             <Calculator allowed={true} />
             <button
-              onClick={triggerWarning}
-              className="hidden items-center gap-1.5 rounded border border-green-400/40 bg-green-500/20 px-2.5 py-1 text-[11px] font-medium text-green-300 transition-colors hover:bg-green-500/30 sm:flex"
+              type="button"
+              className="hidden items-center gap-1.5 rounded border border-green-400/40 bg-green-500/20 px-2.5 py-1 text-[11px] font-medium text-green-300 sm:flex"
             >
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-green-400" />
-              Monitoring Active
+              <span className={cn("h-1.5 w-1.5 rounded-full", socketConnected ? "animate-pulse bg-green-400" : "bg-yellow-300")} />
+              {socketConnected ? "Monitoring Active" : "Connecting Monitor"}
             </button>
             <button
               onClick={openSubmitConfirm}
@@ -534,6 +595,12 @@ export default function ExamPage() {
               </div>
             </div>
 
+            {loadingQuestions ? (
+              <p className="text-sm text-gray-500">Loading exam questions...</p>
+            ) : !q ? (
+              <p className="text-sm text-red-500">No questions available for this exam.</p>
+            ) : (
+            <>
             {/* Question meta row */}
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
               <span className="text-sm font-semibold text-[#1a2d5a]">
@@ -541,7 +608,7 @@ export default function ExamPage() {
               </span>
               <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                 <span className="rounded border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700">
-                  Multiple Choice
+                  {q.questionType.replace("_", " ")}
                 </span>
                 <span className="text-xs font-semibold text-gray-500">{q.marks} Marks</span>
               </div>
@@ -620,6 +687,8 @@ export default function ExamPage() {
                 )
               })}
             </div>
+            </>
+            )}
           </div>
 
           {/* ── Bottom navigation ── */}
@@ -627,7 +696,7 @@ export default function ExamPage() {
             <div className="flex flex-wrap items-center justify-between gap-2 max-w-2xl">
               <button
                 onClick={() => setCurrent(c => Math.max(0, c - 1))}
-                disabled={current === 0}
+                disabled={current === 0 || questions.length === 0}
                 className="flex flex-1 items-center justify-center gap-1.5 rounded border border-gray-300 bg-white px-4 py-2 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50 disabled:opacity-40 sm:flex-none"
               >
                 <ChevronLeft className="h-3.5 w-3.5" />
@@ -636,6 +705,7 @@ export default function ExamPage() {
 
               <button
                 onClick={toggleFlag}
+                disabled={questions.length === 0}
                 className={cn(
                   "flex flex-1 items-center justify-center gap-1.5 rounded border px-4 py-2 text-xs font-medium transition-colors sm:flex-none",
                   flagged.has(current)
@@ -657,6 +727,7 @@ export default function ExamPage() {
               ) : (
                 <button
                   onClick={() => setCurrent(c => Math.min(questions.length - 1, c + 1))}
+                  disabled={questions.length === 0}
                   className="flex flex-1 items-center justify-center gap-1.5 rounded bg-[#1a2d5a] px-5 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#243d73] sm:flex-none"
                 >
                   Next Question
@@ -694,6 +765,7 @@ export default function ExamPage() {
               </p>
             )}
           </div>
+          <canvas ref={frameCanvasRef} width={320} height={240} style={{ display: "none" }} />
 
           {!examCameraReady ? (
             <button
