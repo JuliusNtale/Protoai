@@ -184,18 +184,18 @@ export default function StudentDashboard() {
   const completed = useMemo(() => sessions.filter(s => s.session_status === "completed").length, [sessions])
 
   if (loading) {
-    return <main className="min-h-screen bg-[#f4f5f7] p-6"><div className="mx-auto max-w-6xl rounded-xl border bg-white p-5 text-sm text-gray-500">Loading dashboard...</div></main>
+    return <main className="min-h-screen bg-[#f4f5f7] p-6 text-slate-900"><div className="mx-auto max-w-6xl rounded-xl border bg-white p-5 text-sm text-slate-700">Loading dashboard...</div></main>
   }
 
   return (
-    <main className="min-h-screen bg-[#f4f5f7] p-6">
+    <main className="min-h-screen bg-[#f4f5f7] p-6 text-slate-900">
       <div className="mx-auto max-w-6xl space-y-6">
         <section className="rounded-xl bg-white p-5 shadow-sm border">
           <div className="flex items-center gap-2">
             <User className="h-5 w-5 text-blue-700" />
             <h1 className="text-xl font-semibold">Student Dashboard</h1>
           </div>
-          <p className="mt-2 text-sm text-gray-500">{me?.full_name} ({me?.registration_number})</p>
+          <p className="mt-2 text-sm text-slate-700">{me?.full_name} ({me?.registration_number})</p>
           {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
         </section>
 
@@ -240,7 +240,7 @@ export default function StudentDashboard() {
                     </td>
                   </tr>
                 ))}
-                {exams.length === 0 && <tr><td colSpan={5} className="py-3 text-gray-500">No exams assigned.</td></tr>}
+                {exams.length === 0 && <tr><td colSpan={5} className="py-3 text-slate-600">No exams assigned.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -269,7 +269,7 @@ export default function StudentDashboard() {
                     <td>{s.warning_count}</td>
                   </tr>
                 ))}
-                {sessions.length === 0 && <tr><td colSpan={5} className="py-3 text-gray-500">No sessions yet.</td></tr>}
+                {sessions.length === 0 && <tr><td colSpan={5} className="py-3 text-slate-600">No sessions yet.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -300,7 +300,7 @@ export default function StudentDashboard() {
                     <td>{r.warning_count}</td>
                   </tr>
                 ))}
-                {reports.length === 0 && <tr><td colSpan={6} className="py-3 text-gray-500">No reports generated yet.</td></tr>}
+                {reports.length === 0 && <tr><td colSpan={6} className="py-3 text-slate-600">No reports generated yet.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -309,10 +309,10 @@ export default function StudentDashboard() {
         <section className="rounded-xl bg-white p-5 shadow-sm border">
           <h2 className="text-lg font-semibold">Profile</h2>
           <div className="mt-4 grid gap-3 md:grid-cols-2">
-            <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email" className="rounded-md border p-2 text-sm" />
-            <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="Phone number" className="rounded-md border p-2 text-sm" />
+            <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />
+            <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="Phone number" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />
           </div>
-          {profileMsg && <p className="mt-2 text-sm text-gray-700">{profileMsg}</p>}
+          {profileMsg && <p className="mt-2 text-sm text-slate-700">{profileMsg}</p>}
           <button onClick={updateProfile} className="mt-3 rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white">
             Save Profile
           </button>
@@ -324,10 +324,10 @@ export default function StudentDashboard() {
             <h2 className="text-lg font-semibold">Change Password</h2>
           </div>
           <div className="mt-4 grid gap-3 md:grid-cols-2">
-            <input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} placeholder="Current password" className="rounded-md border p-2 text-sm" />
-            <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="New password" className="rounded-md border p-2 text-sm" />
+            <input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} placeholder="Current password" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />
+            <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="New password" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />
           </div>
-          {passwordMsg && <p className="mt-2 text-sm text-gray-700">{passwordMsg}</p>}
+          {passwordMsg && <p className="mt-2 text-sm text-slate-700">{passwordMsg}</p>}
           <button onClick={changePassword} disabled={saving} className="mt-3 rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
             {saving ? "Updating..." : "Update Password"}
           </button>
@@ -340,7 +340,7 @@ export default function StudentDashboard() {
 function StatCard({ label, value }: { label: string; value: number }) {
   return (
     <div className="rounded-xl border bg-white p-4">
-      <p className="text-xs uppercase tracking-wider text-gray-500">{label}</p>
+      <p className="text-xs uppercase tracking-wider text-slate-600">{label}</p>
       <p className="mt-1 text-2xl font-semibold text-gray-900">{value}</p>
     </div>
   )
