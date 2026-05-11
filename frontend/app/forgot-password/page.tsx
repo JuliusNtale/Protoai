@@ -4,6 +4,7 @@ import { useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { CheckCircle, ArrowLeft, Mail, Phone } from "lucide-react"
+import { getApiPath } from "@/lib/api-url"
 
 const features = [
   { label: "Enter your registration number to find your account" },
@@ -31,7 +32,7 @@ export default function ForgotPasswordPage() {
     setError(null)
     setLoading(true)
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/lookup`, {
+      const res = await fetch(getApiPath("/auth/lookup"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ registration_number: regNum.trim() }),
@@ -62,7 +63,7 @@ export default function ForgotPasswordPage() {
     setError(null)
     setLoading(true)
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/reset-password`, {
+      const res = await fetch(getApiPath("/auth/reset-password"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ registration_number: regNum.trim(), recovery_method: method }),

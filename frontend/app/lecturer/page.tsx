@@ -65,6 +65,21 @@ type SessionResultRow = {
   risk_level: string
 }
 
+function formatDateTime(value?: string | null) {
+  if (!value) return "TBD"
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return "TBD"
+  return date.toLocaleString()
+}
+
+function badgeTone(value: string) {
+  const normalized = value.toLowerCase()
+  if (normalized === "completed" || normalized === "live" || normalized === "low") return "bg-emerald-50 text-emerald-700 border-emerald-200"
+  if (normalized === "scheduled" || normalized === "medium") return "bg-amber-50 text-amber-700 border-amber-200"
+  if (normalized === "high" || normalized === "locked") return "bg-red-50 text-red-700 border-red-200"
+  return "bg-slate-50 text-slate-700 border-slate-200"
+}
+
 export default function LecturerDashboard() {
   const router = useRouter()
   const [token, setToken] = useState("")
@@ -359,7 +374,19 @@ export default function LecturerDashboard() {
   }
 
   if (loading) {
-    return <main className="min-h-screen bg-[#f4f5f7] p-6 text-slate-900"><div className="mx-auto max-w-6xl rounded-xl border bg-white p-5 text-sm text-slate-700">Loading lecturer dashboard...</div></main>
+    return (
+      <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#eef2f7] p-6 text-slate-900">
+        <div className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-blue-200/40 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-24 -right-20 h-80 w-80 rounded-full bg-indigo-200/30 blur-3xl" />
+        <div className="relative w-full max-w-md rounded-3xl border border-slate-200 bg-white/95 p-8 text-center shadow-[0_24px_70px_rgba(15,23,42,0.12)] backdrop-blur">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#1a2d5a]/10">
+            <span className="absolute h-8 w-8 animate-spin rounded-full border-2 border-[#1a2d5a] border-t-transparent" />
+            <span className="absolute h-12 w-12 animate-[spin_2.2s_linear_infinite_reverse] rounded-full border-2 border-blue-300/70 border-b-transparent" />
+          </div>
+          <h1 className="text-xl font-semibold tracking-tight text-slate-900">Loading Lecturer Dashboard</h1>
+        </div>
+      </main>
+    )
   }
 
   return (
@@ -390,12 +417,12 @@ export default function LecturerDashboard() {
             <h2 className="text-base font-semibold">Create Exam</h2>
           </div>
           <div className="mt-4 grid gap-3 md:grid-cols-2">
-            <input value={newTitle} onChange={e => setNewTitle(e.target.value)} placeholder="Exam title" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />
-            <input value={newCourseCode} onChange={e => setNewCourseCode(e.target.value)} placeholder="Course code" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />
-            <input value={newDuration} onChange={e => setNewDuration(e.target.value)} placeholder="Duration minutes" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />
-            <input value={newSchedule} onChange={e => setNewSchedule(e.target.value)} placeholder="Scheduled at ISO (optional)" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />
+            <input value={newTitle} onChange={e => setNewTitle(e.target.value)} placeholder="Exam title" className="rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500 focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100" />
+            <input value={newCourseCode} onChange={e => setNewCourseCode(e.target.value)} placeholder="Course code" className="rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500 focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100" />
+            <input value={newDuration} onChange={e => setNewDuration(e.target.value)} placeholder="Duration minutes" className="rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500 focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100" />
+            <input value={newSchedule} onChange={e => setNewSchedule(e.target.value)} placeholder="Scheduled at ISO (optional)" className="rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500 focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100" />
           </div>
-          <button onClick={createExam} className="mt-3 rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white">Create Exam</button>
+          <button onClick={createExam} className="mt-3 rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#142145]">Create Exam</button>
         </DashboardPanel>
 
         <DashboardPanel title="My Exam List">
@@ -403,11 +430,11 @@ export default function LecturerDashboard() {
             <BookOpen className="h-5 w-5 text-blue-700" />
             <h2 className="text-base font-semibold">My Exam List</h2>
           </div>
-          <div className="mt-4 overflow-x-auto">
+          <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b text-left">
-                  <th className="py-2">Title</th>
+                <tr className="border-b bg-slate-50 text-left">
+                  <th className="py-2 pl-3">Title</th>
                   <th>Course</th>
                   <th>Schedule</th>
                   <th>Status</th>
@@ -419,14 +446,14 @@ export default function LecturerDashboard() {
               </thead>
               <tbody>
                 {exams.map((exam) => (
-                  <tr key={exam.exam_id} className="border-b">
-                    <td className="py-2">{exam.title}</td>
+                  <tr key={exam.exam_id} className="border-b last:border-b-0">
+                    <td className="py-2 pl-3 font-medium">{exam.title}</td>
                     <td>{exam.course_code}</td>
-                    <td>{exam.scheduled_at ? new Date(exam.scheduled_at).toLocaleString() : "TBD"}</td>
-                    <td>{exam.status}</td>
+                    <td>{formatDateTime(exam.scheduled_at)}</td>
+                    <td><span className={`rounded-full border px-2 py-1 text-xs font-medium ${badgeTone(exam.status)}`}>{exam.status}</span></td>
                     <td>
                       <select
-                        className="rounded border p-1 text-xs"
+                        className="rounded-md border border-slate-300 bg-white p-1 text-xs focus:border-[#1a2d5a] focus:outline-none"
                         value={exam.status}
                         onChange={async (e) => updateExamStatus(exam.exam_id, e.target.value)}
                       >
@@ -437,10 +464,10 @@ export default function LecturerDashboard() {
                       </select>
                     </td>
                     <td>
-                      <button onClick={() => editExam(exam)} className="rounded border px-2 py-1 text-xs">Edit</button>
+                      <button onClick={() => editExam(exam)} className="rounded-md border border-slate-300 px-2 py-1 text-xs font-medium hover:bg-slate-50">Edit</button>
                     </td>
                     <td>
-                      <button onClick={() => deleteExam(exam)} className="rounded border px-2 py-1 text-xs text-red-700">
+                      <button onClick={() => deleteExam(exam)} className="rounded-md border border-red-200 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50">
                         Delete
                       </button>
                     </td>
@@ -450,14 +477,14 @@ export default function LecturerDashboard() {
                           setSelectedExamId(exam.exam_id)
                           await loadExamDetails(token, exam.exam_id, exam.course_code)
                         }}
-                        className="rounded border px-2 py-1 text-xs"
+                        className="rounded-md bg-[#1a2d5a] px-2.5 py-1 text-xs font-semibold text-white hover:bg-[#142145]"
                       >
                         Select
                       </button>
                     </td>
                   </tr>
                 ))}
-                {exams.length === 0 && <tr><td colSpan={8} className="py-3 text-slate-600">No exams created yet.</td></tr>}
+                {exams.length === 0 && <tr><td colSpan={8} className="py-3 pl-3 text-slate-600">No exams created yet.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -465,7 +492,7 @@ export default function LecturerDashboard() {
             <button
               onClick={exportSelectedExamReport}
               disabled={!selectedExamId || exporting}
-              className="rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+              className="rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#142145] disabled:opacity-60"
             >
               {exporting ? "Exporting..." : "Export Selected Exam CSV"}
             </button>
@@ -474,19 +501,19 @@ export default function LecturerDashboard() {
 
         <DashboardPanel title={`Question Builder ${selectedExam ? `- ${selectedExam.title}` : ""}`}>
           <div className="mt-4 grid gap-3 md:grid-cols-2">
-            <select value={questionType} onChange={e => setQuestionType(e.target.value as "mcq" | "true_false")} className="rounded-md border bg-white p-2 text-sm text-slate-900">
+            <select value={questionType} onChange={e => setQuestionType(e.target.value as "mcq" | "true_false")} className="rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-900 focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100">
               <option value="mcq">mcq</option>
               <option value="true_false">true_false</option>
             </select>
-            <input value={marks} onChange={e => setMarks(e.target.value)} placeholder="Marks" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />
-            <input value={questionText} onChange={e => setQuestionText(e.target.value)} placeholder="Question text" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500 md:col-span-2" />
-            <input value={optionA} onChange={e => setOptionA(e.target.value)} placeholder="Option A" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />
-            <input value={optionB} onChange={e => setOptionB(e.target.value)} placeholder="Option B" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />
-            {questionType === "mcq" && <input value={optionC} onChange={e => setOptionC(e.target.value)} placeholder="Option C" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />}
-            {questionType === "mcq" && <input value={optionD} onChange={e => setOptionD(e.target.value)} placeholder="Option D" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />}
-            <input value={correctAnswer} onChange={e => setCorrectAnswer(e.target.value)} placeholder="Correct answer (e.g. A or TRUE)" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500 md:col-span-2" />
+            <input value={marks} onChange={e => setMarks(e.target.value)} placeholder="Marks" className="rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500 focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100" />
+            <input value={questionText} onChange={e => setQuestionText(e.target.value)} placeholder="Question text" className="rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500 focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100 md:col-span-2" />
+            <input value={optionA} onChange={e => setOptionA(e.target.value)} placeholder="Option A" className="rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500 focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100" />
+            <input value={optionB} onChange={e => setOptionB(e.target.value)} placeholder="Option B" className="rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500 focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100" />
+            {questionType === "mcq" && <input value={optionC} onChange={e => setOptionC(e.target.value)} placeholder="Option C" className="rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500 focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100" />}
+            {questionType === "mcq" && <input value={optionD} onChange={e => setOptionD(e.target.value)} placeholder="Option D" className="rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500 focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100" />}
+            <input value={correctAnswer} onChange={e => setCorrectAnswer(e.target.value)} placeholder="Correct answer (e.g. A or TRUE)" className="rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500 focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100 md:col-span-2" />
           </div>
-          <button onClick={createQuestion} disabled={!selectedExamId} className="mt-3 rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
+          <button onClick={createQuestion} disabled={!selectedExamId} className="mt-3 rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#142145] disabled:opacity-60">
             Add Question
           </button>
 

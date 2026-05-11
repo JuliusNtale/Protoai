@@ -1,7 +1,7 @@
 # Project Memory TODO
 
 Last updated: 2026-05-11
-Source: recent implementation + pushes to `main` (`3fa9807` .. `61829fb`)
+Source: recent implementation + pushes to `main` (`3fa9807` .. `ecab61d`)
 
 ## Session Checkpoint (2026-05-11)
 
@@ -20,8 +20,19 @@ Source: recent implementation + pushes to `main` (`3fa9807` .. `61829fb`)
 
 - [x] Admin login and dashboard access confirmed working.
 - [x] Core session-management APIs are implemented (`start`, `verify`, `log`, `submit`, `answers`, `list`).
-- [ ] Public DNS for `proctoai.neuraltale.com` still points to Vercel; Nginx route on VPS is ready but not authoritative until DNS cutover.
-- [ ] After DNS cutover, revert temporary direct-IP frontend API strategy to domain/proxy-first routing.
+- [x] Public DNS cutover completed: `proctoai.neuraltale.com` now resolves to VPS (`173.249.27.221`), with Nginx + HTTPS active.
+- [x] Frontend API strategy reverted to domain/proxy-first routing (`NEXT_PUBLIC_API_URL` + relative `/api` fallback; localhost-only dev fallback).
+- [x] Live containerized stack confirmed on VPS (`frontend:3000`, `backend:5000`, `ai-service:8000`) behind Nginx.
+
+## Session Checkpoint (2026-05-12)
+
+- [x] Login page simplified and aligned closer to `login UI inspo`.
+- [x] System logs page UX improved (human-readable action labels, date format `DD/MM/YYYY | Time`, default 10 rows, selectable page size, smoother refresh interaction).
+- [x] Shared dashboard visual polish extended to admin/student/lecturer pages (consistent table shells, spacing, controls, badge styles).
+- [x] Admin top-right `View Logs` shortcut removed per UX feedback.
+- [x] Admin loading state redesigned to centered premium loader (improved interaction feedback).
+- [x] Student dashboard now includes explicit `Logout` action in header (clears auth/session localStorage and redirects to login).
+- [x] Forgot-password flow switched to shared API URL helper (`getApiPath`) for stable local↔server routing.
 
 ## Session Checkpoint (2026-05-10)
 
@@ -82,17 +93,17 @@ Source: recent implementation + pushes to `main` (`3fa9807` .. `61829fb`)
   - Implement deterministic thresholding + confidence response format used by session identity checks.
   - Persist verification outcomes and confidence evidence in DB/audit trail for lecturer/admin review.
   - Add integration test coverage for success/failure/low-confidence verification paths.
-- [ ] Step 0.1 (Today): Improve UI quality across all pages to production-grade UX standards suitable for real users.
-- [ ] Step 0.2 (Today): Standardize typography by using the login page font system across the entire application.
-- [ ] Step 0.3 (Today): Simplify login page visual/layout to match `Development/ui-inspo/login UI inspo.png`.
-- [ ] Step 0.4 (Today): Resolve real frontend URL routing (current Vercel/DNS issue) and finalize domain-based access flow.
-- [ ] Step 0.5 (Today): Apply the new shared dashboard UI system consistently to all remaining pages.
-- [ ] Step 0.6 (Today): Improve system-logs action labels to human-readable text and implement professional pagination/default limit behavior:
+- [x] Step 0.1 (Today): Improve UI quality across all pages to production-grade UX standards suitable for real users.
+- [x] Step 0.2 (Today): Standardize typography by using the login page font system across the entire application.
+- [x] Step 0.3 (Today): Simplify login page visual/layout to match `Development/ui-inspo/login UI inspo.png`.
+- [x] Step 0.4 (Today): Resolve real frontend URL routing (current Vercel/DNS issue) and finalize domain-based access flow.
+- [x] Step 0.5 (Today): Apply the new shared dashboard UI system consistently to all remaining pages.
+- [x] Step 0.6 (Today): Improve system-logs action labels to human-readable text and implement professional pagination/default limit behavior:
   - default visible rows: 10
   - user-selectable page size (e.g., 10/25/50)
   - avoid rendering all logs on initial screen
-- [ ] Step 0.7 (Today): Update logs date/time rendering to `DD/MM/YYYY | Time`.
-- [ ] Step 0.8 (Today): Ensure `Refresh All` in logs page refreshes data smoothly and predictably (no stale/partial UI state).
+- [x] Step 0.7 (Today): Update logs date/time rendering to `DD/MM/YYYY | Time`.
+- [x] Step 0.8 (Today): Ensure `Refresh All` in logs page refreshes data smoothly and predictably (no stale/partial UI state).
 - [x] Step 1: Complete DNS cutover from Vercel -> VPS and validate HTTPS end-to-end on `proctoai.neuraltale.com`.
 - [ ] Step 2: Run full E2E role-based flow and attach screenshots/log evidence.
 - [ ] Step 3: Expand backend tests to cover role provisioning edge cases and session state transitions.

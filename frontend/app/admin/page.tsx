@@ -38,6 +38,12 @@ type AuditLogRow = {
   created_at_eat?: string | null
 }
 
+function statusBadge(active: boolean) {
+  return active
+    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+    : "bg-slate-100 text-slate-600 border-slate-200"
+}
+
 export default function AdminDashboard() {
   const router = useRouter()
   const [token, setToken] = useState("")
@@ -360,8 +366,16 @@ export default function AdminDashboard() {
 
   if (loadingMe) {
     return (
-      <main className="min-h-screen bg-[#f4f5f7] p-6 text-slate-900">
-        <div className="mx-auto max-w-5xl rounded-xl border bg-white p-6 text-sm text-slate-700">Validating admin session...</div>
+      <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#eef2f7] p-6 text-slate-900">
+        <div className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-blue-200/40 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-24 -right-20 h-80 w-80 rounded-full bg-indigo-200/30 blur-3xl" />
+        <div className="relative w-full max-w-md rounded-3xl border border-slate-200 bg-white/95 p-8 text-center shadow-[0_24px_70px_rgba(15,23,42,0.12)] backdrop-blur">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#1a2d5a]/10">
+            <span className="absolute h-8 w-8 animate-spin rounded-full border-2 border-[#1a2d5a] border-t-transparent" />
+            <span className="absolute h-12 w-12 animate-[spin_2.2s_linear_infinite_reverse] rounded-full border-2 border-blue-300/70 border-b-transparent" />
+          </div>
+          <h1 className="text-xl font-semibold tracking-tight text-slate-900">Validating Admin Session</h1>
+        </div>
       </main>
     )
   }
@@ -379,9 +393,6 @@ export default function AdminDashboard() {
       ]}
       rightTopSlot={
         <div className="flex gap-2">
-          <Link href="/admin/system-logs" className="rounded-md border px-3 py-1.5 text-sm font-semibold">
-            View Logs
-          </Link>
           <button onClick={logout} className="inline-flex items-center gap-1 rounded-md border px-3 py-1.5 text-sm font-semibold">
             <LogOut className="h-4 w-4" /> Logout
           </button>
@@ -390,7 +401,7 @@ export default function AdminDashboard() {
     >
       {adminError && <p className="text-sm text-red-600">{adminError}</p>}
 
-      <section className="grid gap-3 md:grid-cols-4">
+      <section className="grid gap-4 md:grid-cols-4">
         <MetricCard label="Total Users" value={summary.total} />
         <MetricCard label="Students" value={summary.students} />
         <MetricCard label="Lecturers" value={summary.lecturers} />
@@ -420,23 +431,23 @@ export default function AdminDashboard() {
             <UserPlus className="h-5 w-5 text-blue-700" />
             <h2 className="text-base font-semibold">Create Lecturer/Student Account</h2>
           </div>
-          <div className="grid gap-3 md:grid-cols-2">
-            <select value={role} onChange={e => setRole(e.target.value as "student" | "lecturer")} className="rounded-md border p-2 text-sm">
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <select value={role} onChange={e => setRole(e.target.value as "student" | "lecturer")} className="rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-900 focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100">
               <option value="student">student</option>
               <option value="lecturer">lecturer</option>
             </select>
-            <input value={fullName} onChange={e => setFullName(e.target.value)} placeholder="Full name" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />
+            <input value={fullName} onChange={e => setFullName(e.target.value)} placeholder="Full name" className="rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500 focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100" />
             {role === "student" && (
-              <input value={regNumber} onChange={e => setRegNumber(e.target.value)} placeholder="Registration number" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />
+              <input value={regNumber} onChange={e => setRegNumber(e.target.value)} placeholder="Registration number" className="rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500 focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100" />
             )}
-            <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />
-            <input value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)} placeholder="Phone number (optional)" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />
+            <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email" className="rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500 focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100" />
+            <input value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)} placeholder="Phone number (optional)" className="rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500 focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100" />
             {role === "lecturer" && (
-              <input value={username} onChange={e => setUsername(e.target.value)} placeholder="Username (required for lecturer)" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />
+              <input value={username} onChange={e => setUsername(e.target.value)} placeholder="Username (required for lecturer)" className="rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500 focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100" />
             )}
           </div>
           {createError && <p className="text-sm text-red-600">{createError}</p>}
-          <button onClick={provisionAccount} disabled={creating || mustChangePassword} className="rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
+          <button onClick={provisionAccount} disabled={creating || mustChangePassword} className="mt-3 rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#142145] disabled:opacity-60">
             {creating ? "Creating..." : "Create Account + Generate Temporary Credentials"}
           </button>
         </DashboardPanel>
@@ -447,30 +458,30 @@ export default function AdminDashboard() {
             <Users className="h-5 w-5 text-blue-700" />
             <h2 className="text-base font-semibold">Manage Users</h2>
           </div>
-          <div className="grid gap-3 md:grid-cols-4">
-            <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search name/email/reg number" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500 md:col-span-2" />
-            <select value={roleFilter} onChange={e => setRoleFilter(e.target.value as "all" | "student" | "lecturer")} className="rounded-md border p-2 text-sm">
+          <div className="mt-4 grid gap-3 md:grid-cols-4">
+            <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search name/email/reg number" className="rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500 focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100 md:col-span-2" />
+            <select value={roleFilter} onChange={e => setRoleFilter(e.target.value as "all" | "student" | "lecturer")} className="rounded-md border border-slate-300 bg-white p-2 text-sm focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100">
               <option value="all">all roles</option>
               <option value="student">student</option>
               <option value="lecturer">lecturer</option>
             </select>
-            <select value={activeFilter} onChange={e => setActiveFilter(e.target.value as "all" | "active" | "inactive")} className="rounded-md border p-2 text-sm">
+            <select value={activeFilter} onChange={e => setActiveFilter(e.target.value as "all" | "active" | "inactive")} className="rounded-md border border-slate-300 bg-white p-2 text-sm focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100">
               <option value="all">all status</option>
               <option value="active">active</option>
               <option value="inactive">inactive</option>
             </select>
           </div>
-          <div className="flex gap-2">
-            <button onClick={() => fetchUsers()} className="rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" disabled={usersLoading}>
+          <div className="mt-3 flex gap-2">
+            <button onClick={() => fetchUsers()} className="rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#142145] disabled:opacity-60" disabled={usersLoading}>
               {usersLoading ? "Loading..." : "Refresh"}
             </button>
           </div>
           {usersError && <p className="text-sm text-red-600">{usersError}</p>}
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto rounded-xl border border-slate-200">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b text-left">
-                  <th className="py-2">Name</th>
+                <tr className="border-b bg-slate-50 text-left">
+                  <th className="py-2 pl-3">Name</th>
                   <th>Role</th>
                   <th>Login ID</th>
                   <th>Email</th>
@@ -480,18 +491,18 @@ export default function AdminDashboard() {
               </thead>
               <tbody>
                 {users.map((user) => (
-                  <tr key={user.user_id} className="border-b">
-                    <td className="py-2">{user.full_name}</td>
+                  <tr key={user.user_id} className="border-b last:border-b-0">
+                    <td className="py-2 pl-3 font-medium">{user.full_name}</td>
                     <td>{user.role}</td>
                     <td className="font-mono">{user.username || user.registration_number}</td>
                     <td>{user.email}</td>
-                    <td>{user.is_active ? "active" : "inactive"}</td>
+                    <td><span className={`rounded-full border px-2 py-1 text-xs font-medium ${statusBadge(user.is_active)}`}>{user.is_active ? "active" : "inactive"}</span></td>
                     <td>
-                      <div className="flex gap-2">
-                        <button onClick={() => toggleUserStatus(user)} className="rounded border px-2 py-1 text-xs">
+                      <div className="flex flex-wrap gap-2">
+                        <button onClick={() => toggleUserStatus(user)} className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium hover:bg-slate-50">
                           {user.is_active ? "Deactivate" : "Activate"}
                         </button>
-                        <button onClick={() => resetCredentials(user)} className="rounded border px-2 py-1 text-xs">
+                        <button onClick={() => resetCredentials(user)} className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium hover:bg-slate-50">
                           Reset Credentials
                         </button>
                       </div>
@@ -500,7 +511,7 @@ export default function AdminDashboard() {
                 ))}
                 {users.length === 0 && (
                   <tr>
-                    <td className="py-3 text-slate-600" colSpan={6}>No users found.</td>
+                    <td className="py-3 pl-3 text-slate-600" colSpan={6}>No users found.</td>
                   </tr>
                 )}
               </tbody>
@@ -509,21 +520,20 @@ export default function AdminDashboard() {
         </DashboardPanel>
 
         <DashboardPanel title="Generated Temporary Credentials" subtitle="Share manually. Each user is forced to set a new password on first login.">
-          <p className="text-sm text-slate-700 mt-1">Share manually. Each user is forced to set a new password on first login.</p>
           <div className="mt-3">
             <button
               onClick={exportGeneratedCredentialsCsv}
               disabled={provisioned.length === 0}
-              className="rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+              className="rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#142145] disabled:opacity-60"
             >
               Export Credentials CSV
             </button>
           </div>
-          <div className="mt-4 overflow-x-auto">
+          <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b text-left">
-                  <th className="py-2">Name</th>
+                <tr className="border-b bg-slate-50 text-left">
+                  <th className="py-2 pl-3">Name</th>
                   <th>Role</th>
                   <th>Login ID</th>
                   <th>Temporary Password</th>
@@ -531,8 +541,8 @@ export default function AdminDashboard() {
               </thead>
               <tbody>
                 {provisioned.map((row, idx) => (
-                  <tr key={`${row.login_id}-${idx}`} className="border-b">
-                    <td className="py-2">{row.full_name}</td>
+                  <tr key={`${row.login_id}-${idx}`} className="border-b last:border-b-0">
+                    <td className="py-2 pl-3 font-medium">{row.full_name}</td>
                     <td>{row.role}</td>
                     <td className="font-mono">{row.login_id}</td>
                     <td className="font-mono">{row.temporary_password}</td>
@@ -540,7 +550,7 @@ export default function AdminDashboard() {
                 ))}
                 {provisioned.length === 0 && (
                   <tr>
-                    <td className="py-3 text-slate-600" colSpan={4}>No credentials generated yet.</td>
+                    <td className="py-3 pl-3 text-slate-600" colSpan={4}>No credentials generated yet.</td>
                   </tr>
                 )}
               </tbody>
@@ -549,9 +559,8 @@ export default function AdminDashboard() {
         </DashboardPanel>
 
         <DashboardPanel title="System Logs" subtitle="Audit and session logs were moved to a dedicated page with filters and CSV export.">
-          <p className="text-sm text-slate-700 mt-1">Audit and session logs were moved to a dedicated page with filters and CSV export.</p>
           <div className="mt-3">
-            <Link href="/admin/system-logs" className="rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white">
+            <Link href="/admin/system-logs" className="rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#142145]">
               Open Logs Page
             </Link>
           </div>

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
-import { BookOpen, KeyRound, User } from "lucide-react"
+import { BookOpen, KeyRound, LogOut, User } from "lucide-react"
 import { getApiPath } from "@/lib/api-url"
 import { DashboardPanel, DashboardShell, MetricCard } from "@/components/dashboard-shell"
 
@@ -45,6 +45,21 @@ type MyReportRow = {
   risk_level: string
   total_anomalies: number
   session_status: string
+}
+
+function formatDateTime(value?: string | null) {
+  if (!value) return "TBD"
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return "TBD"
+  return date.toLocaleString()
+}
+
+function badgeTone(value: string) {
+  const normalized = value.toLowerCase()
+  if (normalized === "completed" || normalized === "live") return "bg-emerald-50 text-emerald-700 border-emerald-200"
+  if (normalized === "scheduled" || normalized === "medium") return "bg-amber-50 text-amber-700 border-amber-200"
+  if (normalized === "high" || normalized === "locked") return "bg-red-50 text-red-700 border-red-200"
+  return "bg-slate-50 text-slate-700 border-slate-200"
 }
 
 export default function StudentDashboard() {
@@ -184,8 +199,28 @@ export default function StudentDashboard() {
 
   const completed = useMemo(() => sessions.filter(s => s.session_status === "completed").length, [sessions])
 
+  function logout() {
+    localStorage.removeItem("token")
+    localStorage.removeItem("user")
+    localStorage.removeItem("session_id")
+    localStorage.removeItem("exam_id")
+    router.push("/")
+  }
+
   if (loading) {
-    return <main className="min-h-screen bg-[#f4f5f7] p-6 text-slate-900"><div className="mx-auto max-w-6xl rounded-xl border bg-white p-5 text-sm text-slate-700">Loading dashboard...</div></main>
+    return (
+      <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#eef2f7] p-6 text-slate-900">
+        <div className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-blue-200/40 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-24 -right-20 h-80 w-80 rounded-full bg-indigo-200/30 blur-3xl" />
+        <div className="relative w-full max-w-md rounded-3xl border border-slate-200 bg-white/95 p-8 text-center shadow-[0_24px_70px_rgba(15,23,42,0.12)] backdrop-blur">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#1a2d5a]/10">
+            <span className="absolute h-8 w-8 animate-spin rounded-full border-2 border-[#1a2d5a] border-t-transparent" />
+            <span className="absolute h-12 w-12 animate-[spin_2.2s_linear_infinite_reverse] rounded-full border-2 border-blue-300/70 border-b-transparent" />
+          </div>
+          <h1 className="text-xl font-semibold tracking-tight text-slate-900">Loading Student Dashboard</h1>
+        </div>
+      </main>
+    )
   }
 
   return (
@@ -200,7 +235,14 @@ export default function StudentDashboard() {
         { label: "Reports" },
         { label: "Profile" },
       ]}
-      rightTopSlot={<User className="h-5 w-5 text-slate-600" />}
+      rightTopSlot={
+        <div className="flex items-center gap-2">
+          <User className="h-5 w-5 text-slate-600" />
+          <button onClick={logout} className="inline-flex items-center gap-1 rounded-md border px-3 py-1.5 text-sm font-semibold">
+            <LogOut className="h-4 w-4" /> Logout
+          </button>
+        </div>
+      }
     >
       {error && <p className="text-sm text-red-600">{error}</p>}
 
@@ -222,41 +264,43 @@ export default function StudentDashboard() {
             <BookOpen className="h-5 w-5 text-blue-700" />
             <h2 className="text-base font-semibold">Assigned Exams</h2>
           </div>
-          <div className="mt-4 overflow-x-auto">
+          <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b text-left">
-                  <th className="py-2">Title</th>
+                <tr className="border-b bg-slate-50 text-left">
+                  <th className="py-2 pl-3">Title</th>
                   <th>Course</th>
                   <th>Schedule</th>
                   <th>Status</th>
-                  <th>Action</th>
+                  <th className="pr-3">Action</th>
                 </tr>
               </thead>
               <tbody>
                 {exams.map((exam) => (
-                  <tr key={exam.exam_id} className="border-b">
-                    <td className="py-2">{exam.title}</td>
+                  <tr key={exam.exam_id} className="border-b last:border-b-0">
+                    <td className="py-2 pl-3 font-medium">{exam.title}</td>
                     <td>{exam.course_code}</td>
-                    <td>{exam.scheduled_at ? new Date(exam.scheduled_at).toLocaleString() : "TBD"}</td>
-                    <td>{exam.status}</td>
+                    <td>{formatDateTime(exam.scheduled_at)}</td>
                     <td>
-                      <button onClick={() => startExam(exam.exam_id)} className="rounded border px-2 py-1 text-xs">Start / Resume</button>
+                      <span className={`rounded-full border px-2 py-1 text-xs font-medium ${badgeTone(exam.status)}`}>{exam.status}</span>
+                    </td>
+                    <td className="pr-3">
+                      <button onClick={() => startExam(exam.exam_id)} className="rounded-md bg-[#1a2d5a] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#142145]">Start / Resume</button>
                     </td>
                   </tr>
                 ))}
-                {exams.length === 0 && <tr><td colSpan={5} className="py-3 text-slate-600">No exams assigned.</td></tr>}
+                {exams.length === 0 && <tr><td colSpan={5} className="py-3 pl-3 text-slate-600">No exams assigned.</td></tr>}
               </tbody>
             </table>
           </div>
         </DashboardPanel>
 
         <DashboardPanel title="My Sessions & Results">
-          <div className="mt-4 overflow-x-auto">
+          <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b text-left">
-                  <th className="py-2">Exam</th>
+                <tr className="border-b bg-slate-50 text-left">
+                  <th className="py-2 pl-3">Exam</th>
                   <th>Course</th>
                   <th>Status</th>
                   <th>Score</th>
@@ -265,26 +309,26 @@ export default function StudentDashboard() {
               </thead>
               <tbody>
                 {sessions.map((s) => (
-                  <tr key={s.session_id} className="border-b">
-                    <td className="py-2">{s.exam_title}</td>
+                  <tr key={s.session_id} className="border-b last:border-b-0">
+                    <td className="py-2 pl-3 font-medium">{s.exam_title}</td>
                     <td>{s.course_code}</td>
-                    <td>{s.session_status}</td>
+                    <td><span className={`rounded-full border px-2 py-1 text-xs font-medium ${badgeTone(s.session_status)}`}>{s.session_status}</span></td>
                     <td>{s.score ?? "-"}</td>
                     <td>{s.warning_count}</td>
                   </tr>
                 ))}
-                {sessions.length === 0 && <tr><td colSpan={5} className="py-3 text-slate-600">No sessions yet.</td></tr>}
+                {sessions.length === 0 && <tr><td colSpan={5} className="py-3 pl-3 text-slate-600">No sessions yet.</td></tr>}
               </tbody>
             </table>
           </div>
         </DashboardPanel>
 
         <DashboardPanel title="My Proctoring Reports">
-          <div className="mt-4 overflow-x-auto">
+          <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b text-left">
-                  <th className="py-2">Exam</th>
+                <tr className="border-b bg-slate-50 text-left">
+                  <th className="py-2 pl-3">Exam</th>
                   <th>Course</th>
                   <th>Status</th>
                   <th>Risk</th>
@@ -294,16 +338,16 @@ export default function StudentDashboard() {
               </thead>
               <tbody>
                 {reports.map((r) => (
-                  <tr key={r.session_id} className="border-b">
-                    <td className="py-2">{r.exam_title}</td>
+                  <tr key={r.session_id} className="border-b last:border-b-0">
+                    <td className="py-2 pl-3 font-medium">{r.exam_title}</td>
                     <td>{r.course_code}</td>
-                    <td>{r.session_status}</td>
-                    <td>{r.risk_level}</td>
+                    <td><span className={`rounded-full border px-2 py-1 text-xs font-medium ${badgeTone(r.session_status)}`}>{r.session_status}</span></td>
+                    <td><span className={`rounded-full border px-2 py-1 text-xs font-medium ${badgeTone(r.risk_level)}`}>{r.risk_level}</span></td>
                     <td>{r.total_anomalies}</td>
                     <td>{r.warning_count}</td>
                   </tr>
                 ))}
-                {reports.length === 0 && <tr><td colSpan={6} className="py-3 text-slate-600">No reports generated yet.</td></tr>}
+                {reports.length === 0 && <tr><td colSpan={6} className="py-3 pl-3 text-slate-600">No reports generated yet.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -311,11 +355,11 @@ export default function StudentDashboard() {
 
         <DashboardPanel title="Profile">
           <div className="mt-4 grid gap-3 md:grid-cols-2">
-            <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />
-            <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="Phone number" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />
+            <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email" className="rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500 focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100" />
+            <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="Phone number" className="rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500 focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100" />
           </div>
           {profileMsg && <p className="mt-2 text-sm text-slate-700">{profileMsg}</p>}
-          <button onClick={updateProfile} className="mt-3 rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white">
+          <button onClick={updateProfile} className="mt-3 rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#142145]">
             Save Profile
           </button>
         </DashboardPanel>
@@ -326,11 +370,11 @@ export default function StudentDashboard() {
             <h2 className="text-base font-semibold">Change Password</h2>
           </div>
           <div className="mt-4 grid gap-3 md:grid-cols-2">
-            <input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} placeholder="Current password" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />
-            <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="New password" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />
+            <input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} placeholder="Current password" className="rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500 focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100" />
+            <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="New password" className="rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500 focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100" />
           </div>
           {passwordMsg && <p className="mt-2 text-sm text-slate-700">{passwordMsg}</p>}
-          <button onClick={changePassword} disabled={saving} className="mt-3 rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
+          <button onClick={changePassword} disabled={saving} className="mt-3 rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#142145] disabled:opacity-60">
             {saving ? "Updating..." : "Update Password"}
           </button>
         </DashboardPanel>
