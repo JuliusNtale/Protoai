@@ -3,8 +3,9 @@
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { KeyRound, Shield, UserPlus, Users } from "lucide-react"
+import { KeyRound, LogOut, UserPlus, Users } from "lucide-react"
 import { getApiPath } from "@/lib/api-url"
+import { DashboardPanel, DashboardShell, MetricCard } from "@/components/dashboard-shell"
 
 type Provisioned = {
   user_id?: number
@@ -57,10 +58,6 @@ export default function AdminDashboard() {
   const [createError, setCreateError] = useState("")
   const [creating, setCreating] = useState(false)
   const [provisioned, setProvisioned] = useState<Provisioned[]>([])
-  const [bulkJson, setBulkJson] = useState("")
-  const [bulkMsg, setBulkMsg] = useState("")
-  const [bulkCreating, setBulkCreating] = useState(false)
-  const [bulkErrors, setBulkErrors] = useState<Array<{ index: number; message: string }>>([])
 
   const [users, setUsers] = useState<ManagedUser[]>([])
   const [usersLoading, setUsersLoading] = useState(false)
@@ -288,53 +285,6 @@ export default function AdminDashboard() {
     }
   }
 
-  async function provisionBulkAccounts() {
-    setBulkMsg("")
-    setBulkErrors([])
-    let parsed: unknown
-    try {
-      parsed = JSON.parse(bulkJson)
-    } catch {
-      setBulkMsg("Invalid JSON format.")
-      return
-    }
-    if (!Array.isArray(parsed) || parsed.length === 0) {
-      setBulkMsg("Provide a non-empty JSON array of users.")
-      return
-    }
-
-    setBulkCreating(true)
-    try {
-      const res = await fetch(getApiPath("/auth/provision-bulk"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ users: parsed }),
-      })
-      const payload = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        setBulkMsg(payload?.error?.message || "Bulk provisioning failed.")
-        return
-      }
-
-      const created = payload.created || []
-      setBulkErrors(payload.errors || [])
-      setProvisioned(prev => [
-        ...created.map((entry: { user?: { full_name?: string; role?: string }; login_id?: string; temporary_password?: string }) => ({
-          full_name: entry.user?.full_name || "",
-          role: entry.user?.role || "",
-          login_id: entry.login_id || "",
-          temporary_password: entry.temporary_password || "",
-        })),
-        ...prev,
-      ])
-      setBulkMsg(`Created ${payload.created_count || 0} users, ${payload.error_count || 0} errors.`)
-      await fetchUsers()
-      await fetchAuditLogs()
-    } finally {
-      setBulkCreating(false)
-    }
-  }
-
   function exportGeneratedCredentialsCsv() {
     if (provisioned.length === 0) return
     const header = ["full_name", "role", "login_id", "temporary_password"]
@@ -417,37 +367,41 @@ export default function AdminDashboard() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f4f5f7] p-6 text-slate-900">
-      <div className="mx-auto max-w-6xl space-y-6">
-        <section className="rounded-xl bg-white p-5 shadow-sm border">
-          <div className="flex items-center gap-2">
-            <Shield className="h-5 w-5 text-blue-700" />
-            <h1 className="text-xl font-semibold">Admin Console</h1>
-          </div>
-          <div className="mt-3 flex gap-2">
-            <Link href="/admin/system-logs" className="rounded-md border px-3 py-1.5 text-sm font-semibold">
-              View Logs
-            </Link>
-            <button onClick={logout} className="rounded-md border px-3 py-1.5 text-sm font-semibold">
-              Logout
-            </button>
-          </div>
-          <p className="mt-2 text-sm text-slate-700">Manage account lifecycle: provision users, enforce first-login password change, activate/deactivate accounts, and reset credentials.</p>
-          {adminError && <p className="mt-2 text-sm text-red-600">{adminError}</p>}
-        </section>
+    <DashboardShell
+      appName="ProctorAI Admin"
+      title="Admin Console"
+      subtitle="Manage account lifecycle: provision users, enforce first-login password change, activate/deactivate accounts, and reset credentials."
+      sidebarItems={[
+        { label: "Dashboard", active: true },
+        { label: "Users" },
+        { label: "Credentials" },
+        { label: "Logs", href: "/admin/system-logs" },
+      ]}
+      rightTopSlot={
+        <div className="flex gap-2">
+          <Link href="/admin/system-logs" className="rounded-md border px-3 py-1.5 text-sm font-semibold">
+            View Logs
+          </Link>
+          <button onClick={logout} className="inline-flex items-center gap-1 rounded-md border px-3 py-1.5 text-sm font-semibold">
+            <LogOut className="h-4 w-4" /> Logout
+          </button>
+        </div>
+      }
+    >
+      {adminError && <p className="text-sm text-red-600">{adminError}</p>}
 
-        <section className="grid gap-3 md:grid-cols-4">
-          <StatCard label="Total Users" value={summary.total} />
-          <StatCard label="Students" value={summary.students} />
-          <StatCard label="Lecturers" value={summary.lecturers} />
-          <StatCard label="Active Users" value={summary.active} />
-        </section>
+      <section className="grid gap-3 md:grid-cols-4">
+        <MetricCard label="Total Users" value={summary.total} />
+        <MetricCard label="Students" value={summary.students} />
+        <MetricCard label="Lecturers" value={summary.lecturers} />
+        <MetricCard label="Active Users" value={summary.active} />
+      </section>
 
         {mustChangePassword && (
-          <section className="rounded-xl border border-amber-300 bg-amber-50 p-5">
+          <DashboardPanel title="Change Temporary Admin Password">
             <div className="flex items-center gap-2 text-amber-800 font-semibold">
               <KeyRound className="h-4 w-4" />
-              Change Temporary Admin Password
+              First-login password update required
             </div>
             <p className="mt-1 text-sm text-amber-700">You must change your temporary password before regular admin operations.</p>
             <div className="mt-4 grid gap-3 md:grid-cols-2">
@@ -458,13 +412,13 @@ export default function AdminDashboard() {
             <button onClick={submitPasswordChange} disabled={loadingPassword} className="mt-3 rounded-md bg-amber-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
               {loadingPassword ? "Updating..." : "Update Password"}
             </button>
-          </section>
+          </DashboardPanel>
         )}
 
-        <section className="rounded-xl bg-white p-5 shadow-sm border space-y-4">
+        <DashboardPanel title="Create Lecturer/Student Account">
           <div className="flex items-center gap-2">
             <UserPlus className="h-5 w-5 text-blue-700" />
-            <h2 className="text-lg font-semibold">Create Lecturer/Student Account</h2>
+            <h2 className="text-base font-semibold">Create Lecturer/Student Account</h2>
           </div>
           <div className="grid gap-3 md:grid-cols-2">
             <select value={role} onChange={e => setRole(e.target.value as "student" | "lecturer")} className="rounded-md border p-2 text-sm">
@@ -485,13 +439,13 @@ export default function AdminDashboard() {
           <button onClick={provisionAccount} disabled={creating || mustChangePassword} className="rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
             {creating ? "Creating..." : "Create Account + Generate Temporary Credentials"}
           </button>
-        </section>
+        </DashboardPanel>
 
 
-        <section className="rounded-xl bg-white p-5 shadow-sm border space-y-4">
+        <DashboardPanel title="Manage Users">
           <div className="flex items-center gap-2">
             <Users className="h-5 w-5 text-blue-700" />
-            <h2 className="text-lg font-semibold">Manage Users</h2>
+            <h2 className="text-base font-semibold">Manage Users</h2>
           </div>
           <div className="grid gap-3 md:grid-cols-4">
             <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search name/email/reg number" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500 md:col-span-2" />
@@ -552,10 +506,9 @@ export default function AdminDashboard() {
               </tbody>
             </table>
           </div>
-        </section>
+        </DashboardPanel>
 
-        <section className="rounded-xl bg-white p-5 shadow-sm border">
-          <h2 className="text-lg font-semibold">Generated Temporary Credentials</h2>
+        <DashboardPanel title="Generated Temporary Credentials" subtitle="Share manually. Each user is forced to set a new password on first login.">
           <p className="text-sm text-slate-700 mt-1">Share manually. Each user is forced to set a new password on first login.</p>
           <div className="mt-3">
             <button
@@ -593,27 +546,16 @@ export default function AdminDashboard() {
               </tbody>
             </table>
           </div>
-        </section>
+        </DashboardPanel>
 
-        <section className="rounded-xl bg-white p-5 shadow-sm border">
-          <h2 className="text-lg font-semibold">System Logs</h2>
+        <DashboardPanel title="System Logs" subtitle="Audit and session logs were moved to a dedicated page with filters and CSV export.">
           <p className="text-sm text-slate-700 mt-1">Audit and session logs were moved to a dedicated page with filters and CSV export.</p>
           <div className="mt-3">
             <Link href="/admin/system-logs" className="rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white">
               Open Logs Page
             </Link>
           </div>
-        </section>
-      </div>
-    </main>
-  )
-}
-
-function StatCard({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-xl border bg-white p-4">
-      <p className="text-xs uppercase tracking-wider text-slate-600">{label}</p>
-      <p className="mt-1 text-2xl font-semibold text-gray-900">{value}</p>
-    </div>
+        </DashboardPanel>
+    </DashboardShell>
   )
 }
