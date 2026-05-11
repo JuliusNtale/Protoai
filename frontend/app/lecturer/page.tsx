@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { BookOpen, Plus, Users } from "lucide-react"
 import { getApiPath } from "@/lib/api-url"
+import { DashboardPanel, DashboardShell, MetricCard } from "@/components/dashboard-shell"
 
 type MeUser = {
   user_id: number
@@ -358,42 +359,49 @@ export default function LecturerDashboard() {
   }
 
   if (loading) {
-    return <main className="min-h-screen bg-[#f4f5f7] p-6"><div className="mx-auto max-w-6xl rounded-xl border bg-white p-5 text-sm text-gray-500">Loading lecturer dashboard...</div></main>
+    return <main className="min-h-screen bg-[#f4f5f7] p-6 text-slate-900"><div className="mx-auto max-w-6xl rounded-xl border bg-white p-5 text-sm text-slate-700">Loading lecturer dashboard...</div></main>
   }
 
   return (
-    <main className="min-h-screen bg-[#f4f5f7] p-6">
-      <div className="mx-auto max-w-6xl space-y-6">
-        <section className="rounded-xl bg-white p-5 shadow-sm border">
-          <h1 className="text-xl font-semibold">Lecturer Dashboard</h1>
-          <p className="mt-2 text-sm text-gray-500">{me?.full_name}</p>
-          {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
-        </section>
+    <DashboardShell
+      appName="ProctorAI Lecturer"
+      title="Lecturer Dashboard"
+      subtitle={me?.full_name || ""}
+      sidebarItems={[
+        { label: "Dashboard", active: true },
+        { label: "Exams" },
+        { label: "Questions" },
+        { label: "Students" },
+        { label: "Session Results" },
+      ]}
+      rightTopSlot={<Users className="h-5 w-5 text-slate-600" />}
+    >
+      {error && <p className="text-sm text-red-600">{error}</p>}
 
         <section className="grid gap-3 md:grid-cols-3">
-          <StatCard label="My Exams" value={exams.length} />
-          <StatCard label="Questions (Selected Exam)" value={questions.length} />
-          <StatCard label="Students (Selected Exam)" value={students.length} />
+          <MetricCard label="My Exams" value={exams.length} />
+          <MetricCard label="Questions (Selected Exam)" value={questions.length} />
+          <MetricCard label="Students (Selected Exam)" value={students.length} />
         </section>
 
-        <section className="rounded-xl bg-white p-5 shadow-sm border">
+        <DashboardPanel title="Create Exam">
           <div className="flex items-center gap-2">
             <Plus className="h-5 w-5 text-blue-700" />
-            <h2 className="text-lg font-semibold">Create Exam</h2>
+            <h2 className="text-base font-semibold">Create Exam</h2>
           </div>
           <div className="mt-4 grid gap-3 md:grid-cols-2">
-            <input value={newTitle} onChange={e => setNewTitle(e.target.value)} placeholder="Exam title" className="rounded-md border p-2 text-sm" />
-            <input value={newCourseCode} onChange={e => setNewCourseCode(e.target.value)} placeholder="Course code" className="rounded-md border p-2 text-sm" />
-            <input value={newDuration} onChange={e => setNewDuration(e.target.value)} placeholder="Duration minutes" className="rounded-md border p-2 text-sm" />
-            <input value={newSchedule} onChange={e => setNewSchedule(e.target.value)} placeholder="Scheduled at ISO (optional)" className="rounded-md border p-2 text-sm" />
+            <input value={newTitle} onChange={e => setNewTitle(e.target.value)} placeholder="Exam title" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />
+            <input value={newCourseCode} onChange={e => setNewCourseCode(e.target.value)} placeholder="Course code" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />
+            <input value={newDuration} onChange={e => setNewDuration(e.target.value)} placeholder="Duration minutes" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />
+            <input value={newSchedule} onChange={e => setNewSchedule(e.target.value)} placeholder="Scheduled at ISO (optional)" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />
           </div>
           <button onClick={createExam} className="mt-3 rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white">Create Exam</button>
-        </section>
+        </DashboardPanel>
 
-        <section className="rounded-xl bg-white p-5 shadow-sm border">
+        <DashboardPanel title="My Exam List">
           <div className="flex items-center gap-2">
             <BookOpen className="h-5 w-5 text-blue-700" />
-            <h2 className="text-lg font-semibold">My Exam List</h2>
+            <h2 className="text-base font-semibold">My Exam List</h2>
           </div>
           <div className="mt-4 overflow-x-auto">
             <table className="w-full text-sm">
@@ -449,7 +457,7 @@ export default function LecturerDashboard() {
                     </td>
                   </tr>
                 ))}
-                {exams.length === 0 && <tr><td colSpan={8} className="py-3 text-gray-500">No exams created yet.</td></tr>}
+                {exams.length === 0 && <tr><td colSpan={8} className="py-3 text-slate-600">No exams created yet.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -462,22 +470,21 @@ export default function LecturerDashboard() {
               {exporting ? "Exporting..." : "Export Selected Exam CSV"}
             </button>
           </div>
-        </section>
+        </DashboardPanel>
 
-        <section className="rounded-xl bg-white p-5 shadow-sm border">
-          <h2 className="text-lg font-semibold">Question Builder {selectedExam ? `- ${selectedExam.title}` : ""}</h2>
+        <DashboardPanel title={`Question Builder ${selectedExam ? `- ${selectedExam.title}` : ""}`}>
           <div className="mt-4 grid gap-3 md:grid-cols-2">
-            <select value={questionType} onChange={e => setQuestionType(e.target.value as "mcq" | "true_false")} className="rounded-md border p-2 text-sm">
+            <select value={questionType} onChange={e => setQuestionType(e.target.value as "mcq" | "true_false")} className="rounded-md border bg-white p-2 text-sm text-slate-900">
               <option value="mcq">mcq</option>
               <option value="true_false">true_false</option>
             </select>
-            <input value={marks} onChange={e => setMarks(e.target.value)} placeholder="Marks" className="rounded-md border p-2 text-sm" />
-            <input value={questionText} onChange={e => setQuestionText(e.target.value)} placeholder="Question text" className="rounded-md border p-2 text-sm md:col-span-2" />
-            <input value={optionA} onChange={e => setOptionA(e.target.value)} placeholder="Option A" className="rounded-md border p-2 text-sm" />
-            <input value={optionB} onChange={e => setOptionB(e.target.value)} placeholder="Option B" className="rounded-md border p-2 text-sm" />
-            {questionType === "mcq" && <input value={optionC} onChange={e => setOptionC(e.target.value)} placeholder="Option C" className="rounded-md border p-2 text-sm" />}
-            {questionType === "mcq" && <input value={optionD} onChange={e => setOptionD(e.target.value)} placeholder="Option D" className="rounded-md border p-2 text-sm" />}
-            <input value={correctAnswer} onChange={e => setCorrectAnswer(e.target.value)} placeholder="Correct answer (e.g. A or TRUE)" className="rounded-md border p-2 text-sm md:col-span-2" />
+            <input value={marks} onChange={e => setMarks(e.target.value)} placeholder="Marks" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />
+            <input value={questionText} onChange={e => setQuestionText(e.target.value)} placeholder="Question text" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500 md:col-span-2" />
+            <input value={optionA} onChange={e => setOptionA(e.target.value)} placeholder="Option A" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />
+            <input value={optionB} onChange={e => setOptionB(e.target.value)} placeholder="Option B" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />
+            {questionType === "mcq" && <input value={optionC} onChange={e => setOptionC(e.target.value)} placeholder="Option C" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />}
+            {questionType === "mcq" && <input value={optionD} onChange={e => setOptionD(e.target.value)} placeholder="Option D" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />}
+            <input value={correctAnswer} onChange={e => setCorrectAnswer(e.target.value)} placeholder="Correct answer (e.g. A or TRUE)" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500 md:col-span-2" />
           </div>
           <button onClick={createQuestion} disabled={!selectedExamId} className="mt-3 rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
             Add Question
@@ -516,16 +523,16 @@ export default function LecturerDashboard() {
                     <td><button onClick={() => deleteQuestion(q.question_id)} className="rounded border px-2 py-1 text-xs">Delete</button></td>
                   </tr>
                 ))}
-                {questions.length === 0 && <tr><td colSpan={7} className="py-3 text-gray-500">No questions for selected exam.</td></tr>}
+                {questions.length === 0 && <tr><td colSpan={7} className="py-3 text-slate-600">No questions for selected exam.</td></tr>}
               </tbody>
             </table>
           </div>
-        </section>
+        </DashboardPanel>
 
-        <section className="rounded-xl bg-white p-5 shadow-sm border">
+        <DashboardPanel title={`Enrolled Students ${selectedExam ? `- ${selectedExam.title}` : ""}`}>
           <div className="flex items-center gap-2">
             <Users className="h-5 w-5 text-blue-700" />
-            <h2 className="text-lg font-semibold">Enrolled Students {selectedExam ? `- ${selectedExam.title}` : ""}</h2>
+            <h2 className="text-base font-semibold">Enrolled Students {selectedExam ? `- ${selectedExam.title}` : ""}</h2>
           </div>
           <div className="mt-4 overflow-x-auto">
             <table className="w-full text-sm">
@@ -550,16 +557,16 @@ export default function LecturerDashboard() {
                     <td>{s.warning_count}</td>
                   </tr>
                 ))}
-                {students.length === 0 && <tr><td colSpan={6} className="py-3 text-gray-500">No students enrolled yet (students appear after starting session).</td></tr>}
+                {students.length === 0 && <tr><td colSpan={6} className="py-3 text-slate-600">No students enrolled yet (students appear after starting session).</td></tr>}
               </tbody>
             </table>
           </div>
-        </section>
+        </DashboardPanel>
 
-        <section className="rounded-xl bg-white p-5 shadow-sm border">
+        <DashboardPanel title={`Students In Course ${selectedExam ? `- ${selectedExam.course_code}` : ""}`}>
           <div className="flex items-center gap-2">
             <Users className="h-5 w-5 text-blue-700" />
-            <h2 className="text-lg font-semibold">Students In Course {selectedExam ? `- ${selectedExam.course_code}` : ""}</h2>
+            <h2 className="text-base font-semibold">Students In Course {selectedExam ? `- ${selectedExam.course_code}` : ""}</h2>
           </div>
           <div className="mt-4 overflow-x-auto">
             <table className="w-full text-sm">
@@ -578,14 +585,13 @@ export default function LecturerDashboard() {
                     <td>{s.email}</td>
                   </tr>
                 ))}
-                {courseStudents.length === 0 && <tr><td colSpan={3} className="py-3 text-gray-500">No course students yet.</td></tr>}
+                {courseStudents.length === 0 && <tr><td colSpan={3} className="py-3 text-slate-600">No course students yet.</td></tr>}
               </tbody>
             </table>
           </div>
-        </section>
+        </DashboardPanel>
 
-        <section className="rounded-xl bg-white p-5 shadow-sm border">
-          <h2 className="text-lg font-semibold">Session Results (Live Data)</h2>
+        <DashboardPanel title="Session Results (Live Data)">
           <div className="mt-4 overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -613,21 +619,11 @@ export default function LecturerDashboard() {
                     <td>{row.risk_level}</td>
                   </tr>
                 ))}
-                {filteredSessionResults.length === 0 && <tr><td colSpan={8} className="py-3 text-gray-500">No session results for selected scope.</td></tr>}
+                {filteredSessionResults.length === 0 && <tr><td colSpan={8} className="py-3 text-slate-600">No session results for selected scope.</td></tr>}
               </tbody>
             </table>
           </div>
-        </section>
-      </div>
-    </main>
-  )
-}
-
-function StatCard({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-xl border bg-white p-4">
-      <p className="text-xs uppercase tracking-wider text-gray-500">{label}</p>
-      <p className="mt-1 text-2xl font-semibold text-gray-900">{value}</p>
-    </div>
+        </DashboardPanel>
+    </DashboardShell>
   )
 }
