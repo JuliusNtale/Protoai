@@ -1,7 +1,8 @@
 from datetime import datetime
+from pathlib import Path
 
 from app.extensions import db
-from app.models import Exam, User
+from app.models import Exam, FacialImage, User
 
 
 def _register_and_login(client, reg, role="student"):
@@ -21,9 +22,21 @@ def _register_and_login(client, reg, role="student"):
     return login.get_json()["token"]
 
 
-def test_start_session_returns_409_if_existing(client, app):
+def _complete_student_verification_prerequisites(app, reg_number: str, tmp_path: Path):
+    with app.app_context():
+        student = User.query.filter_by(reg_number=reg_number).first()
+        student.phone_number = "+255700000000"
+        student.department = "BSc Computer Science"
+        image_path = tmp_path / f"{reg_number}.jpg"
+        image_path.write_bytes(b"fake-jpeg-bytes")
+        db.session.add(FacialImage(user_id=student.user_id, file_path=str(image_path)))
+        db.session.commit()
+
+
+def test_start_session_returns_409_if_existing(client, app, tmp_path):
     student_token = _register_and_login(client, "T22-03-30001")
     lecturer_token = _register_and_login(client, "L22-03-40001", role="lecturer")
+    _complete_student_verification_prerequisites(app, "T22-03-30001", tmp_path)
 
     create_exam = client.post(
         "/api/exams",
@@ -68,10 +81,11 @@ def test_start_session_returns_409_if_existing(client, app):
     assert second.get_json()["session_id"]
 
 
-def test_reports_access_control_and_csv_export(client, app):
+def test_reports_access_control_and_csv_export(client, app, tmp_path):
     lecturer_token = _register_and_login(client, "L22-03-50001", role="lecturer")
     other_lecturer_token = _register_and_login(client, "L22-03-50002", role="lecturer")
     student_token = _register_and_login(client, "T22-03-50003")
+    _complete_student_verification_prerequisites(app, "T22-03-50003", tmp_path)
 
     with app.app_context():
         lecturer = User.query.filter_by(reg_number="L22-03-50001").first()
