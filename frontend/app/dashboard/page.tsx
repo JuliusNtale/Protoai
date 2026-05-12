@@ -467,10 +467,6 @@ function StudentDashboardInner() {
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
               <button onClick={() => void updateProfile()} className="rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white">Save Profile</button>
-              <label className="cursor-pointer rounded-md border px-4 py-2 text-sm font-semibold">
-                {uploadingImage ? "Uploading..." : "Upload Face Image"}
-                <input type="file" accept="image/jpeg,image/png" className="hidden" onChange={(e) => void uploadBaselineImage(e.target.files?.[0] ?? null)} />
-              </label>
             </div>
             {profileMsg ? <p className="mt-2 text-sm text-muted-foreground">{profileMsg}</p> : null}
           </DashboardPanel>
