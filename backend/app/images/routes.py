@@ -14,6 +14,12 @@ from app.models import FacialImage, User
 images_bp = Blueprint("images", __name__)
 
 
+def _resolve_file_path(file_path: str) -> str:
+    if os.path.isabs(file_path):
+        return file_path
+    return os.path.abspath(os.path.join(os.getcwd(), file_path))
+
+
 def _save_uploaded_face_file(upload) -> tuple[str, str]:
     content_type = (upload.content_type or "").lower()
     if content_type not in {"image/jpeg", "image/jpg", "image/png"}:
@@ -25,7 +31,7 @@ def _save_uploaded_face_file(upload) -> tuple[str, str]:
     if len(raw) > 5 * 1024 * 1024:
         raise ValueError("Image must be 5MB or less")
 
-    storage_dir = os.path.join("storage", "faces")
+    storage_dir = os.path.abspath(os.path.join(os.getcwd(), "storage", "faces"))
     os.makedirs(storage_dir, exist_ok=True)
     ext = ".png" if content_type == "image/png" else ".jpg"
     file_name = f"{uuid4().hex}{ext}"
@@ -45,10 +51,11 @@ def get_user_image(user_id):
     image = FacialImage.query.filter_by(user_id=user_id).order_by(FacialImage.captured_at.desc()).first()
     if not image:
         return jsonify({"error": {"message": "Image not found"}}), 404
-    if not os.path.isfile(image.file_path):
+    resolved_file_path = _resolve_file_path(image.file_path)
+    if not os.path.isfile(resolved_file_path):
         return jsonify({"error": {"message": "Stored image file is missing"}}), 404
 
-    return send_file(image.file_path, mimetype="image/jpeg")
+    return send_file(resolved_file_path, mimetype="image/jpeg")
 
 
 @images_bp.post("/<int:user_id>")
@@ -137,11 +144,12 @@ def get_my_image():
     image = FacialImage.query.filter_by(user_id=user_id).order_by(FacialImage.captured_at.desc()).first()
     if not image:
         return jsonify({"error": {"message": "Image not found"}}), 404
-    if not os.path.isfile(image.file_path):
+    resolved_file_path = _resolve_file_path(image.file_path)
+    if not os.path.isfile(resolved_file_path):
         return jsonify({"error": {"message": "Stored image file is missing"}}), 404
-    guessed_type, _ = mimetypes.guess_type(image.file_path)
+    guessed_type, _ = mimetypes.guess_type(resolved_file_path)
     mimetype = guessed_type or "application/octet-stream"
-    response = make_response(send_file(image.file_path, mimetype=mimetype))
+    response = make_response(send_file(resolved_file_path, mimetype=mimetype))
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     response.headers["Pragma"] = "no-cache"
     return response
@@ -158,10 +166,11 @@ def get_user_image_internal(user_id):
     image = FacialImage.query.filter_by(user_id=user_id).order_by(FacialImage.captured_at.desc()).first()
     if not image:
         return jsonify({"error": {"message": "Baseline facial image not found"}}), 404
-    if not os.path.isfile(image.file_path):
+    resolved_file_path = _resolve_file_path(image.file_path)
+    if not os.path.isfile(resolved_file_path):
         return jsonify({"error": {"message": "Stored image file is missing"}}), 404
 
-    with open(image.file_path, "rb") as file:
+    with open(resolved_file_path, "rb") as file:
         encoded = base64.b64encode(file.read()).decode("ascii")
 
     return jsonify(

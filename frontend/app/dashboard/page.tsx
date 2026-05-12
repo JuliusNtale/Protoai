@@ -105,6 +105,7 @@ function StudentDashboardInner() {
   const [passwordMsg, setPasswordMsg] = useState("")
   const [isExiting, setIsExiting] = useState(false)
   const [baselineImageUrl, setBaselineImageUrl] = useState<string | null>(null)
+  const [baselineLoadError, setBaselineLoadError] = useState<string | null>(null)
 
   useEffect(() => {
     const rawToken = localStorage.getItem("token")
@@ -173,6 +174,7 @@ function StudentDashboardInner() {
       })
       if (!res.ok) {
         setBaselineImageUrl(null)
+        setBaselineLoadError(res.status === 404 ? null : "Could not load baseline image preview.")
         return
       }
       const blob = await res.blob()
@@ -181,8 +183,10 @@ function StudentDashboardInner() {
         if (prev) URL.revokeObjectURL(prev)
         return objectUrl
       })
+      setBaselineLoadError(null)
     } catch {
       setBaselineImageUrl(null)
+      setBaselineLoadError("Could not load baseline image preview.")
     }
   }
 
@@ -485,6 +489,7 @@ function StudentDashboardInner() {
                 <p className="text-sm text-muted-foreground">
                   Status: <span className="font-medium text-foreground">{baselineImageUrl ? "Uploaded" : "Not uploaded"}</span>
                 </p>
+                {baselineLoadError ? <p className="text-xs text-red-500">{baselineLoadError}</p> : null}
                 <label className="w-fit cursor-pointer rounded-md border px-3 py-1.5 text-sm font-semibold">
                   {uploadingImage ? "Uploading..." : baselineImageUrl ? "Replace Image" : "Upload Image"}
                   <input type="file" accept="image/jpeg,image/png" className="hidden" onChange={(e) => void uploadBaselineImage(e.target.files?.[0] ?? null)} />
