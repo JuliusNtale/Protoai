@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import { Suspense } from "react"
 import { useEffect, useMemo, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { LogOut } from "lucide-react"
@@ -63,7 +64,7 @@ function formatDateTime(value?: string | null) {
   return date.toLocaleString()
 }
 
-export default function StudentDashboardPage() {
+function StudentDashboardInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const tab = ((searchParams.get("tab") as StudentTab) || "dashboard")
@@ -401,3 +402,19 @@ export default function StudentDashboardPage() {
   )
 }
 
+export default function StudentDashboardPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-background p-6 text-foreground">
+          <div className="mx-auto w-full max-w-3xl rounded-3xl border border-border bg-card p-8 text-center">
+            <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            <h1 className="text-xl font-semibold">Loading Student Dashboard</h1>
+          </div>
+        </main>
+      }
+    >
+      <StudentDashboardInner />
+    </Suspense>
+  )
+}

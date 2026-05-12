@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { Suspense, useEffect, useMemo, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { BookOpen, KeyRound, LogOut, Plus, Users } from "lucide-react"
 import { getApiPath } from "@/lib/api-url"
@@ -80,7 +80,7 @@ function badgeTone(value: string) {
   return "bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700"
 }
 
-export default function LecturerDashboard() {
+function LecturerDashboardInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const tab = (searchParams.get("tab") || "dashboard").toLowerCase()
@@ -772,5 +772,22 @@ export default function LecturerDashboard() {
         </div>
         )}
     </DashboardShell>
+  )
+}
+
+export default function LecturerDashboard() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-background p-6 text-foreground">
+          <div className="mx-auto w-full max-w-3xl rounded-3xl border border-border bg-card p-8 text-center">
+            <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            <h1 className="text-xl font-semibold">Loading Lecturer Dashboard</h1>
+          </div>
+        </main>
+      }
+    >
+      <LecturerDashboardInner />
+    </Suspense>
   )
 }
