@@ -1,8 +1,8 @@
 "use client"
 
-import Link from "next/link"
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
+import { LogOut } from "lucide-react"
 import { getApiPath } from "@/lib/api-url"
 import { DashboardPanel, DashboardShell } from "@/components/dashboard-shell"
 
@@ -69,6 +69,7 @@ export default function AdminLogsPage() {
   const [sessions, setSessions] = useState<SessionRow[]>([])
   const [sessionQuery, setSessionQuery] = useState("")
   const [sessionRisk, setSessionRisk] = useState<"all" | "low" | "medium" | "high">("all")
+  const [isExiting, setIsExiting] = useState(false)
 
   useEffect(() => {
     const rawToken = localStorage.getItem("token")
@@ -137,6 +138,16 @@ export default function AdminLogsPage() {
     }
   }
 
+  async function logout() {
+    setIsExiting(true)
+    await new Promise((r) => setTimeout(r, 320))
+    localStorage.removeItem("token")
+    localStorage.removeItem("user")
+    localStorage.removeItem("session_id")
+    localStorage.removeItem("exam_id")
+    router.push("/")
+  }
+
   async function applyAuditFilters() {
     setError("")
     setAuditLimit(auditPageSize)
@@ -184,8 +195,11 @@ export default function AdminLogsPage() {
   if (loading) {
     return (
       <main className="min-h-screen bg-background p-6 text-foreground">
-        <div className="mx-auto w-full max-w-3xl rounded-3xl border border-border bg-card p-8 text-center">
-          <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        <div className="mx-auto w-full max-w-3xl rounded-3xl border border-border bg-card p-8 text-center shadow-[0_24px_70px_rgba(15,23,42,0.12)] dark:shadow-[0_24px_70px_rgba(0,0,0,0.45)]">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#1a2d5a]/10">
+            <span className="absolute h-8 w-8 animate-spin rounded-full border-2 border-[#1a2d5a] border-t-transparent" />
+            <span className="absolute h-12 w-12 animate-[spin_2.2s_linear_infinite_reverse] rounded-full border-2 border-blue-300/70 border-b-transparent" />
+          </div>
           <h1 className="text-xl font-semibold">Loading Logs</h1>
           <p className="mt-1 text-sm text-muted-foreground">Fetching audit and session activity...</p>
         </div>
@@ -202,14 +216,11 @@ export default function AdminLogsPage() {
         { label: "Dashboard", href: "/admin" },
         { label: "Users", href: "/admin/users" },
         { label: "Credentials", href: "/admin/credentials" },
-        { label: "Logs", active: true },
+        { label: "Logs", href: "/admin/system-logs", active: true },
         { label: "Reset Password", href: "/admin/reset-password" },
       ]}
       rightTopSlot={
         <div className="flex gap-2">
-          <Link href="/admin" className="rounded-md border px-3 py-1.5 text-sm font-semibold">
-            Back to Admin
-          </Link>
           <button
             onClick={() => void refreshAll()}
             disabled={refreshing}
@@ -217,9 +228,15 @@ export default function AdminLogsPage() {
           >
             {refreshing ? "Refreshing..." : "Refresh All"}
           </button>
+          <button onClick={() => void logout()} className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-3 py-1.5 text-sm font-semibold text-foreground">
+            <LogOut className="h-4 w-4" /> Logout
+          </button>
         </div>
       }
     >
+      {isExiting ? (
+        <div className="rounded-xl border border-border bg-card p-3 text-sm text-muted-foreground animate-pulse">Signing out...</div>
+      ) : null}
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       <DashboardPanel title="Audit Logs" subtitle="Human-readable security actions with date/time and actor details.">

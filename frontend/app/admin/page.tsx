@@ -104,7 +104,7 @@ export default function AdminDashboardSummary() {
       title="Admin Dashboard"
       subtitle="Summary view. Use sidebar navigation for users, credentials, and logs operations."
       sidebarItems={[
-        { label: "Dashboard", active: true },
+        { label: "Dashboard", href: "/admin", active: true },
         { label: "Users", href: "/admin/users" },
         { label: "Credentials", href: "/admin/credentials" },
         { label: "Logs", href: "/admin/system-logs" },

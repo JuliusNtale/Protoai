@@ -10,6 +10,7 @@ export default function AdminCredentialsPage() {
   const router = useRouter()
   const [rows, setRows] = useState(readGeneratedCredentials())
   const [loading, setLoading] = useState(true)
+  const [isExiting, setIsExiting] = useState(false)
 
   useEffect(() => {
     const token = localStorage.getItem("token")
@@ -36,22 +37,13 @@ export default function AdminCredentialsPage() {
   }
 
   async function logout() {
+    setIsExiting(true)
+    await new Promise((r) => setTimeout(r, 320))
     localStorage.removeItem("token")
     localStorage.removeItem("user")
     localStorage.removeItem("session_id")
     localStorage.removeItem("exam_id")
     router.push("/")
-  }
-
-  if (loading) {
-    return (
-      <main className="min-h-screen bg-background p-6 text-foreground">
-        <div className="mx-auto w-full max-w-3xl rounded-3xl border border-border bg-card p-8 text-center">
-          <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-          <h1 className="text-xl font-semibold">Loading Credentials</h1>
-        </div>
-      </main>
-    )
   }
 
   return (
@@ -62,7 +54,7 @@ export default function AdminCredentialsPage() {
       sidebarItems={[
         { label: "Dashboard", href: "/admin" },
         { label: "Users", href: "/admin/users" },
-        { label: "Credentials", active: true },
+        { label: "Credentials", href: "/admin/credentials", active: true },
         { label: "Logs", href: "/admin/system-logs" },
         { label: "Reset Password", href: "/admin/reset-password" },
       ]}
@@ -72,6 +64,18 @@ export default function AdminCredentialsPage() {
         </button>
       }
     >
+      {isExiting ? (
+        <div className="rounded-xl border border-border bg-card p-3 text-sm text-muted-foreground animate-pulse">Signing out...</div>
+      ) : null}
+      {loading ? (
+        <DashboardPanel title="Loading Credentials">
+          <div className="flex items-center gap-3 text-sm text-muted-foreground">
+            <span className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            Fetching generated credentials...
+          </div>
+        </DashboardPanel>
+      ) : null}
+      {!loading ? (
       <DashboardPanel title="Generated Temporary Credentials">
         <div className="mb-3 flex gap-2">
           <button onClick={exportCsv} disabled={rows.length === 0} className="rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
@@ -104,6 +108,7 @@ export default function AdminCredentialsPage() {
           </table>
         </div>
       </DashboardPanel>
+      ) : null}
     </DashboardShell>
   )
 }

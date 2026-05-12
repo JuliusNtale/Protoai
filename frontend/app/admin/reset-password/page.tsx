@@ -25,6 +25,7 @@ export default function AdminResetPasswordPage() {
   const [newPassword, setNewPassword] = useState("")
   const [passwordMsg, setPasswordMsg] = useState("")
   const [msg, setMsg] = useState("")
+  const [isExiting, setIsExiting] = useState(false)
 
   useEffect(() => {
     const rawToken = localStorage.getItem("token")
@@ -94,22 +95,13 @@ export default function AdminResetPasswordPage() {
   }
 
   async function logout() {
+    setIsExiting(true)
+    await new Promise((r) => setTimeout(r, 320))
     localStorage.removeItem("token")
     localStorage.removeItem("user")
     localStorage.removeItem("session_id")
     localStorage.removeItem("exam_id")
     router.push("/")
-  }
-
-  if (loading) {
-    return (
-      <main className="min-h-screen bg-background p-6 text-foreground">
-        <div className="mx-auto w-full max-w-3xl rounded-3xl border border-border bg-card p-8 text-center">
-          <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-          <h1 className="text-xl font-semibold">Loading Reset Password</h1>
-        </div>
-      </main>
-    )
   }
 
   return (
@@ -122,7 +114,7 @@ export default function AdminResetPasswordPage() {
         { label: "Users", href: "/admin/users" },
         { label: "Credentials", href: "/admin/credentials" },
         { label: "Logs", href: "/admin/system-logs" },
-        { label: "Reset Password", active: true },
+        { label: "Reset Password", href: "/admin/reset-password", active: true },
       ]}
       rightTopSlot={
         <button onClick={() => void logout()} className="inline-flex items-center gap-1 rounded-md border px-3 py-1.5 text-sm font-semibold">
@@ -130,6 +122,19 @@ export default function AdminResetPasswordPage() {
         </button>
       }
     >
+      {isExiting ? (
+        <div className="rounded-xl border border-border bg-card p-3 text-sm text-muted-foreground animate-pulse">Signing out...</div>
+      ) : null}
+      {loading ? (
+        <DashboardPanel title="Loading Reset Password">
+          <div className="flex items-center gap-3 text-sm text-muted-foreground">
+            <span className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            Fetching password reset data...
+          </div>
+        </DashboardPanel>
+      ) : null}
+      {!loading ? (
+      <>
       <DashboardPanel title="Reset My Password">
         <div className="flex items-center gap-2">
           <KeyRound className="h-5 w-5 text-blue-700" />
@@ -179,6 +184,8 @@ export default function AdminResetPasswordPage() {
           </table>
         </div>
       </DashboardPanel>
+      </>
+      ) : null}
     </DashboardShell>
   )
 }

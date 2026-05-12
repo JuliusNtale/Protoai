@@ -44,6 +44,7 @@ export default function AdminUsersPage() {
   const [usersError, setUsersError] = useState("")
   const [uploadingByUser, setUploadingByUser] = useState<Record<number, boolean>>({})
   const [uploadMessage, setUploadMessage] = useState("")
+  const [isExiting, setIsExiting] = useState(false)
   const [query, setQuery] = useState("")
   const [roleFilter, setRoleFilter] = useState<"all" | "student" | "lecturer">("all")
   const [activeFilter, setActiveFilter] = useState<"all" | "active" | "inactive">("all")
@@ -199,22 +200,13 @@ export default function AdminUsersPage() {
   }, [users])
 
   async function logout() {
+    setIsExiting(true)
+    await new Promise((r) => setTimeout(r, 320))
     localStorage.removeItem("token")
     localStorage.removeItem("user")
     localStorage.removeItem("session_id")
     localStorage.removeItem("exam_id")
     router.push("/")
-  }
-
-  if (loadingMe) {
-    return (
-      <main className="min-h-screen bg-background p-6 text-foreground">
-        <div className="mx-auto w-full max-w-3xl rounded-3xl border border-border bg-card p-8 text-center">
-          <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-          <h1 className="text-xl font-semibold">Loading Admin Users</h1>
-        </div>
-      </main>
-    )
   }
 
   return (
@@ -224,7 +216,7 @@ export default function AdminUsersPage() {
       subtitle="Manage user accounts and student baseline images."
       sidebarItems={[
         { label: "Dashboard", href: "/admin" },
-        { label: "Users", active: true },
+        { label: "Users", href: "/admin/users", active: true },
         { label: "Credentials", href: "/admin/credentials" },
         { label: "Logs", href: "/admin/system-logs" },
         { label: "Reset Password", href: "/admin/reset-password" },
@@ -235,7 +227,20 @@ export default function AdminUsersPage() {
         </button>
       }
     >
+      {isExiting ? (
+        <div className="rounded-xl border border-border bg-card p-3 text-sm text-muted-foreground animate-pulse">Signing out...</div>
+      ) : null}
+      {loadingMe ? (
+        <DashboardPanel title="Loading Users">
+          <div className="flex items-center gap-3 text-sm text-muted-foreground">
+            <span className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            Fetching users data...
+          </div>
+        </DashboardPanel>
+      ) : null}
       {adminError && <p className="text-sm text-red-600">{adminError}</p>}
+      {!loadingMe ? (
+      <>
       <section className="grid gap-4 md:grid-cols-4">
         <MetricCard label="Total Users" value={summary.total} />
         <MetricCard label="Students" value={summary.students} />
@@ -349,6 +354,8 @@ export default function AdminUsersPage() {
           </table>
         </div>
       </DashboardPanel>
+      </>
+      ) : null}
     </DashboardShell>
   )
 }
