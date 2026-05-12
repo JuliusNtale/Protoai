@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { BookOpen, KeyRound, LogOut, Plus, Users } from "lucide-react"
+import Link from "next/link"
 import { getApiPath } from "@/lib/api-url"
 import { DashboardPanel, DashboardShell, MetricCard } from "@/components/dashboard-shell"
 
@@ -84,6 +85,14 @@ function LecturerDashboardInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const tab = (searchParams.get("tab") || "dashboard").toLowerCase()
+  const tabTitleMap: Record<string, string> = {
+    dashboard: "Dashboard",
+    exams: "Exams",
+    questions: "Questions",
+    students: "Students",
+    results: "Session Results",
+    profile: "Profile",
+  }
   const [token, setToken] = useState("")
   const [me, setMe] = useState<MeUser | null>(null)
   const [exams, setExams] = useState<ExamRow[]>([])
@@ -423,7 +432,7 @@ function LecturerDashboardInner() {
   return (
     <DashboardShell
       appName="ProctorAI Lecturer"
-      title="Lecturer Dashboard"
+      title={tabTitleMap[tab] || "Lecturer Dashboard"}
       subtitle={me?.full_name || ""}
       sidebarItems={[
         { label: "Dashboard", href: "/lecturer", active: tab === "dashboard" },
@@ -462,13 +471,28 @@ function LecturerDashboardInner() {
           <MetricCard label="Questions (Selected Exam)" value={questions.length} />
           <MetricCard label="Students (Selected Exam)" value={students.length} />
         </section>
-        <DashboardPanel title="Shortcuts">
-          <div className="flex flex-wrap gap-2">
-            <a href="/lecturer?tab=exams" className="rounded-md border px-3 py-2 text-sm font-semibold">Exams</a>
-            <a href="/lecturer?tab=questions" className="rounded-md border px-3 py-2 text-sm font-semibold">Questions</a>
-            <a href="/lecturer?tab=students" className="rounded-md border px-3 py-2 text-sm font-semibold">Students</a>
-            <a href="/lecturer?tab=results" className="rounded-md border px-3 py-2 text-sm font-semibold">Session Results</a>
-            <a href="/lecturer?tab=profile" className="rounded-md border px-3 py-2 text-sm font-semibold">Profile</a>
+        <DashboardPanel title="Quick Shortcuts" subtitle="Move quickly between lecturer workflows.">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            <Link href="/lecturer?tab=exams" className="rounded-xl border border-border bg-gradient-to-br from-blue-50 to-indigo-50 p-4 transition hover:shadow-md dark:from-slate-900 dark:to-slate-800">
+              <p className="text-sm font-semibold text-foreground">Exams</p>
+              <p className="mt-1 text-xs text-muted-foreground">Create and manage exams.</p>
+            </Link>
+            <Link href="/lecturer?tab=questions" className="rounded-xl border border-border bg-gradient-to-br from-emerald-50 to-teal-50 p-4 transition hover:shadow-md dark:from-slate-900 dark:to-slate-800">
+              <p className="text-sm font-semibold text-foreground">Questions</p>
+              <p className="mt-1 text-xs text-muted-foreground">Build question banks.</p>
+            </Link>
+            <Link href="/lecturer?tab=students" className="rounded-xl border border-border bg-gradient-to-br from-amber-50 to-orange-50 p-4 transition hover:shadow-md dark:from-slate-900 dark:to-slate-800">
+              <p className="text-sm font-semibold text-foreground">Students</p>
+              <p className="mt-1 text-xs text-muted-foreground">View enrolled students.</p>
+            </Link>
+            <Link href="/lecturer?tab=results" className="rounded-xl border border-border bg-gradient-to-br from-violet-50 to-fuchsia-50 p-4 transition hover:shadow-md dark:from-slate-900 dark:to-slate-800">
+              <p className="text-sm font-semibold text-foreground">Session Results</p>
+              <p className="mt-1 text-xs text-muted-foreground">Inspect outcomes and risk.</p>
+            </Link>
+            <Link href="/lecturer?tab=profile" className="rounded-xl border border-border bg-gradient-to-br from-slate-100 to-slate-200 p-4 transition hover:shadow-md dark:from-slate-900 dark:to-slate-800">
+              <p className="text-sm font-semibold text-foreground">Profile</p>
+              <p className="mt-1 text-xs text-muted-foreground">Reset account password.</p>
+            </Link>
           </div>
         </DashboardPanel>
           </>
