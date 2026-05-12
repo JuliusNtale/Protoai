@@ -20,8 +20,8 @@ type ManagedUser = {
 
 function statusBadge(active: boolean) {
   return active
-    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-    : "bg-slate-100 text-slate-600 border-slate-200"
+    ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-900/50"
+    : "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700"
 }
 
 export default function AdminUsersPage() {
@@ -249,15 +249,15 @@ export default function AdminUsersPage() {
           <h2 className="text-base font-semibold">Create Lecturer/Student Account</h2>
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-2">
-          <select value={role} onChange={e => setRole(e.target.value as "student" | "lecturer")} className="rounded-md border p-2 text-sm">
+          <select value={role} onChange={e => setRole(e.target.value as "student" | "lecturer")} className="rounded-md border border-border bg-background p-2 text-sm text-foreground">
             <option value="student">student</option>
             <option value="lecturer">lecturer</option>
           </select>
-          <input value={fullName} onChange={e => setFullName(e.target.value)} placeholder="Full name" className="rounded-md border p-2 text-sm" />
-          {role === "student" ? <input value={regNumber} onChange={e => setRegNumber(e.target.value)} placeholder="Registration number" className="rounded-md border p-2 text-sm" /> : null}
-          <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email" className="rounded-md border p-2 text-sm" />
-          <input value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)} placeholder="Phone number (optional)" className="rounded-md border p-2 text-sm" />
-          {role === "lecturer" ? <input value={username} onChange={e => setUsername(e.target.value)} placeholder="Username (required for lecturer)" className="rounded-md border p-2 text-sm" /> : null}
+          <input value={fullName} onChange={e => setFullName(e.target.value)} placeholder="Full name" className="rounded-md border border-border bg-background p-2 text-sm text-foreground" />
+          {role === "student" ? <input value={regNumber} onChange={e => setRegNumber(e.target.value)} placeholder="Registration number" className="rounded-md border border-border bg-background p-2 text-sm text-foreground" /> : null}
+          <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email" className="rounded-md border border-border bg-background p-2 text-sm text-foreground" />
+          <input value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)} placeholder="Phone number (optional)" className="rounded-md border border-border bg-background p-2 text-sm text-foreground" />
+          {role === "lecturer" ? <input value={username} onChange={e => setUsername(e.target.value)} placeholder="Username (required for lecturer)" className="rounded-md border border-border bg-background p-2 text-sm text-foreground" /> : null}
         </div>
         {createError && <p className="mt-2 text-sm text-red-600">{createError}</p>}
         <button onClick={provisionAccount} disabled={creating} className="mt-3 rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
@@ -271,13 +271,13 @@ export default function AdminUsersPage() {
           <h2 className="text-base font-semibold">Manage Users</h2>
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-4">
-          <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search name/email/reg number" className="rounded-md border p-2 text-sm md:col-span-2" />
-          <select value={roleFilter} onChange={e => setRoleFilter(e.target.value as "all" | "student" | "lecturer")} className="rounded-md border p-2 text-sm">
+          <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search name/email/reg number" className="rounded-md border border-border bg-background p-2 text-sm text-foreground md:col-span-2" />
+          <select value={roleFilter} onChange={e => setRoleFilter(e.target.value as "all" | "student" | "lecturer")} className="rounded-md border border-border bg-background p-2 text-sm text-foreground">
             <option value="all">all roles</option>
             <option value="student">student</option>
             <option value="lecturer">lecturer</option>
           </select>
-          <select value={activeFilter} onChange={e => setActiveFilter(e.target.value as "all" | "active" | "inactive")} className="rounded-md border p-2 text-sm">
+          <select value={activeFilter} onChange={e => setActiveFilter(e.target.value as "all" | "active" | "inactive")} className="rounded-md border border-border bg-background p-2 text-sm text-foreground">
             <option value="all">all status</option>
             <option value="active">active</option>
             <option value="inactive">inactive</option>
@@ -291,10 +291,10 @@ export default function AdminUsersPage() {
         </div>
         {usersError && <p className="text-sm text-red-600">{usersError}</p>}
         {uploadMessage && <p className="text-sm text-emerald-700">{uploadMessage}</p>}
-        <div className="overflow-x-auto rounded-xl border border-slate-200">
+        <div className="overflow-x-auto rounded-xl border border-border">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b bg-slate-50 text-left">
+              <tr className="border-b border-border bg-muted/50 text-left text-foreground">
                 <th className="py-2 pl-3">Name</th>
                 <th>Role</th>
                 <th>Login ID</th>
@@ -331,7 +331,7 @@ export default function AdminUsersPage() {
                         </button>
                       </div>
                     ) : (
-                      <span className="text-xs text-slate-500">N/A</span>
+                      <span className="text-xs text-muted-foreground">N/A</span>
                     )}
                   </td>
                   <td>
@@ -341,7 +341,7 @@ export default function AdminUsersPage() {
                   </td>
                 </tr>
               ))}
-              {users.length === 0 ? <tr><td className="py-3 pl-3 text-slate-600" colSpan={7}>No users found.</td></tr> : null}
+              {users.length === 0 ? <tr><td className="py-3 pl-3 text-muted-foreground" colSpan={7}>No users found.</td></tr> : null}
             </tbody>
           </table>
         </div>
@@ -349,4 +349,3 @@ export default function AdminUsersPage() {
     </DashboardShell>
   )
 }
-

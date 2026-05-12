@@ -228,18 +228,18 @@ export default function AdminLogsPage() {
             value={auditQuery}
             onChange={(e) => setAuditQuery(e.target.value)}
             placeholder="Search actor/email/action"
-            className="rounded-md border bg-white p-2 text-sm"
+            className="rounded-md border border-border bg-background p-2 text-sm text-foreground"
           />
           <input
             value={auditAction}
             onChange={(e) => setAuditAction(e.target.value)}
             placeholder="Filter action (e.g. auth.login)"
-            className="rounded-md border bg-white p-2 text-sm"
+            className="rounded-md border border-border bg-background p-2 text-sm text-foreground"
           />
           <select
             value={auditPageSize}
             onChange={(e) => setAuditPageSize(Number(e.target.value))}
-            className="rounded-md border bg-white p-2 text-sm"
+            className="rounded-md border border-border bg-background p-2 text-sm text-foreground"
           >
             {PAGE_SIZE_OPTIONS.map((size) => (
               <option key={size} value={size}>
@@ -281,7 +281,7 @@ export default function AdminLogsPage() {
               ))}
               {auditLogs.length === 0 && (
                 <tr>
-                  <td className="py-3 text-slate-600" colSpan={5}>
+                  <td className="py-3 text-muted-foreground" colSpan={5}>
                     No audit logs found for this filter.
                   </td>
                 </tr>
@@ -297,12 +297,12 @@ export default function AdminLogsPage() {
             value={sessionQuery}
             onChange={(e) => setSessionQuery(e.target.value)}
             placeholder="Search student/exam/course/email"
-            className="rounded-md border bg-white p-2 text-sm"
+            className="rounded-md border border-border bg-background p-2 text-sm text-foreground"
           />
           <select
             value={sessionRisk}
             onChange={(e) => setSessionRisk(e.target.value as "all" | "low" | "medium" | "high")}
-            className="rounded-md border bg-white p-2 text-sm"
+            className="rounded-md border border-border bg-background p-2 text-sm text-foreground"
           >
             <option value="all">all risk levels</option>
             <option value="low">low</option>
@@ -338,7 +338,7 @@ export default function AdminLogsPage() {
               ))}
               {filteredSessions.length === 0 && (
                 <tr>
-                  <td className="py-3 text-slate-600" colSpan={7}>
+                  <td className="py-3 text-muted-foreground" colSpan={7}>
                     No session logs match this filter.
                   </td>
                 </tr>

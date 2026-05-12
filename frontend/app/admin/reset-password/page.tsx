@@ -136,8 +136,8 @@ export default function AdminResetPasswordPage() {
           <h2 className="text-base font-semibold">Admin Password</h2>
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-2">
-          <input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} placeholder="Current password" className="rounded-md border p-2 text-sm" />
-          <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="New password" className="rounded-md border p-2 text-sm" />
+          <input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} placeholder="Current password" className="rounded-md border border-border bg-background p-2 text-sm text-foreground" />
+          <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="New password" className="rounded-md border border-border bg-background p-2 text-sm text-foreground" />
         </div>
         {passwordMsg ? <p className="mt-2 text-sm">{passwordMsg}</p> : null}
         <button onClick={() => void resetMyPassword()} className="mt-3 rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white">
@@ -147,10 +147,10 @@ export default function AdminResetPasswordPage() {
 
       <DashboardPanel title="Reset User Passwords">
         {msg ? <p className="mb-3 text-sm text-emerald-700">{msg}</p> : null}
-        <div className="overflow-x-auto rounded-xl border border-slate-200">
+        <div className="overflow-x-auto rounded-xl border border-border">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b bg-slate-50 text-left">
+              <tr className="border-b border-border bg-muted/50 text-left text-foreground">
                 <th className="py-2 pl-3">Name</th>
                 <th>Role</th>
                 <th>Login ID</th>
@@ -179,4 +179,3 @@ export default function AdminResetPasswordPage() {
     </DashboardShell>
   )
 }
-

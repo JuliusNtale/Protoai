@@ -78,10 +78,10 @@ export default function AdminCredentialsPage() {
             Export CSV
           </button>
         </div>
-        <div className="overflow-x-auto rounded-xl border border-slate-200">
+        <div className="overflow-x-auto rounded-xl border border-border">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b bg-slate-50 text-left">
+              <tr className="border-b border-border bg-muted/50 text-left text-foreground">
                 <th className="py-2 pl-3">Generated At</th>
                 <th>Name</th>
                 <th>Role</th>
@@ -99,7 +99,7 @@ export default function AdminCredentialsPage() {
                   <td className="font-mono">{row.temporary_password}</td>
                 </tr>
               ))}
-              {rows.length === 0 ? <tr><td className="py-3 pl-3 text-slate-600" colSpan={5}>No credentials generated yet.</td></tr> : null}
+              {rows.length === 0 ? <tr><td className="py-3 pl-3 text-muted-foreground" colSpan={5}>No credentials generated yet.</td></tr> : null}
             </tbody>
           </table>
         </div>
@@ -107,4 +107,3 @@ export default function AdminCredentialsPage() {
     </DashboardShell>
   )
 }
-

@@ -54,7 +54,7 @@ function badgeTone(value: string) {
   if (normalized === "completed" || normalized === "live") return "bg-emerald-50 text-emerald-700 border-emerald-200"
   if (normalized === "scheduled" || normalized === "medium") return "bg-amber-50 text-amber-700 border-amber-200"
   if (normalized === "high" || normalized === "locked") return "bg-red-50 text-red-700 border-red-200"
-  return "bg-slate-50 text-slate-700 border-slate-200"
+  return "bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700"
 }
 
 function formatDateTime(value?: string | null) {
@@ -278,10 +278,10 @@ function StudentDashboardInner() {
 
       {tab === "exams" ? (
         <DashboardPanel title="Assigned Exams">
-          <div className="overflow-x-auto rounded-xl border border-slate-200">
+          <div className="overflow-x-auto rounded-xl border border-border">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b bg-slate-50 text-left">
+                <tr className="border-b border-border bg-muted/50 text-left">
                   <th className="py-2 pl-3">Title</th>
                   <th>Course</th>
                   <th>Schedule</th>
@@ -303,7 +303,7 @@ function StudentDashboardInner() {
                     </td>
                   </tr>
                 ))}
-                {exams.length === 0 ? <tr><td colSpan={5} className="py-3 pl-3 text-slate-600">No exams assigned.</td></tr> : null}
+                {exams.length === 0 ? <tr><td colSpan={5} className="py-3 pl-3 text-muted-foreground">No exams assigned.</td></tr> : null}
               </tbody>
             </table>
           </div>
@@ -312,10 +312,10 @@ function StudentDashboardInner() {
 
       {tab === "sessions" ? (
         <DashboardPanel title="Sessions">
-          <div className="overflow-x-auto rounded-xl border border-slate-200">
+          <div className="overflow-x-auto rounded-xl border border-border">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b bg-slate-50 text-left">
+                <tr className="border-b border-border bg-muted/50 text-left">
                   <th className="py-2 pl-3">Exam</th>
                   <th>Course</th>
                   <th>Status</th>
@@ -333,7 +333,7 @@ function StudentDashboardInner() {
                     <td>{s.warning_count}</td>
                   </tr>
                 ))}
-                {sessions.length === 0 ? <tr><td colSpan={5} className="py-3 pl-3 text-slate-600">No sessions yet.</td></tr> : null}
+                {sessions.length === 0 ? <tr><td colSpan={5} className="py-3 pl-3 text-muted-foreground">No sessions yet.</td></tr> : null}
               </tbody>
             </table>
           </div>
@@ -342,10 +342,10 @@ function StudentDashboardInner() {
 
       {tab === "reports" ? (
         <DashboardPanel title="Reports">
-          <div className="overflow-x-auto rounded-xl border border-slate-200">
+          <div className="overflow-x-auto rounded-xl border border-border">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b bg-slate-50 text-left">
+                <tr className="border-b border-border bg-muted/50 text-left">
                   <th className="py-2 pl-3">Exam</th>
                   <th>Course</th>
                   <th>Status</th>
@@ -365,7 +365,7 @@ function StudentDashboardInner() {
                     <td>{r.warning_count}</td>
                   </tr>
                 ))}
-                {reports.length === 0 ? <tr><td colSpan={6} className="py-3 pl-3 text-slate-600">No reports generated yet.</td></tr> : null}
+                {reports.length === 0 ? <tr><td colSpan={6} className="py-3 pl-3 text-muted-foreground">No reports generated yet.</td></tr> : null}
               </tbody>
             </table>
           </div>
@@ -376,9 +376,9 @@ function StudentDashboardInner() {
         <>
           <DashboardPanel title="Profile">
             <div className="grid gap-3 md:grid-cols-2">
-              <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email" className="rounded-md border p-2 text-sm" />
-              <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="Phone number" className="rounded-md border p-2 text-sm" />
-              <input value={department} onChange={e => setDepartment(e.target.value)} placeholder="Course / Department" className="rounded-md border p-2 text-sm md:col-span-2" />
+              <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email" className="rounded-md border border-border bg-background p-2 text-sm text-foreground" />
+              <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="Phone number" className="rounded-md border border-border bg-background p-2 text-sm text-foreground" />
+              <input value={department} onChange={e => setDepartment(e.target.value)} placeholder="Course / Department" className="rounded-md border border-border bg-background p-2 text-sm text-foreground md:col-span-2" />
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
               <button onClick={() => void updateProfile()} className="rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white">Save Profile</button>
@@ -387,14 +387,14 @@ function StudentDashboardInner() {
                 <input type="file" accept="image/jpeg,image/png" className="hidden" onChange={(e) => void uploadBaselineImage(e.target.files?.[0] ?? null)} />
               </label>
             </div>
-            {profileMsg ? <p className="mt-2 text-sm text-slate-700">{profileMsg}</p> : null}
+            {profileMsg ? <p className="mt-2 text-sm text-muted-foreground">{profileMsg}</p> : null}
           </DashboardPanel>
           <DashboardPanel title="Reset Password">
             <div className="grid gap-3 md:grid-cols-2">
-              <input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} placeholder="Current password" className="rounded-md border p-2 text-sm" />
-              <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="New password" className="rounded-md border p-2 text-sm" />
+              <input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} placeholder="Current password" className="rounded-md border border-border bg-background p-2 text-sm text-foreground" />
+              <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="New password" className="rounded-md border border-border bg-background p-2 text-sm text-foreground" />
             </div>
-            {passwordMsg ? <p className="mt-2 text-sm text-slate-700">{passwordMsg}</p> : null}
+            {passwordMsg ? <p className="mt-2 text-sm text-muted-foreground">{passwordMsg}</p> : null}
             <button onClick={() => void changePassword()} className="mt-3 rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white">Update Password</button>
           </DashboardPanel>
         </>
