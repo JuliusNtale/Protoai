@@ -77,6 +77,16 @@ export default function VerifyPage() {
     ? { label: "Blocked", detail: cameraError, tone: "error" as const }
     : { label: "Checking", detail: "Preparing camera access", tone: "neutral" as const }
 
+  function resolveAiBaseUrl() {
+    const configured = (process.env.NEXT_PUBLIC_AI_URL || "").trim().replace(/\/+$/, "")
+    if (typeof window === "undefined") return configured || "http://localhost:8000"
+    if (!configured) return window.location.origin
+    if (window.location.protocol === "https:" && configured.startsWith("http://")) {
+      return window.location.origin
+    }
+    return configured
+  }
+
   function stopCameraStream() {
     if (!streamRef.current) return
     streamRef.current.getTracks().forEach(track => track.stop())
@@ -198,6 +208,10 @@ export default function VerifyPage() {
     const runValidation = async () => {
       if (monitorLockRef.current) return
       if (!videoRef.current) return
+      if (videoRef.current.readyState < 2) {
+        setPhaseError("Waiting for camera feed...")
+        return
+      }
       monitorLockRef.current = true
       try {
         const canvas = document.createElement("canvas")
@@ -210,7 +224,7 @@ export default function VerifyPage() {
 
         const rawSessionId = localStorage.getItem("session_id")
         const sessionId = rawSessionId && Number(rawSessionId) > 0 ? Number(rawSessionId) : 0
-        const aiBase = (process.env.NEXT_PUBLIC_AI_URL || "http://localhost:8000").replace(/\/+$/, "")
+        const aiBase = resolveAiBaseUrl()
         const response = await fetch(`${aiBase}/monitor-frame`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -260,7 +274,7 @@ export default function VerifyPage() {
       } catch {
         phaseHoldStartRef.current = null
         setScanProgress(0)
-        setPhaseError("Live verification stream interrupted. Check network/camera and retry.")
+        setPhaseError("Live verification stream interrupted. Check network, HTTPS routing, and camera, then retry.")
       } finally {
         monitorLockRef.current = false
       }
@@ -376,7 +390,7 @@ export default function VerifyPage() {
       ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height)
       const imageBase64 = canvas.toDataURL("image/jpeg", 0.8)
 
-      const aiBase = (process.env.NEXT_PUBLIC_AI_URL || "http://localhost:8000").replace(/\/+$/, "")
+      const aiBase = resolveAiBaseUrl()
       const response = await fetch(`${aiBase}/verify-identity`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
