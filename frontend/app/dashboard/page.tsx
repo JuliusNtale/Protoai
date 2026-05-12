@@ -145,7 +145,8 @@ function StudentDashboardInner() {
       body: JSON.stringify({ exam_id: examId }),
     })
     const payload = await res.json().catch(() => ({}))
-    if (res.status === 201 || res.status === 409) {
+    const sessionId = Number(payload?.session_id)
+    if ((res.status === 201 || res.status === 409) && Number.isFinite(sessionId) && sessionId > 0) {
       localStorage.setItem("session_id", String(payload.session_id))
       localStorage.setItem("exam_id", String(examId))
       router.push("/verify")
