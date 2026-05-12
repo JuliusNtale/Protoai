@@ -147,7 +147,7 @@ function StudentDashboardInner() {
     })
     const payload = await res.json().catch(() => ({}))
     const sessionId = Number(payload?.session_id)
-    if ((res.status === 201 || res.status === 409) && Number.isFinite(sessionId) && sessionId > 0) {
+    if (res.status === 201 && Number.isFinite(sessionId) && sessionId > 0) {
       localStorage.setItem("session_id", String(payload.session_id))
       localStorage.setItem("exam_id", String(examId))
       router.push("/verify")
@@ -238,7 +238,7 @@ function StudentDashboardInner() {
     <DashboardShell
       appName="ProctorAI Student"
       title={tab === "dashboard" ? "Dashboard" : tab.charAt(0).toUpperCase() + tab.slice(1)}
-      subtitle={`Profile | ${me?.full_name || ""} (${me?.registration_number || ""}) | ${me?.department || "Course not set"}`}
+      subtitle={`${me?.full_name || "-"} | ${me?.registration_number || "-"} | ${me?.department || "Course not set"}`}
       sidebarItems={[
         { label: "Dashboard", href: "/dashboard", active: tab === "dashboard" },
         { label: "Exams", href: "/dashboard?tab=exams", active: tab === "exams" },

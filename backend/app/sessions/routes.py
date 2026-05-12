@@ -72,7 +72,23 @@ def start_session():
         return jsonify({"error": {"message": "Password change required before exam start"}}), 403
     existing = ExamSession.query.filter_by(student_id=student_id, exam_id=exam.exam_id).first()
     if existing:
-        return jsonify({"error": "Session already exists for this exam", "session_id": existing.session_id}), 409
+        if existing.session_status in {"active", "pending"} and not existing.submitted_at:
+            existing.submitted_at = datetime.utcnow()
+            existing.session_status = "completed"
+            db.session.commit()
+            return (
+                jsonify(
+                    {
+                        "error": {
+                            "message": "Existing in-progress session was auto-submitted and cannot be resumed."
+                        },
+                        "session_id": existing.session_id,
+                        "auto_submitted": True,
+                    }
+                ),
+                409,
+            )
+        return jsonify({"error": {"message": "Exam session already exists and cannot be resumed."}, "session_id": existing.session_id}), 409
 
     session = ExamSession(
         student_id=student_id,
