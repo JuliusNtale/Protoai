@@ -27,6 +27,8 @@ const STEPS: { phase: Phase; label: string; description: string }[] = [
 
 const HOLD_DURATION_MS = 1200
 const MONITOR_INTERVAL_MS = 700
+const MONITOR_REQUEST_TIMEOUT_MS = 6000
+const MAX_CONSECUTIVE_MONITOR_ERRORS = 4
 
 const PHASE_HINTS: Record<Phase, string> = {
   idle:       "Position your face in the frame",
@@ -53,6 +55,7 @@ export default function VerifyPage() {
   const [segmentsFilled, setSegmentsFilled] = useState<Set<string>>(new Set())
   const [scanProgress, setScanProgress] = useState(0)
   const [cameraReady, setCameraReady] = useState(false)
+  const [videoFeedReady, setVideoFeedReady] = useState(false)
   const [cameraError, setCameraError] = useState<string | null>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [fullscreenError, setFullscreenError] = useState<string | null>(null)
@@ -60,8 +63,10 @@ export default function VerifyPage() {
   const [isVerifyingIdentity, setIsVerifyingIdentity] = useState(false)
   const [identityError, setIdentityError] = useState<string | null>(null)
   const [phaseError, setPhaseError] = useState<string | null>(null)
+  const [monitorErrors, setMonitorErrors] = useState(0)
   const phaseHoldStartRef = useRef<number | null>(null)
   const monitorLockRef = useRef(false)
+  const monitorAbortRef = useRef<AbortController | null>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const networkStatus = useNetworkStatus()
@@ -88,6 +93,10 @@ export default function VerifyPage() {
   }
 
   function stopCameraStream() {
+    if (monitorAbortRef.current) {
+      monitorAbortRef.current.abort()
+      monitorAbortRef.current = null
+    }
     if (!streamRef.current) return
     streamRef.current.getTracks().forEach(track => track.stop())
     streamRef.current = null
@@ -133,6 +142,9 @@ export default function VerifyPage() {
 
     stopCameraStream()
     setCameraReady(false)
+    setVideoFeedReady(false)
+    setMonitorErrors(0)
+    setPhaseError(null)
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -186,6 +198,7 @@ export default function VerifyPage() {
       return next
     })
     setScanProgress(0)
+    setPhaseError(null)
     phaseHoldStartRef.current = null
     setPhaseIndex(i => Math.min(i + 1, PHASE_SEQUENCE.length - 1))
   }
@@ -203,12 +216,21 @@ export default function VerifyPage() {
 
   // strict phase validation loop driven by AI monitor output
   useEffect(() => {
-    if (isDone || !cameraReady || cameraError) return
+    if (isDone || !cameraReady || !videoFeedReady || cameraError) return
 
     const runValidation = async () => {
       if (monitorLockRef.current) return
       if (!videoRef.current) return
-      if (videoRef.current.readyState < 2) {
+      if (!streamRef.current || streamRef.current.getVideoTracks().every(t => t.readyState !== "live")) {
+        setPhaseError("Camera stream paused. Reconnect camera to continue.")
+        setCameraReady(false)
+        return
+      }
+      const hasRenderableFrame =
+        videoRef.current.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
+        videoRef.current.videoWidth > 0 &&
+        videoRef.current.videoHeight > 0
+      if (!hasRenderableFrame) {
         setPhaseError("Waiting for camera feed...")
         return
       }
@@ -224,18 +246,34 @@ export default function VerifyPage() {
 
         const rawSessionId = localStorage.getItem("session_id")
         const sessionId = rawSessionId && Number(rawSessionId) > 0 ? Number(rawSessionId) : 0
+        if (!sessionId) {
+          setPhaseError("No active exam session found. Restart from dashboard.")
+          return
+        }
         const aiBase = resolveAiBaseUrl()
-        const response = await fetch(`${aiBase}/monitor-frame`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ session_id: sessionId || 1, frame_base64: frameBase64 }),
-        })
+        const controller = new AbortController()
+        monitorAbortRef.current = controller
+        const timeout = setTimeout(() => controller.abort(), MONITOR_REQUEST_TIMEOUT_MS)
+        let response: Response
+        try {
+          response = await fetch(`${aiBase}/monitor-frame`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            signal: controller.signal,
+            body: JSON.stringify({ session_id: sessionId || 1, frame_base64: frameBase64 }),
+          })
+        } finally {
+          clearTimeout(timeout)
+        }
+        monitorAbortRef.current = null
         if (!response.ok) {
+          setMonitorErrors(prev => prev + 1)
           phaseHoldStartRef.current = null
           setScanProgress(0)
           setPhaseError("Unable to analyze camera frame. Keep camera active and retry.")
           return
         }
+        setMonitorErrors(0)
 
         const result = await response.json()
         const anomalies: string[] = Array.isArray(result?.anomalies) ? result.anomalies : []
@@ -272,6 +310,7 @@ export default function VerifyPage() {
           nextPhase()
         }
       } catch {
+        setMonitorErrors(prev => prev + 1)
         phaseHoldStartRef.current = null
         setScanProgress(0)
         setPhaseError("Live verification stream interrupted. Check network, HTTPS routing, and camera, then retry.")
@@ -288,7 +327,13 @@ export default function VerifyPage() {
     return () => {
       clearInterval(interval)
     }
-  }, [phase, isDone, cameraReady, cameraError])
+  }, [phase, isDone, cameraReady, videoFeedReady, cameraError])
+
+  useEffect(() => {
+    if (monitorErrors < MAX_CONSECUTIVE_MONITOR_ERRORS) return
+    setPhaseError("Verification stream unstable. Restarting camera...")
+    void startCamera()
+  }, [monitorErrors])
 
   // ─── SVG ring geometry ──────────────────────────────────────────────────────
   const cx = 140
@@ -353,7 +398,11 @@ export default function VerifyPage() {
   const completedStepPhases = Array.from(segmentsFilled)
 
   async function handleContinueToExam() {
-    if (!videoRef.current || !cameraReady || isVerifyingIdentity) return
+    if (!videoRef.current || !cameraReady || !videoFeedReady || isVerifyingIdentity) return
+    if (!isDone) {
+      setIdentityError("Complete all verification steps before continuing.")
+      return
+    }
 
     setIdentityError(null)
     setIsVerifyingIdentity(true)
@@ -595,6 +644,8 @@ export default function VerifyPage() {
                   autoPlay
                   muted
                   playsInline
+                  onLoadedData={() => setVideoFeedReady(true)}
+                  onCanPlay={() => setVideoFeedReady(true)}
                   className="absolute inset-0 h-full w-full object-cover"
                 />
               ) : (
