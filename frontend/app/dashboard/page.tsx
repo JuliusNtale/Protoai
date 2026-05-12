@@ -234,6 +234,7 @@ export default function StudentDashboard() {
         { label: "Sessions" },
         { label: "Reports" },
         { label: "Profile" },
+        { label: "Reset Password", href: "#reset-password" },
       ]}
       rightTopSlot={
         <div className="flex items-center gap-2">
@@ -364,6 +365,7 @@ export default function StudentDashboard() {
           </button>
         </DashboardPanel>
 
+        <div id="reset-password" className="scroll-mt-24">
         <DashboardPanel title="Change Password">
           <div className="flex items-center gap-2">
             <KeyRound className="h-5 w-5 text-blue-700" />
@@ -378,6 +380,7 @@ export default function StudentDashboard() {
             {saving ? "Updating..." : "Update Password"}
           </button>
         </DashboardPanel>
+        </div>
     </DashboardShell>
   )
 }

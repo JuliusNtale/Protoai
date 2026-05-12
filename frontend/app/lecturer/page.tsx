@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
-import { BookOpen, Plus, Users } from "lucide-react"
+import { BookOpen, KeyRound, LogOut, Plus, Users } from "lucide-react"
 import { getApiPath } from "@/lib/api-url"
 import { DashboardPanel, DashboardShell, MetricCard } from "@/components/dashboard-shell"
 
@@ -108,6 +108,10 @@ export default function LecturerDashboard() {
   const [correctAnswer, setCorrectAnswer] = useState("")
   const [marks, setMarks] = useState("1")
   const [editingQuestionId, setEditingQuestionId] = useState<number | null>(null)
+  const [currentPassword, setCurrentPassword] = useState("")
+  const [newPassword, setNewPassword] = useState("")
+  const [savingPassword, setSavingPassword] = useState(false)
+  const [passwordMsg, setPasswordMsg] = useState("")
 
   useEffect(() => {
     const rawToken = localStorage.getItem("token")
@@ -373,6 +377,44 @@ export default function LecturerDashboard() {
     }
   }
 
+  async function changePassword() {
+    setPasswordMsg("")
+    if (!currentPassword || !newPassword) {
+      setPasswordMsg("Current and new password are required.")
+      return
+    }
+    if (newPassword.length < 8) {
+      setPasswordMsg("New password must be at least 8 characters.")
+      return
+    }
+    setSavingPassword(true)
+    try {
+      const res = await fetch(getApiPath("/auth/change-password"), {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+      })
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setPasswordMsg(payload?.error?.message || "Could not update password.")
+        return
+      }
+      setCurrentPassword("")
+      setNewPassword("")
+      setPasswordMsg("Password updated successfully.")
+    } finally {
+      setSavingPassword(false)
+    }
+  }
+
+  function logout() {
+    localStorage.removeItem("token")
+    localStorage.removeItem("user")
+    localStorage.removeItem("session_id")
+    localStorage.removeItem("exam_id")
+    router.push("/")
+  }
+
   if (loading) {
     return (
       <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#eef2f7] p-6 text-slate-900">
@@ -400,8 +442,16 @@ export default function LecturerDashboard() {
         { label: "Questions" },
         { label: "Students" },
         { label: "Session Results" },
+        { label: "Reset Password", href: "#reset-password" },
       ]}
-      rightTopSlot={<Users className="h-5 w-5 text-slate-600" />}
+      rightTopSlot={
+        <div className="flex items-center gap-2">
+          <Users className="h-5 w-5 text-slate-600" />
+          <button onClick={logout} className="inline-flex items-center gap-1 rounded-md border px-3 py-1.5 text-sm font-semibold">
+            <LogOut className="h-4 w-4" /> Logout
+          </button>
+        </div>
+      }
     >
       {error && <p className="text-sm text-red-600">{error}</p>}
 
@@ -420,7 +470,16 @@ export default function LecturerDashboard() {
             <input value={newTitle} onChange={e => setNewTitle(e.target.value)} placeholder="Exam title" className="rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500 focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100" />
             <input value={newCourseCode} onChange={e => setNewCourseCode(e.target.value)} placeholder="Course code" className="rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500 focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100" />
             <input value={newDuration} onChange={e => setNewDuration(e.target.value)} placeholder="Duration minutes" className="rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500 focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100" />
-            <input value={newSchedule} onChange={e => setNewSchedule(e.target.value)} placeholder="Scheduled at ISO (optional)" className="rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500 focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100" />
+            <input
+              type="datetime-local"
+              value={newSchedule}
+              onChange={e => setNewSchedule(e.target.value)}
+              onClick={(e) => {
+                const el = e.currentTarget as HTMLInputElement & { showPicker?: () => void }
+                el.showPicker?.()
+              }}
+              className="cursor-pointer rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-900 focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100"
+            />
           </div>
           <button onClick={createExam} className="mt-3 rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#142145]">Create Exam</button>
         </DashboardPanel>
@@ -651,6 +710,35 @@ export default function LecturerDashboard() {
             </table>
           </div>
         </DashboardPanel>
+
+        <div id="reset-password" className="scroll-mt-24">
+        <DashboardPanel title="Change Password">
+          <div className="flex items-center gap-2">
+            <KeyRound className="h-5 w-5 text-blue-700" />
+            <h2 className="text-base font-semibold">Reset Password</h2>
+          </div>
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <input
+              type="password"
+              value={currentPassword}
+              onChange={e => setCurrentPassword(e.target.value)}
+              placeholder="Current password"
+              className="rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500 focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100"
+            />
+            <input
+              type="password"
+              value={newPassword}
+              onChange={e => setNewPassword(e.target.value)}
+              placeholder="New password"
+              className="rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500 focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100"
+            />
+          </div>
+          {passwordMsg && <p className="mt-2 text-sm text-slate-700">{passwordMsg}</p>}
+          <button onClick={changePassword} disabled={savingPassword} className="mt-3 rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#142145] disabled:opacity-60">
+            {savingPassword ? "Updating..." : "Update Password"}
+          </button>
+        </DashboardPanel>
+        </div>
     </DashboardShell>
   )
 }
