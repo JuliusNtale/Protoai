@@ -400,11 +400,15 @@ def list_course_students(course_code: str):
     if not exam_ids:
         return jsonify({"students": []}), 200
 
+    distinct_students = (
+        db.session.query(ExamSession.student_id.label("student_id"))
+        .filter(ExamSession.exam_id.in_(exam_ids))
+        .distinct()
+        .subquery()
+    )
     rows = (
         db.session.query(User.user_id, User.full_name, User.reg_number, User.email)
-        .join(ExamSession, ExamSession.student_id == User.user_id)
-        .filter(ExamSession.exam_id.in_(exam_ids))
-        .distinct(User.user_id)
+        .join(distinct_students, distinct_students.c.student_id == User.user_id)
         .order_by(User.full_name.asc())
         .all()
     )

@@ -205,6 +205,13 @@ function StudentDashboardInner() {
       router.push("/verify")
       return
     }
+    if (res.status === 409) {
+      const backendMessage = String(payload?.error?.message || "").toLowerCase()
+      if (backendMessage.includes("already has an active exam session")) {
+        setError("No active exam session found. Previous attempts are auto-submitted and cannot be resumed. Start a new assigned exam.")
+        return
+      }
+    }
     setError(payload?.error?.message || "Could not start exam.")
   }
 
