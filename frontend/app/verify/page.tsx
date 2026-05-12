@@ -289,6 +289,7 @@ export default function VerifyPage() {
         setIdentityError("No active exam session found. Start the exam again from dashboard.")
         return
       }
+      const sessionId = Number(rawSessionId)
 
       const parsed = JSON.parse(rawUser)
       const userId = Number(parsed.user_id ?? parsed.id)
@@ -314,6 +315,7 @@ export default function VerifyPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          session_id: sessionId,
           user_id: userId,
           image_base64: imageBase64,
         }),

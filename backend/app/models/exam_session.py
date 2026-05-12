@@ -13,6 +13,10 @@ class ExamSession(db.Model):
     submitted_at = db.Column(db.DateTime)
     session_status = db.Column(db.String(20), nullable=False, default="pending")
     identity_verified = db.Column(db.Boolean, nullable=False, default=False)
+    verification_score = db.Column(db.Float)
+    verified_at = db.Column(db.DateTime)
+    verification_method = db.Column(db.String(50))
+    verification_details = db.Column(db.JSON)
     warning_count = db.Column(db.Integer, nullable=False, default=0)
     score = db.Column(db.Numeric(5, 2))
 
