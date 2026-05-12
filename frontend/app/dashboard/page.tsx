@@ -50,6 +50,25 @@ type MyReportRow = {
   session_status: string
 }
 
+const DEGREE_PROGRAM_OPTIONS = [
+  "Bachelor of Science in Information Technology with Business Analytics",
+  "Bachelor of Science in Instructional Design and Information Technology (BSc IDIT)",
+  "Bachelor of Science in Multimedia Technology and Animation",
+  "Bachelor of Science in Computer Networks and Information Security Engineering (BSc CNISE)",
+  "Bachelor of Science in Computer Engineering (BSc CE)",
+  "Bachelor of Science in Computer Science (BSc CS)",
+  "Bachelor of Science in Software Engineering (BSc SE)",
+  "Bachelor of Science in Cyber Security and Digital Forensics Engineering (BSc CSDFE)",
+  "Bachelor of Science in Business Information Systems (BSc BIS)",
+  "Bachelor of Science in Multimedia Technology and Animation (BSc MTA)",
+  "Bachelor of Science in Telecommunication Engineering (BSc TE)",
+  "Bachelor of Science in Digital Content and Broadcasting Engineering (BSc DCBE)",
+  "Bachelor of Science in Information Systems (BSc IS)",
+  "Diploma in Cyber Security and Digital Forensics (Dip. CSDF)",
+  "Diploma in Educational Technology (Dip. ET)",
+  "Diploma in Information and Communication Technology (Dip. ICT)",
+]
+
 function badgeTone(value: string) {
   const normalized = value.toLowerCase()
   if (normalized === "completed" || normalized === "live") return "bg-emerald-50 text-emerald-700 border-emerald-200"
@@ -408,7 +427,12 @@ function StudentDashboardInner() {
             <div className="grid gap-3 md:grid-cols-2">
               <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email" className="rounded-md border border-border bg-background p-2 text-sm text-foreground" />
               <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="Phone number" className="rounded-md border border-border bg-background p-2 text-sm text-foreground" />
-              <input value={department} onChange={e => setDepartment(e.target.value)} placeholder="Course / Department" className="rounded-md border border-border bg-background p-2 text-sm text-foreground md:col-span-2" />
+              <select value={department} onChange={e => setDepartment(e.target.value)} className="rounded-md border border-border bg-background p-2 text-sm text-foreground md:col-span-2">
+                <option value="">Select Degree / Course Program</option>
+                {DEGREE_PROGRAM_OPTIONS.map((program) => (
+                  <option key={program} value={program}>{program}</option>
+                ))}
+              </select>
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
               <button onClick={() => void updateProfile()} className="rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white">Save Profile</button>
