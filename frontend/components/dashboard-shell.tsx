@@ -101,7 +101,7 @@ export function DashboardShell({
 
   return (
     <main className="min-h-screen bg-background p-4 text-foreground md:p-6">
-      <div className="mx-auto flex w-full overflow-hidden rounded-[28px] border border-border bg-card shadow-[0_18px_55px_rgba(15,23,42,0.08)] dark:shadow-[0_18px_55px_rgba(0,0,0,0.45)]">
+      <div className="mx-auto flex min-h-[calc(100vh-2rem)] w-full overflow-hidden rounded-[28px] border border-border bg-card shadow-[0_18px_55px_rgba(15,23,42,0.08)] dark:shadow-[0_18px_55px_rgba(0,0,0,0.45)] md:min-h-[calc(100vh-3rem)]">
         <aside className="hidden w-72 border-r border-border bg-muted/35 px-4 py-5 lg:block">
           <div className="px-2">
             <h2 className="text-lg font-semibold text-foreground">{appName}</h2>
@@ -129,7 +129,7 @@ export function DashboardShell({
           </nav>
         </aside>
 
-        <div className="min-w-0 flex-1">
+        <div className="flex min-h-full min-w-0 flex-1 flex-col">
           <header className="border-b border-border px-4 py-4 md:px-6">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
@@ -177,7 +177,7 @@ export function DashboardShell({
               </div>
             </div>
           </header>
-          <section className="space-y-5 px-4 py-5 md:px-6">{children}</section>
+          <section className="flex-1 space-y-5 px-4 py-5 md:px-6">{children}</section>
         </div>
       </div>
     </main>
