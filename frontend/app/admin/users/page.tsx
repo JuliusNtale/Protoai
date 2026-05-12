@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { KeyRound, LogOut, UserPlus, Users } from "lucide-react"
@@ -68,6 +68,8 @@ export default function AdminDashboard() {
   const [users, setUsers] = useState<ManagedUser[]>([])
   const [usersLoading, setUsersLoading] = useState(false)
   const [usersError, setUsersError] = useState("")
+  const [uploadingByUser, setUploadingByUser] = useState<Record<number, boolean>>({})
+  const [uploadMessage, setUploadMessage] = useState("")
   const [query, setQuery] = useState("")
   const [roleFilter, setRoleFilter] = useState<"all" | "student" | "lecturer">("all")
   const [activeFilter, setActiveFilter] = useState<"all" | "active" | "inactive">("all")
@@ -79,6 +81,7 @@ export default function AdminDashboard() {
   const [auditOffset, setAuditOffset] = useState(0)
   const [auditLimit] = useState(100)
   const [auditLastCount, setAuditLastCount] = useState(0)
+  const fileInputs = useRef<Record<number, HTMLInputElement | null>>({})
 
   useEffect(() => {
     const rawToken = localStorage.getItem("token")
@@ -351,6 +354,33 @@ export default function AdminDashboard() {
     await fetchAuditLogs()
   }
 
+  async function uploadBaselineImage(user: ManagedUser, file: File | null) {
+    if (!file) return
+    setUploadMessage("")
+    setUploadingByUser((prev) => ({ ...prev, [user.user_id]: true }))
+    try {
+      const body = new FormData()
+      body.append("image", file)
+      const res = await fetch(getApiPath(`/images/${user.user_id}`), {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body,
+      })
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setUploadMessage(payload?.error?.message || "Failed to upload baseline image.")
+        return
+      }
+      setUploadMessage(`Baseline photo updated for ${user.full_name}.`)
+      await fetchAuditLogs()
+    } finally {
+      setUploadingByUser((prev) => ({ ...prev, [user.user_id]: false }))
+      if (fileInputs.current[user.user_id]) {
+        fileInputs.current[user.user_id]!.value = ""
+      }
+    }
+  }
+
   const summary = useMemo(() => {
     const students = users.filter(u => u.role === "student").length
     const lecturers = users.filter(u => u.role === "lecturer").length
@@ -477,6 +507,7 @@ export default function AdminDashboard() {
             </button>
           </div>
           {usersError && <p className="text-sm text-red-600">{usersError}</p>}
+          {uploadMessage && <p className="text-sm text-emerald-700">{uploadMessage}</p>}
           <div className="overflow-x-auto rounded-xl border border-slate-200">
             <table className="w-full text-sm">
               <thead>
@@ -486,6 +517,7 @@ export default function AdminDashboard() {
                   <th>Login ID</th>
                   <th>Email</th>
                   <th>Status</th>
+                  <th>Baseline Photo</th>
                   <th>Actions</th>
                 </tr>
               </thead>
@@ -497,6 +529,32 @@ export default function AdminDashboard() {
                     <td className="font-mono">{user.username || user.registration_number}</td>
                     <td>{user.email}</td>
                     <td><span className={`rounded-full border px-2 py-1 text-xs font-medium ${statusBadge(user.is_active)}`}>{user.is_active ? "active" : "inactive"}</span></td>
+                    <td>
+                      {user.role === "student" ? (
+                        <div className="flex items-center gap-2">
+                          <input
+                            ref={(el) => {
+                              fileInputs.current[user.user_id] = el
+                            }}
+                            type="file"
+                            accept="image/jpeg,image/png"
+                            className="hidden"
+                            onChange={(event) => {
+                              void uploadBaselineImage(user, event.target.files?.[0] ?? null)
+                            }}
+                          />
+                          <button
+                            onClick={() => fileInputs.current[user.user_id]?.click()}
+                            disabled={Boolean(uploadingByUser[user.user_id])}
+                            className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium hover:bg-slate-50 disabled:opacity-60"
+                          >
+                            {uploadingByUser[user.user_id] ? "Uploading..." : "Upload / Update"}
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-slate-500">N/A</span>
+                      )}
+                    </td>
                     <td>
                       <div className="flex flex-wrap gap-2">
                         <button onClick={() => toggleUserStatus(user)} className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium hover:bg-slate-50">
@@ -511,7 +569,7 @@ export default function AdminDashboard() {
                 ))}
                 {users.length === 0 && (
                   <tr>
-                    <td className="py-3 pl-3 text-slate-600" colSpan={6}>No users found.</td>
+                    <td className="py-3 pl-3 text-slate-600" colSpan={7}>No users found.</td>
                   </tr>
                 )}
               </tbody>

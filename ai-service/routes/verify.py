@@ -37,6 +37,39 @@ def _persist_verification(session_id: int, match: bool, confidence: float):
         return False, str(exc)
 
 
+def _load_registered_baseline_embedding(user_id: int, facenet):
+    response = requests.get(
+        f"{_BACKEND_URL}/api/images/internal/{user_id}/baseline",
+        headers={"X-Internal-Token": _AI_SERVICE_TOKEN},
+        timeout=8,
+    )
+    if not response.ok:
+        return None, f"Baseline image fetch failed: {response.status_code}"
+
+    payload = response.json()
+    baseline_base64 = payload.get("image_base64")
+    if not baseline_base64:
+        return None, "Baseline image payload missing image_base64"
+
+    try:
+        baseline_bgr = base64_to_numpy(baseline_base64)
+    except Exception:
+        return None, "Invalid baseline image payload"
+
+    baseline_face, _ = detect_and_crop_face(baseline_bgr)
+    if baseline_face is None:
+        return None, "No face detected in registered baseline image"
+
+    baseline_input = preprocess_for_facenet(baseline_face)
+    baseline_embedding = facenet.run(['embedding'], {'input': baseline_input})[0][0]
+    norm = np.linalg.norm(baseline_embedding)
+    if norm > 0:
+        baseline_embedding = baseline_embedding / norm
+
+    save_embedding(user_id, baseline_embedding)
+    return baseline_embedding, None
+
+
 @verify_bp.route('/verify-identity', methods=['POST'])
 def verify_identity():
     data = request.get_json(silent=True)
@@ -69,11 +102,10 @@ def verify_identity():
     stored = load_embedding(user_id)
 
     if stored is None:
-        # First call for this user — register their embedding
-        save_embedding(user_id, embedding)
-        if session_id is not None:
-            _persist_verification(int(session_id), True, 1.0)
-        return jsonify({'match': True, 'confidence': 1.0, 'registered': True}), 200
+        baseline_embedding, baseline_error = _load_registered_baseline_embedding(user_id, facenet)
+        if baseline_embedding is None:
+            return jsonify({"error": f"Unable to load registered face baseline: {baseline_error}"}), 422
+        stored = baseline_embedding
 
     confidence = cosine_similarity(embedding, stored)
     match = confidence >= _THRESHOLD
@@ -90,6 +122,7 @@ def verify_identity():
         'match': bool(match),
         'confidence': round(float(confidence), 4),
         'threshold': _THRESHOLD,
+        'registered': True,
         'backend_persisted': backend_persisted,
         'backend_persist_error': backend_persist_error,
     }), 200
