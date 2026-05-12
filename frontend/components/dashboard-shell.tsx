@@ -20,6 +20,8 @@ type DashboardShellProps = {
   subtitle?: string
   sidebarItems: SidebarItem[]
   rightTopSlot?: ReactNode
+  isExiting?: boolean
+  exitMessage?: string
   children: ReactNode
 }
 
@@ -37,6 +39,8 @@ export function DashboardShell({
   subtitle,
   sidebarItems,
   rightTopSlot,
+  isExiting = false,
+  exitMessage = "Signing out...",
   children,
 }: DashboardShellProps) {
   const router = useRouter()
@@ -100,7 +104,15 @@ export function DashboardShell({
   }
 
   return (
-    <main className="min-h-screen bg-background p-4 text-foreground md:p-6">
+    <main className="relative min-h-screen bg-background p-4 text-foreground md:p-6">
+      {isExiting ? (
+        <div className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center bg-background/70 backdrop-blur-sm">
+          <div className="rounded-2xl border border-border bg-card px-6 py-5 text-center shadow-xl">
+            <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            <p className="text-sm font-medium text-foreground">{exitMessage}</p>
+          </div>
+        </div>
+      ) : null}
       <div className="mx-auto flex min-h-[calc(100vh-2rem)] w-full overflow-hidden rounded-[28px] border border-border bg-card shadow-[0_18px_55px_rgba(15,23,42,0.08)] dark:shadow-[0_18px_55px_rgba(0,0,0,0.45)] md:min-h-[calc(100vh-3rem)]">
         <aside className="hidden w-72 border-r border-border bg-muted/35 px-4 py-5 lg:block">
           <div className="px-2">

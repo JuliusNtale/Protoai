@@ -104,9 +104,10 @@ export default function AdminDashboardSummary() {
           </button>
         </div>
       }
+      isExiting={isExiting}
+      exitMessage="Signing out of admin..."
     >
       {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
-      {isExiting && <p className="text-sm text-muted-foreground">Signing out...</p>}
       {loading ? (
         <DashboardPanel title="Loading Admin Dashboard">
           <div className="flex items-center gap-3 text-sm text-muted-foreground">

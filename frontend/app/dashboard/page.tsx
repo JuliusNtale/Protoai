@@ -243,8 +243,9 @@ function StudentDashboardInner() {
           <LogOut className="h-4 w-4" /> Logout
         </button>
       }
+      isExiting={isExiting}
+      exitMessage="Signing out of student account..."
     >
-      {isExiting ? <p className="text-sm text-muted-foreground">Signing out...</p> : null}
       {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
       {loading ? (
         <DashboardPanel title="Loading Student Dashboard">

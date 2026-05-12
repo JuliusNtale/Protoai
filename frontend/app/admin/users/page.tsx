@@ -226,10 +226,9 @@ export default function AdminUsersPage() {
           <LogOut className="h-4 w-4" /> Logout
         </button>
       }
+      isExiting={isExiting}
+      exitMessage="Signing out of admin..."
     >
-      {isExiting ? (
-        <div className="rounded-xl border border-border bg-card p-3 text-sm text-muted-foreground animate-pulse">Signing out...</div>
-      ) : null}
       {loadingMe ? (
         <DashboardPanel title="Loading Users">
           <div className="flex items-center gap-3 text-sm text-muted-foreground">

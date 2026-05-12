@@ -63,10 +63,9 @@ export default function AdminCredentialsPage() {
           <LogOut className="h-4 w-4" /> Logout
         </button>
       }
+      isExiting={isExiting}
+      exitMessage="Signing out of admin..."
     >
-      {isExiting ? (
-        <div className="rounded-xl border border-border bg-card p-3 text-sm text-muted-foreground animate-pulse">Signing out...</div>
-      ) : null}
       {loading ? (
         <DashboardPanel title="Loading Credentials">
           <div className="flex items-center gap-3 text-sm text-muted-foreground">
