@@ -25,15 +25,8 @@ const STEPS: { phase: Phase; label: string; description: string }[] = [
   { phase: "move_right", label: "Look Right",           description: "Slowly tilt your head to the right" },
 ]
 
-const PHASE_DURATIONS: Record<Phase, number> = {
-  idle: 2500,
-  scanning: 5000,
-  move_up: 4000,
-  move_down: 4000,
-  move_left: 4000,
-  move_right: 4000,
-  done: 0,
-}
+const HOLD_DURATION_MS = 1200
+const MONITOR_INTERVAL_MS = 700
 
 const PHASE_HINTS: Record<Phase, string> = {
   idle:       "Position your face in the frame",
@@ -66,8 +59,9 @@ export default function VerifyPage() {
   const [securityAlert, setSecurityAlert] = useState<string | null>(null)
   const [isVerifyingIdentity, setIsVerifyingIdentity] = useState(false)
   const [identityError, setIdentityError] = useState<string | null>(null)
-  const rafRef = useRef<number | null>(null)
-  const startRef = useRef<number | null>(null)
+  const [phaseError, setPhaseError] = useState<string | null>(null)
+  const phaseHoldStartRef = useRef<number | null>(null)
+  const monitorLockRef = useRef(false)
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const networkStatus = useNetworkStatus()
@@ -175,40 +169,112 @@ export default function VerifyPage() {
     }
   }, [])
 
-  // advance through phases
-  useEffect(() => {
-    if (isDone) return
-    const duration = PHASE_DURATIONS[phase]
-    if (duration === 0) return
-
-    // progress animation
-    startRef.current = null
+  function nextPhase() {
+    setSegmentsFilled(prev => {
+      const next = new Set(prev)
+      if (phase !== "idle") next.add(phase)
+      return next
+    })
     setScanProgress(0)
+    phaseHoldStartRef.current = null
+    setPhaseIndex(i => Math.min(i + 1, PHASE_SEQUENCE.length - 1))
+  }
 
-    const animate = (ts: number) => {
-      if (startRef.current === null) startRef.current = ts
-      const elapsed = ts - startRef.current
-      setScanProgress(Math.min(elapsed / duration, 1))
-      if (elapsed < duration) {
-        rafRef.current = requestAnimationFrame(animate)
+  function isPhaseConditionSatisfied(currentPhase: Phase, yaw: number, pitch: number, facePresent: boolean) {
+    if (!facePresent) return false
+    if (currentPhase === "idle") return true
+    if (currentPhase === "scanning") return Math.abs(yaw) <= 15 && Math.abs(pitch) <= 15
+    if (currentPhase === "move_up") return pitch <= -15
+    if (currentPhase === "move_down") return pitch >= 15
+    if (currentPhase === "move_left") return yaw <= -18
+    if (currentPhase === "move_right") return yaw >= 18
+    return false
+  }
+
+  // strict phase validation loop driven by AI monitor output
+  useEffect(() => {
+    if (isDone || !cameraReady || cameraError) return
+
+    const runValidation = async () => {
+      if (monitorLockRef.current) return
+      if (!videoRef.current) return
+      monitorLockRef.current = true
+      try {
+        const canvas = document.createElement("canvas")
+        canvas.width = 320
+        canvas.height = 240
+        const ctx = canvas.getContext("2d")
+        if (!ctx) return
+        ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height)
+        const frameBase64 = canvas.toDataURL("image/jpeg", 0.7)
+
+        const rawSessionId = localStorage.getItem("session_id")
+        const sessionId = rawSessionId && Number(rawSessionId) > 0 ? Number(rawSessionId) : 0
+        const aiBase = (process.env.NEXT_PUBLIC_AI_URL || "http://localhost:8000").replace(/\/+$/, "")
+        const response = await fetch(`${aiBase}/monitor-frame`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ session_id: sessionId || 1, frame_base64: frameBase64 }),
+        })
+        if (!response.ok) {
+          phaseHoldStartRef.current = null
+          setScanProgress(0)
+          setPhaseError("Unable to analyze camera frame. Keep camera active and retry.")
+          return
+        }
+
+        const result = await response.json()
+        const anomalies: string[] = Array.isArray(result?.anomalies) ? result.anomalies : []
+        const pose = result?.head_pose || {}
+        const yaw = Number(pose?.yaw || 0)
+        const pitch = Number(pose?.pitch || 0)
+        const facePresent = !anomalies.includes("face_absent")
+        const satisfied = isPhaseConditionSatisfied(phase, yaw, pitch, facePresent)
+
+        if (!facePresent) {
+          setPhaseError("Face not detected. Position your face inside the frame.")
+        } else if (!satisfied) {
+          if (phase === "scanning") setPhaseError("Hold your face still and centered.")
+          if (phase === "move_up") setPhaseError("Tilt your head up to continue.")
+          if (phase === "move_down") setPhaseError("Tilt your head down to continue.")
+          if (phase === "move_left") setPhaseError("Tilt your head left to continue.")
+          if (phase === "move_right") setPhaseError("Tilt your head right to continue.")
+        } else {
+          setPhaseError(null)
+        }
+
+        if (!satisfied) {
+          phaseHoldStartRef.current = null
+          setScanProgress(0)
+          return
+        }
+
+        const now = performance.now()
+        if (phaseHoldStartRef.current === null) phaseHoldStartRef.current = now
+        const elapsed = now - phaseHoldStartRef.current
+        setScanProgress(Math.min(elapsed / HOLD_DURATION_MS, 1))
+
+        if (elapsed >= HOLD_DURATION_MS) {
+          nextPhase()
+        }
+      } catch {
+        phaseHoldStartRef.current = null
+        setScanProgress(0)
+        setPhaseError("Live verification stream interrupted. Check network/camera and retry.")
+      } finally {
+        monitorLockRef.current = false
       }
     }
-    rafRef.current = requestAnimationFrame(animate)
 
-    const timer = setTimeout(() => {
-      setSegmentsFilled(prev => {
-        const next = new Set(prev)
-        if (phase !== "idle") next.add(phase)
-        return next
-      })
-      setPhaseIndex(i => i + 1)
-    }, duration)
+    const interval = setInterval(() => {
+      void runValidation()
+    }, MONITOR_INTERVAL_MS)
+    void runValidation()
 
     return () => {
-      clearTimeout(timer)
-      if (rafRef.current) cancelAnimationFrame(rafRef.current)
+      clearInterval(interval)
     }
-  }, [phase, isDone])
+  }, [phase, isDone, cameraReady, cameraError])
 
   // ─── SVG ring geometry ──────────────────────────────────────────────────────
   const cx = 140
@@ -592,6 +658,8 @@ export default function VerifyPage() {
               )}
               {cameraError ? (
                 <p className="text-xs text-red-400">{cameraError}</p>
+              ) : phaseError ? (
+                <p className="text-xs text-amber-300">{phaseError}</p>
               ) : null}
             </>
           )}
