@@ -1,9 +1,11 @@
 "use client"
 
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { Search } from "lucide-react"
-import type { ReactNode } from "react"
+import { useEffect, useRef, useState, type ReactNode } from "react"
 import { ThemeToggle } from "@/components/theme-toggle"
+import { getApiPath } from "@/lib/api-url"
 
 type SidebarItem = {
   label: string
@@ -21,6 +23,14 @@ type DashboardShellProps = {
   children: ReactNode
 }
 
+type SearchResultItem = {
+  type: string
+  id: number
+  title: string
+  subtitle: string
+  href: string
+}
+
 export function DashboardShell({
   appName,
   title,
@@ -29,6 +39,66 @@ export function DashboardShell({
   rightTopSlot,
   children,
 }: DashboardShellProps) {
+  const router = useRouter()
+  const [query, setQuery] = useState("")
+  const [results, setResults] = useState<SearchResultItem[]>([])
+  const [searching, setSearching] = useState(false)
+  const [open, setOpen] = useState(false)
+  const searchContainerRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    function handleOutsideClick(event: MouseEvent) {
+      if (!searchContainerRef.current?.contains(event.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener("mousedown", handleOutsideClick)
+    return () => document.removeEventListener("mousedown", handleOutsideClick)
+  }, [])
+
+  useEffect(() => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null
+    const trimmed = query.trim()
+    if (!token || trimmed.length < 2) {
+      setResults([])
+      setSearching(false)
+      return
+    }
+
+    const controller = new AbortController()
+    const timeout = setTimeout(async () => {
+      try {
+        setSearching(true)
+        const res = await fetch(`${getApiPath("/search")}?q=${encodeURIComponent(trimmed)}&limit=12`, {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: controller.signal,
+        })
+        const payload = await res.json().catch(() => ({}))
+        if (!res.ok) {
+          setResults([])
+          return
+        }
+        setResults(payload.results || [])
+        setOpen(true)
+      } catch {
+        setResults([])
+      } finally {
+        setSearching(false)
+      }
+    }, 220)
+
+    return () => {
+      clearTimeout(timeout)
+      controller.abort()
+    }
+  }, [query])
+
+  function onSelect(result: SearchResultItem) {
+    setOpen(false)
+    setQuery("")
+    router.push(result.href)
+  }
+
   return (
     <main className="min-h-screen bg-background p-4 text-foreground md:p-6">
       <div className="mx-auto flex w-full overflow-hidden rounded-[28px] border border-border bg-card shadow-[0_18px_55px_rgba(15,23,42,0.08)] dark:shadow-[0_18px_55px_rgba(0,0,0,0.45)]">
@@ -67,14 +137,41 @@ export function DashboardShell({
                 {subtitle ? <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p> : null}
               </div>
               <div className="flex items-center gap-3">
-                <label className="hidden items-center gap-2 rounded-xl border border-border bg-muted/50 px-3 py-2 text-sm text-muted-foreground md:flex">
-                  <Search className="h-4 w-4" />
-                  <input
-                    readOnly
-                    placeholder="Search"
-                    className="w-44 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
-                  />
-                </label>
+                <div ref={searchContainerRef} className="relative hidden md:block">
+                  <label className="flex items-center gap-2 rounded-xl border border-border bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
+                    <Search className="h-4 w-4" />
+                    <input
+                      value={query}
+                      onChange={(event) => setQuery(event.target.value)}
+                      onFocus={() => setOpen(results.length > 0)}
+                      placeholder="Search exams, users, sessions..."
+                      className="w-64 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+                    />
+                  </label>
+                  {open ? (
+                    <div className="absolute right-0 z-30 mt-2 w-[30rem] overflow-hidden rounded-xl border border-border bg-card shadow-xl">
+                      {searching ? (
+                        <div className="px-3 py-2 text-sm text-muted-foreground">Searching...</div>
+                      ) : results.length === 0 ? (
+                        <div className="px-3 py-2 text-sm text-muted-foreground">No results</div>
+                      ) : (
+                        <ul className="max-h-80 overflow-y-auto">
+                          {results.map((result) => (
+                            <li key={`${result.type}-${result.id}`}>
+                              <button
+                                onClick={() => onSelect(result)}
+                                className="w-full border-b border-border px-3 py-2 text-left transition-colors hover:bg-accent last:border-b-0"
+                              >
+                                <p className="text-sm font-medium text-foreground">{result.title}</p>
+                                <p className="text-xs text-muted-foreground">{result.subtitle}</p>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
                 <ThemeToggle />
                 {rightTopSlot}
               </div>
