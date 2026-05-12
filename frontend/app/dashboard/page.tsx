@@ -226,17 +226,6 @@ function StudentDashboardInner() {
 
   const completed = useMemo(() => sessions.filter(s => s.session_status === "completed").length, [sessions])
 
-  if (loading) {
-    return (
-      <main className="min-h-screen bg-background p-6 text-foreground">
-        <div className="mx-auto w-full max-w-3xl rounded-3xl border border-border bg-card p-8 text-center">
-          <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-          <h1 className="text-xl font-semibold">Loading Student Dashboard</h1>
-        </div>
-      </main>
-    )
-  }
-
   return (
     <DashboardShell
       appName="ProctorAI Student"
@@ -257,7 +246,17 @@ function StudentDashboardInner() {
     >
       {isExiting ? <p className="text-sm text-muted-foreground">Signing out...</p> : null}
       {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
+      {loading ? (
+        <DashboardPanel title="Loading Student Dashboard">
+          <div className="flex items-center gap-3 text-sm text-muted-foreground">
+            <span className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            Preparing your data...
+          </div>
+        </DashboardPanel>
+      ) : null}
 
+      {!loading ? (
+      <>
       {tab === "dashboard" ? (
         <>
           <section className="grid gap-3 md:grid-cols-3">
@@ -399,6 +398,8 @@ function StudentDashboardInner() {
           </DashboardPanel>
         </>
       ) : null}
+      </>
+      ) : null}
     </DashboardShell>
   )
 }
@@ -407,12 +408,19 @@ export default function StudentDashboardPage() {
   return (
     <Suspense
       fallback={
-        <main className="min-h-screen bg-background p-6 text-foreground">
-          <div className="mx-auto w-full max-w-3xl rounded-3xl border border-border bg-card p-8 text-center">
-            <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-            <h1 className="text-xl font-semibold">Loading Student Dashboard</h1>
-          </div>
-        </main>
+        <DashboardShell
+          appName="ProctorAI Student"
+          title="Dashboard"
+          subtitle=""
+          sidebarItems={[]}
+        >
+          <DashboardPanel title="Loading Student Dashboard">
+            <div className="flex items-center gap-3 text-sm text-muted-foreground">
+              <span className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+              Preparing your data...
+            </div>
+          </DashboardPanel>
+        </DashboardShell>
       }
     >
       <StudentDashboardInner />

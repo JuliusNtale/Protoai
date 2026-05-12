@@ -420,22 +420,6 @@ function LecturerDashboardInner() {
     router.push("/")
   }
 
-  if (loading) {
-    return (
-      <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background p-6 text-foreground">
-        <div className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-blue-200/40 blur-3xl dark:bg-blue-500/15" />
-        <div className="pointer-events-none absolute -bottom-24 -right-20 h-80 w-80 rounded-full bg-indigo-200/30 blur-3xl dark:bg-indigo-500/15" />
-        <div className="relative w-full max-w-md rounded-3xl border border-border bg-card/95 p-8 text-center shadow-[0_24px_70px_rgba(15,23,42,0.12)] backdrop-blur dark:shadow-[0_24px_70px_rgba(0,0,0,0.45)]">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#1a2d5a]/10">
-            <span className="absolute h-8 w-8 animate-spin rounded-full border-2 border-[#1a2d5a] border-t-transparent" />
-            <span className="absolute h-12 w-12 animate-[spin_2.2s_linear_infinite_reverse] rounded-full border-2 border-blue-300/70 border-b-transparent" />
-          </div>
-          <h1 className="text-xl font-semibold tracking-tight text-foreground">Loading Lecturer Dashboard</h1>
-        </div>
-      </main>
-    )
-  }
-
   return (
     <DashboardShell
       appName="ProctorAI Lecturer"
@@ -459,7 +443,17 @@ function LecturerDashboardInner() {
     >
       {isExiting ? <p className="text-sm text-muted-foreground">Signing out...</p> : null}
       {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+      {loading ? (
+        <DashboardPanel title="Loading Lecturer Dashboard">
+          <div className="flex items-center gap-3 text-sm text-muted-foreground">
+            <span className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            Preparing your dashboard...
+          </div>
+        </DashboardPanel>
+      ) : null}
 
+      {!loading ? (
+      <>
         {tab === "dashboard" && (
           <>
         <section className="grid gap-3 md:grid-cols-3">
@@ -776,6 +770,8 @@ function LecturerDashboardInner() {
         </DashboardPanel>
         </div>
         )}
+      </>
+      ) : null}
     </DashboardShell>
   )
 }
@@ -784,12 +780,19 @@ export default function LecturerDashboard() {
   return (
     <Suspense
       fallback={
-        <main className="min-h-screen bg-background p-6 text-foreground">
-          <div className="mx-auto w-full max-w-3xl rounded-3xl border border-border bg-card p-8 text-center">
-            <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-            <h1 className="text-xl font-semibold">Loading Lecturer Dashboard</h1>
-          </div>
-        </main>
+        <DashboardShell
+          appName="ProctorAI Lecturer"
+          title="Lecturer Dashboard"
+          subtitle=""
+          sidebarItems={[]}
+        >
+          <DashboardPanel title="Loading Lecturer Dashboard">
+            <div className="flex items-center gap-3 text-sm text-muted-foreground">
+              <span className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+              Preparing your dashboard...
+            </div>
+          </DashboardPanel>
+        </DashboardShell>
       }
     >
       <LecturerDashboardInner />
