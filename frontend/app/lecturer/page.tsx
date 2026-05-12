@@ -543,7 +543,12 @@ function LecturerDashboardInner() {
                       </select>
                     </td>
                     <td>
-                      <button onClick={() => editExam(exam)} className="rounded-md border border-slate-300 px-2 py-1 text-xs font-medium hover:bg-slate-50">Edit</button>
+                      <button
+                        onClick={() => editExam(exam)}
+                        className="rounded-md border border-border bg-card px-2 py-1 text-xs font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                      >
+                        Edit
+                      </button>
                     </td>
                     <td>
                       <button onClick={() => deleteExam(exam)} className="rounded-md border border-red-200 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50">

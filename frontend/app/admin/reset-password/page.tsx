@@ -166,7 +166,10 @@ export default function AdminResetPasswordPage() {
                   <td className="font-mono">{u.username || u.registration_number}</td>
                   <td>{u.email}</td>
                   <td>
-                    <button onClick={() => void resetUserPassword(u)} className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium hover:bg-slate-50">
+                    <button
+                      onClick={() => void resetUserPassword(u)}
+                      className="rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                    >
                       Reset Temporary Password
                     </button>
                   </td>

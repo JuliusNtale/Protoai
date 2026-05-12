@@ -325,7 +325,7 @@ export default function AdminUsersPage() {
                         <button
                           onClick={() => fileInputs.current[user.user_id]?.click()}
                           disabled={Boolean(uploadingByUser[user.user_id])}
-                          className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium hover:bg-slate-50 disabled:opacity-60"
+                          className="rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:opacity-60"
                         >
                           {uploadingByUser[user.user_id] ? "Uploading..." : "Upload / Update"}
                         </button>
@@ -335,7 +335,10 @@ export default function AdminUsersPage() {
                     )}
                   </td>
                   <td>
-                    <button onClick={() => void toggleUserStatus(user)} className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium hover:bg-slate-50">
+                    <button
+                      onClick={() => void toggleUserStatus(user)}
+                      className="rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                    >
                       {user.is_active ? "Deactivate" : "Activate"}
                     </button>
                   </td>
