@@ -18,6 +18,7 @@ import {
 import { SystemStatusIndicators } from "@/components/system-status-indicators"
 import { useCameraStatus } from "@/hooks/use-camera-status"
 import { useNetworkStatus } from "@/hooks/use-network-status"
+import { ThemeToggle } from "@/components/theme-toggle"
 
 const ORIENT_SECONDS = 5 * 60 // 5 minutes
 
@@ -122,7 +123,7 @@ export default function OrientPage() {
 
   return (
     <div
-      className="min-h-screen bg-[#f0f2f5]"
+      className="min-h-screen bg-[#f0f2f5] dark:bg-slate-950"
       style={{ fontFamily: "var(--font-sans, system-ui, sans-serif)" }}
     >
       {/* ── Top bar ── */}
@@ -146,6 +147,7 @@ export default function OrientPage() {
 
         {/* System checks */}
         <div className="flex items-center gap-3">
+          <ThemeToggle className="border-white/25 bg-white/10 text-white hover:bg-white/20" />
           <SystemStatusIndicators
             camera={cameraStatus}
             network={networkStatus}

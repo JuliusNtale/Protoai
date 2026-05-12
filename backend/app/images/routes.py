@@ -13,6 +13,27 @@ from app.models import FacialImage, User
 images_bp = Blueprint("images", __name__)
 
 
+def _save_uploaded_face_file(upload) -> tuple[str, str]:
+    content_type = (upload.content_type or "").lower()
+    if content_type not in {"image/jpeg", "image/jpg", "image/png"}:
+        raise ValueError("Only JPG or PNG images are allowed")
+
+    raw = upload.read()
+    if not raw:
+        raise ValueError("Uploaded image is empty")
+    if len(raw) > 5 * 1024 * 1024:
+        raise ValueError("Image must be 5MB or less")
+
+    storage_dir = os.path.join("storage", "faces")
+    os.makedirs(storage_dir, exist_ok=True)
+    ext = ".png" if content_type == "image/png" else ".jpg"
+    file_name = f"{uuid4().hex}{ext}"
+    file_path = os.path.join(storage_dir, file_name)
+    with open(file_path, "wb") as face_file:
+        face_file.write(raw)
+    return file_path, content_type
+
+
 @images_bp.get("/<int:user_id>")
 @jwt_required()
 def get_user_image(user_id):
@@ -46,23 +67,10 @@ def upload_user_image(user_id):
     if not upload:
         return jsonify({"error": {"message": "Missing image file in form-data field `image`"}}), 400
 
-    content_type = (upload.content_type or "").lower()
-    if content_type not in {"image/jpeg", "image/jpg", "image/png"}:
-        return jsonify({"error": {"message": "Only JPG or PNG images are allowed"}}), 400
-
-    raw = upload.read()
-    if not raw:
-        return jsonify({"error": {"message": "Uploaded image is empty"}}), 400
-    if len(raw) > 5 * 1024 * 1024:
-        return jsonify({"error": {"message": "Image must be 5MB or less"}}), 400
-
-    storage_dir = os.path.join("storage", "faces")
-    os.makedirs(storage_dir, exist_ok=True)
-    ext = ".png" if content_type == "image/png" else ".jpg"
-    file_name = f"{user.user_id}_{uuid4().hex}{ext}"
-    file_path = os.path.join(storage_dir, file_name)
-    with open(file_path, "wb") as face_file:
-        face_file.write(raw)
+    try:
+        file_path, content_type = _save_uploaded_face_file(upload)
+    except ValueError as exc:
+        return jsonify({"error": {"message": str(exc)}}), 400
 
     image = FacialImage(user_id=user.user_id, file_path=file_path, captured_at=datetime.utcnow())
     db.session.add(image)
@@ -88,6 +96,37 @@ def upload_user_image(user_id):
         ),
         201,
     )
+
+
+@images_bp.post("/me")
+@jwt_required()
+def upload_my_image():
+    user_id = int(get_jwt_identity())
+    user = db.session.get(User, user_id)
+    if not user:
+        return jsonify({"error": {"message": "User not found"}}), 404
+    if user.role != "student":
+        return jsonify({"error": {"message": "Only students can upload self baseline images"}}), 403
+
+    upload = request.files.get("image")
+    if not upload:
+        return jsonify({"error": {"message": "Missing image file in form-data field `image`"}}), 400
+    try:
+        file_path, content_type = _save_uploaded_face_file(upload)
+    except ValueError as exc:
+        return jsonify({"error": {"message": str(exc)}}), 400
+
+    image = FacialImage(user_id=user.user_id, file_path=file_path, captured_at=datetime.utcnow())
+    db.session.add(image)
+    db.session.flush()
+    log_audit(
+        action="student.baseline_uploaded",
+        actor_user_id=user.user_id,
+        target_user_id=user.user_id,
+        metadata={"image_id": image.image_id, "content_type": content_type},
+    )
+    db.session.commit()
+    return jsonify({"message": "Baseline image uploaded", "image_id": image.image_id}), 201
 
 
 @images_bp.get("/internal/<int:user_id>/baseline")

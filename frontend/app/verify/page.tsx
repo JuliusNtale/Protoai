@@ -8,6 +8,7 @@ import { SystemStatusIndicators } from "@/components/system-status-indicators"
 import { useBrowserLockdown } from "@/hooks/use-browser-lockdown"
 import { useNetworkStatus } from "@/hooks/use-network-status"
 import { CheckCircle2, Circle, Loader2 } from "lucide-react"
+import { ThemeToggle } from "@/components/theme-toggle"
 
 // ─── phase machine ────────────────────────────────────────────────────────────
 type Phase = "idle" | "scanning" | "move_up" | "move_down" | "move_left" | "move_right" | "done"
@@ -471,7 +472,10 @@ export default function VerifyPage() {
   }
 
   return (
-    <div className="flex min-h-screen bg-black select-none">
+    <div className="relative flex min-h-screen bg-black text-white select-none dark:bg-black dark:text-white">
+      <div className="absolute right-4 top-4 z-30">
+        <ThemeToggle className="border-white/20 bg-white/10 text-white hover:bg-white/20" />
+      </div>
 
       {/* ── Left step sidebar ── */}
       <aside className="hidden lg:flex flex-col justify-between w-72 xl:w-80 shrink-0 border-r border-white/5 px-8 py-10">

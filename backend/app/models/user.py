@@ -39,5 +39,6 @@ class User(db.Model):
             "must_change_password": self.must_change_password,
             "email": self.email,
             "phone_number": self.phone_number,
+            "department": self.department,
             "role": role_value,
         }

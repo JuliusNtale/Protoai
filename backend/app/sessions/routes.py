@@ -7,6 +7,7 @@ from flask_jwt_extended import get_jwt, get_jwt_identity, jwt_required
 from app.audit import log_audit
 from app.extensions import db
 from app.models import BehavioralLog, Exam, ExamSession, Question, SessionAnswer, User
+from app.models import FacialImage
 
 sessions_bp = Blueprint("sessions", __name__)
 VALID_EVENTS = {"gaze_away", "head_turned", "face_absent", "tab_switch", "multiple_faces"}
@@ -15,6 +16,30 @@ VALID_EVENTS = {"gaze_away", "head_turned", "face_absent", "tab_switch", "multip
 def _password_change_required(user_id: int) -> bool:
     user = db.session.get(User, user_id)
     return bool(user and user.must_change_password)
+
+
+def _student_profile_ready_for_verification(user: User) -> tuple[bool, str]:
+    if not user:
+        return False, "User not found"
+    if not (user.full_name or "").strip():
+        return False, "Complete your profile: full name is required."
+    if not (user.reg_number or "").strip():
+        return False, "Complete your profile: registration number is required."
+    if not (user.email or "").strip():
+        return False, "Complete your profile: email is required."
+    if not (user.phone_number or "").strip():
+        return False, "Complete your profile: phone number is required."
+    if not (user.department or "").strip():
+        return False, "Complete your profile: course/department is required."
+    has_image = (
+        FacialImage.query.filter_by(user_id=user.user_id)
+        .order_by(FacialImage.captured_at.desc())
+        .first()
+        is not None
+    )
+    if not has_image:
+        return False, "Upload your profile face image before starting an exam."
+    return True, ""
 
 
 @sessions_bp.post("/start")
@@ -39,6 +64,10 @@ def start_session():
             return jsonify({"error": {"message": "Exam has not started yet"}}), 409
 
     student_id = int(get_jwt_identity())
+    student = db.session.get(User, student_id)
+    ready, message = _student_profile_ready_for_verification(student)
+    if not ready:
+        return jsonify({"error": {"message": message}}), 409
     if _password_change_required(student_id):
         return jsonify({"error": {"message": "Password change required before exam start"}}), 403
     existing = ExamSession.query.filter_by(student_id=student_id, exam_id=exam.exam_id).first()

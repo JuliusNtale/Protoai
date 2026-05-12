@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { BookOpen, KeyRound, LogOut, Plus, Users } from "lucide-react"
 import { getApiPath } from "@/lib/api-url"
 import { DashboardPanel, DashboardShell, MetricCard } from "@/components/dashboard-shell"
@@ -74,14 +74,16 @@ function formatDateTime(value?: string | null) {
 
 function badgeTone(value: string) {
   const normalized = value.toLowerCase()
-  if (normalized === "completed" || normalized === "live" || normalized === "low") return "bg-emerald-50 text-emerald-700 border-emerald-200"
-  if (normalized === "scheduled" || normalized === "medium") return "bg-amber-50 text-amber-700 border-amber-200"
-  if (normalized === "high" || normalized === "locked") return "bg-red-50 text-red-700 border-red-200"
-  return "bg-slate-50 text-slate-700 border-slate-200"
+  if (normalized === "completed" || normalized === "live" || normalized === "low") return "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-900/50"
+  if (normalized === "scheduled" || normalized === "medium") return "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-900/50"
+  if (normalized === "high" || normalized === "locked") return "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/30 dark:text-red-300 dark:border-red-900/50"
+  return "bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700"
 }
 
 export default function LecturerDashboard() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const tab = (searchParams.get("tab") || "dashboard").toLowerCase()
   const [token, setToken] = useState("")
   const [me, setMe] = useState<MeUser | null>(null)
   const [exams, setExams] = useState<ExamRow[]>([])
@@ -112,6 +114,7 @@ export default function LecturerDashboard() {
   const [newPassword, setNewPassword] = useState("")
   const [savingPassword, setSavingPassword] = useState(false)
   const [passwordMsg, setPasswordMsg] = useState("")
+  const [isExiting, setIsExiting] = useState(false)
 
   useEffect(() => {
     const rawToken = localStorage.getItem("token")
@@ -407,7 +410,9 @@ export default function LecturerDashboard() {
     }
   }
 
-  function logout() {
+  async function logout() {
+    setIsExiting(true)
+    await new Promise((r) => setTimeout(r, 350))
     localStorage.removeItem("token")
     localStorage.removeItem("user")
     localStorage.removeItem("session_id")
@@ -417,15 +422,15 @@ export default function LecturerDashboard() {
 
   if (loading) {
     return (
-      <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#eef2f7] p-6 text-slate-900">
-        <div className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-blue-200/40 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-24 -right-20 h-80 w-80 rounded-full bg-indigo-200/30 blur-3xl" />
-        <div className="relative w-full max-w-md rounded-3xl border border-slate-200 bg-white/95 p-8 text-center shadow-[0_24px_70px_rgba(15,23,42,0.12)] backdrop-blur">
+      <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background p-6 text-foreground">
+        <div className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-blue-200/40 blur-3xl dark:bg-blue-500/15" />
+        <div className="pointer-events-none absolute -bottom-24 -right-20 h-80 w-80 rounded-full bg-indigo-200/30 blur-3xl dark:bg-indigo-500/15" />
+        <div className="relative w-full max-w-md rounded-3xl border border-border bg-card/95 p-8 text-center shadow-[0_24px_70px_rgba(15,23,42,0.12)] backdrop-blur dark:shadow-[0_24px_70px_rgba(0,0,0,0.45)]">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#1a2d5a]/10">
             <span className="absolute h-8 w-8 animate-spin rounded-full border-2 border-[#1a2d5a] border-t-transparent" />
             <span className="absolute h-12 w-12 animate-[spin_2.2s_linear_infinite_reverse] rounded-full border-2 border-blue-300/70 border-b-transparent" />
           </div>
-          <h1 className="text-xl font-semibold tracking-tight text-slate-900">Loading Lecturer Dashboard</h1>
+          <h1 className="text-xl font-semibold tracking-tight text-foreground">Loading Lecturer Dashboard</h1>
         </div>
       </main>
     )
@@ -437,30 +442,45 @@ export default function LecturerDashboard() {
       title="Lecturer Dashboard"
       subtitle={me?.full_name || ""}
       sidebarItems={[
-        { label: "Dashboard", active: true },
-        { label: "Exams" },
-        { label: "Questions" },
-        { label: "Students" },
-        { label: "Session Results" },
-        { label: "Reset Password", href: "#reset-password" },
+        { label: "Dashboard", href: "/lecturer", active: tab === "dashboard" },
+        { label: "Exams", href: "/lecturer?tab=exams", active: tab === "exams" },
+        { label: "Questions", href: "/lecturer?tab=questions", active: tab === "questions" },
+        { label: "Students", href: "/lecturer?tab=students", active: tab === "students" },
+        { label: "Session Results", href: "/lecturer?tab=results", active: tab === "results" },
+        { label: "Profile", href: "/lecturer?tab=profile", active: tab === "profile" },
       ]}
       rightTopSlot={
         <div className="flex items-center gap-2">
-          <Users className="h-5 w-5 text-slate-600" />
-          <button onClick={logout} className="inline-flex items-center gap-1 rounded-md border px-3 py-1.5 text-sm font-semibold">
+          <button onClick={logout} className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-3 py-1.5 text-sm font-semibold text-foreground">
             <LogOut className="h-4 w-4" /> Logout
           </button>
         </div>
       }
     >
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {isExiting ? <p className="text-sm text-muted-foreground">Signing out...</p> : null}
+      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
+        {tab === "dashboard" && (
+          <>
         <section className="grid gap-3 md:grid-cols-3">
           <MetricCard label="My Exams" value={exams.length} />
           <MetricCard label="Questions (Selected Exam)" value={questions.length} />
           <MetricCard label="Students (Selected Exam)" value={students.length} />
         </section>
+        <DashboardPanel title="Shortcuts">
+          <div className="flex flex-wrap gap-2">
+            <a href="/lecturer?tab=exams" className="rounded-md border px-3 py-2 text-sm font-semibold">Exams</a>
+            <a href="/lecturer?tab=questions" className="rounded-md border px-3 py-2 text-sm font-semibold">Questions</a>
+            <a href="/lecturer?tab=students" className="rounded-md border px-3 py-2 text-sm font-semibold">Students</a>
+            <a href="/lecturer?tab=results" className="rounded-md border px-3 py-2 text-sm font-semibold">Session Results</a>
+            <a href="/lecturer?tab=profile" className="rounded-md border px-3 py-2 text-sm font-semibold">Profile</a>
+          </div>
+        </DashboardPanel>
+          </>
+        )}
 
+        {tab === "exams" && (
+          <>
         <DashboardPanel title="Create Exam">
           <div className="flex items-center gap-2">
             <Plus className="h-5 w-5 text-blue-700" />
@@ -557,7 +577,10 @@ export default function LecturerDashboard() {
             </button>
           </div>
         </DashboardPanel>
+          </>
+        )}
 
+        {tab === "questions" && (
         <DashboardPanel title={`Question Builder ${selectedExam ? `- ${selectedExam.title}` : ""}`}>
           <div className="mt-4 grid gap-3 md:grid-cols-2">
             <select value={questionType} onChange={e => setQuestionType(e.target.value as "mcq" | "true_false")} className="rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-900 focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100">
@@ -614,7 +637,10 @@ export default function LecturerDashboard() {
             </table>
           </div>
         </DashboardPanel>
+        )}
 
+        {tab === "students" && (
+          <>
         <DashboardPanel title={`Enrolled Students ${selectedExam ? `- ${selectedExam.title}` : ""}`}>
           <div className="flex items-center gap-2">
             <Users className="h-5 w-5 text-blue-700" />
@@ -676,7 +702,10 @@ export default function LecturerDashboard() {
             </table>
           </div>
         </DashboardPanel>
+          </>
+        )}
 
+        {tab === "results" && (
         <DashboardPanel title="Session Results (Live Data)">
           <div className="mt-4 overflow-x-auto">
             <table className="w-full text-sm">
@@ -710,8 +739,10 @@ export default function LecturerDashboard() {
             </table>
           </div>
         </DashboardPanel>
+        )}
 
-        <div id="reset-password" className="scroll-mt-24">
+        {tab === "profile" && (
+        <div className="scroll-mt-24">
         <DashboardPanel title="Change Password">
           <div className="flex items-center gap-2">
             <KeyRound className="h-5 w-5 text-blue-700" />
@@ -739,6 +770,7 @@ export default function LecturerDashboard() {
           </button>
         </DashboardPanel>
         </div>
+        )}
     </DashboardShell>
   )
 }

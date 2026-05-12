@@ -50,16 +50,18 @@ def update_profile():
         return jsonify({"error": {"message": "Email already exists"}}), 409
 
     phone_number = (data.get("phone_number") or "").strip()
+    department = (data.get("department") or "").strip()
 
     if email:
         user.email = email
     user.phone_number = phone_number or None
+    user.department = department or None
 
     log_audit(
         action="user.profile_updated",
         actor_user_id=user.user_id,
         target_user_id=user.user_id,
-        metadata={"email_changed": bool(email), "phone_changed": True},
+        metadata={"email_changed": bool(email), "phone_changed": True, "department_changed": True},
     )
     db.session.commit()
 

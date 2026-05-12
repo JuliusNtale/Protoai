@@ -182,7 +182,15 @@ export default function AdminLogsPage() {
   )
 
   if (loading) {
-    return <main className="min-h-screen bg-[#eef2f7] p-6 text-slate-900">Loading logs...</main>
+    return (
+      <main className="min-h-screen bg-background p-6 text-foreground">
+        <div className="mx-auto w-full max-w-3xl rounded-3xl border border-border bg-card p-8 text-center">
+          <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+          <h1 className="text-xl font-semibold">Loading Logs</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Fetching audit and session activity...</p>
+        </div>
+      </main>
+    )
   }
 
   return (
@@ -192,9 +200,10 @@ export default function AdminLogsPage() {
       subtitle="Review audit activity and exam session behavior with operational filters."
       sidebarItems={[
         { label: "Dashboard", href: "/admin" },
-        { label: "Users", href: "/admin" },
-        { label: "Credentials", href: "/admin" },
+        { label: "Users", href: "/admin/users" },
+        { label: "Credentials", href: "/admin/credentials" },
         { label: "Logs", active: true },
+        { label: "Reset Password", href: "/admin/reset-password" },
       ]}
       rightTopSlot={
         <div className="flex gap-2">
@@ -341,4 +350,3 @@ export default function AdminLogsPage() {
     </DashboardShell>
   )
 }
-

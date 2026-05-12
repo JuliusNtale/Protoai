@@ -6,6 +6,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Eye, EyeOff, ShieldCheck, Sparkles } from "lucide-react"
 import { getApiPath } from "@/lib/api-url"
+import { ThemeToggle } from "@/components/theme-toggle"
 
 export default function LoginPage() {
   const router = useRouter()
@@ -52,11 +53,14 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="relative h-screen overflow-hidden bg-[linear-gradient(165deg,#ebf2fb,#dfe9f8)] p-4 md:p-8">
-      <div className="pointer-events-none absolute left-8 top-8 h-52 w-52 rounded-full bg-blue-200/45 blur-3xl" />
-      <div className="pointer-events-none absolute bottom-8 right-8 h-64 w-64 rounded-full bg-cyan-200/40 blur-3xl" />
+    <main className="relative h-screen overflow-hidden bg-[linear-gradient(165deg,#ebf2fb,#dfe9f8)] p-4 text-foreground dark:bg-[linear-gradient(165deg,#0e1526,#141d33)] md:p-8">
+      <div className="pointer-events-none absolute left-8 top-8 h-52 w-52 rounded-full bg-blue-200/45 blur-3xl dark:bg-blue-500/15" />
+      <div className="pointer-events-none absolute bottom-8 right-8 h-64 w-64 rounded-full bg-cyan-200/40 blur-3xl dark:bg-cyan-500/15" />
+      <div className="absolute right-4 top-4 z-20">
+        <ThemeToggle />
+      </div>
 
-      <div className="mx-auto grid h-full max-w-6xl overflow-hidden rounded-[32px] border border-slate-200/80 bg-white/95 shadow-[0_24px_80px_rgba(15,23,42,0.14)] lg:grid-cols-[1.12fr_1fr]">
+      <div className="mx-auto grid h-full max-w-6xl overflow-hidden rounded-[32px] border border-slate-200/80 bg-white/95 shadow-[0_24px_80px_rgba(15,23,42,0.14)] dark:border-slate-700/80 dark:bg-slate-900/90 dark:shadow-[0_24px_80px_rgba(0,0,0,0.45)] lg:grid-cols-[1.12fr_1fr]">
         <section className="relative hidden overflow-hidden bg-[linear-gradient(160deg,#0f2b60,#0a1f45)] p-10 text-white lg:flex lg:flex-col lg:justify-between xl:p-12">
           <div className="pointer-events-none absolute -left-20 -top-20 h-60 w-60 rounded-full bg-blue-400/20 blur-2xl" />
           <div className="pointer-events-none absolute -bottom-24 -right-8 h-72 w-72 rounded-full bg-cyan-300/12 blur-2xl" />
@@ -86,13 +90,13 @@ export default function LoginPage() {
         </section>
 
         <section className="flex items-center justify-center p-6 md:p-10">
-          <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-7 shadow-[0_12px_35px_rgba(15,23,42,0.08)] md:p-8">
-            <h2 className="text-3xl font-semibold tracking-tight text-slate-900">Sign in</h2>
-            <p className="mt-1 text-sm text-slate-600">Access your examination portal securely</p>
+          <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-7 shadow-[0_12px_35px_rgba(15,23,42,0.08)] dark:border-slate-700 dark:bg-slate-900 md:p-8">
+            <h2 className="text-3xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">Sign in</h2>
+            <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">Access your examination portal securely</p>
 
             <form onSubmit={handleLogin} className="mt-7 space-y-4">
               <div className="space-y-1.5">
-                <label htmlFor="login-id" className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                <label htmlFor="login-id" className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
                   Login ID
                 </label>
                 <input
@@ -102,12 +106,12 @@ export default function LoginPage() {
                   onChange={(e) => setLoginId(e.target.value)}
                   placeholder="Reg No / Username / Email"
                   required
-                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-[#1a2d5a] focus:ring-4 focus:ring-blue-100"
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-[#1a2d5a] focus:ring-4 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:ring-blue-900/40"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <label htmlFor="password" className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                <label htmlFor="password" className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
                   Password
                 </label>
                 <div className="relative">
@@ -117,12 +121,12 @@ export default function LoginPage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
-                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 pr-10 text-sm text-slate-900 outline-none transition focus:border-[#1a2d5a] focus:ring-4 focus:ring-blue-100"
+                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 pr-10 text-sm text-slate-900 outline-none transition focus:border-[#1a2d5a] focus:ring-4 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:ring-blue-900/40"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
                     aria-label={showPassword ? "Hide password" : "Show password"}
                   >
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -136,7 +140,7 @@ export default function LoginPage() {
                 </Link>
               </div>
 
-              {error && <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+              {error && <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-300">{error}</p>}
 
               <button
                 type="submit"
@@ -147,7 +151,7 @@ export default function LoginPage() {
               </button>
             </form>
 
-            <p className="mt-5 text-center text-xs text-slate-500">
+            <p className="mt-5 text-center text-xs text-slate-500 dark:text-slate-400">
               By continuing, you agree to the university examination integrity policy.
             </p>
           </div>

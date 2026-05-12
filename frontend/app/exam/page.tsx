@@ -9,6 +9,7 @@ import { SystemStatusIndicators } from "@/components/system-status-indicators"
 import { useNetworkStatus } from "@/hooks/use-network-status"
 import { Calculator } from "@/components/calculator"
 import { getApiPath } from "@/lib/api-url"
+import { ThemeToggle } from "@/components/theme-toggle"
 
 type SocketLike = {
   on: (event: string, callback: (...args: any[]) => void) => void
@@ -485,7 +486,7 @@ export default function ExamPage() {
     : { label: "Checking", detail: "Preparing camera access", tone: "neutral" as const }
 
   return (
-    <div className="flex min-h-[100dvh] flex-col overflow-x-hidden bg-[#f4f5f7] text-gray-800" style={{ fontFamily: "var(--font-sans, system-ui, sans-serif)" }}>
+    <div className="flex min-h-[100dvh] flex-col overflow-x-hidden bg-[#f4f5f7] text-gray-800 dark:bg-slate-950 dark:text-slate-100" style={{ fontFamily: "var(--font-sans, system-ui, sans-serif)" }}>
 
       {/* ── Top bar ── */}
       <header className="shrink-0 border-b border-gray-200 bg-[#1a2d5a] px-3 py-2 text-white sm:px-4 sm:py-1.5">
@@ -507,6 +508,7 @@ export default function ExamPage() {
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3">
+            <ThemeToggle className="border-white/25 bg-white/10 text-white hover:bg-white/20" />
             <Calculator allowed={true} />
             <button
               type="button"
