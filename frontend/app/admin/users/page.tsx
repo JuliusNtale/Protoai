@@ -297,27 +297,27 @@ export default function AdminUsersPage() {
         {usersError && <p className="text-sm text-red-600">{usersError}</p>}
         {uploadMessage && <p className="text-sm text-emerald-700">{uploadMessage}</p>}
         <div className="overflow-x-auto rounded-xl border border-border">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[980px] text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/50 text-left text-foreground">
-                <th className="py-2 pl-3">Name</th>
-                <th>Role</th>
-                <th>Login ID</th>
-                <th>Email</th>
-                <th>Status</th>
-                <th>Baseline Photo</th>
-                <th>Actions</th>
+                <th className="px-4 py-3">Name</th>
+                <th className="px-4 py-3">Role</th>
+                <th className="px-4 py-3">Login ID</th>
+                <th className="px-4 py-3">Email</th>
+                <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3">Baseline Photo</th>
+                <th className="px-4 py-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
               {users.map((user) => (
                 <tr key={user.user_id} className="border-b last:border-b-0">
-                  <td className="py-2 pl-3 font-medium">{user.full_name}</td>
-                  <td>{user.role}</td>
-                  <td className="font-mono">{user.username || user.registration_number}</td>
-                  <td>{user.email}</td>
-                  <td><span className={`rounded-full border px-2 py-1 text-xs font-medium ${statusBadge(user.is_active)}`}>{user.is_active ? "active" : "inactive"}</span></td>
-                  <td>
+                  <td className="px-4 py-3 font-medium">{user.full_name}</td>
+                  <td className="px-4 py-3 align-middle">{user.role}</td>
+                  <td className="px-4 py-3 align-middle font-mono">{user.username || user.registration_number}</td>
+                  <td className="px-4 py-3 align-middle">{user.email}</td>
+                  <td className="px-4 py-3 align-middle"><span className={`rounded-full border px-2 py-1 text-xs font-medium ${statusBadge(user.is_active)}`}>{user.is_active ? "active" : "inactive"}</span></td>
+                  <td className="px-4 py-3 align-middle">
                     {user.role === "student" ? (
                       <div className="flex items-center gap-2">
                         <input
@@ -339,7 +339,7 @@ export default function AdminUsersPage() {
                       <span className="text-xs text-muted-foreground">N/A</span>
                     )}
                   </td>
-                  <td>
+                  <td className="px-4 py-3 text-right align-middle">
                     <button
                       onClick={() => void toggleUserStatus(user)}
                       className="rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
@@ -349,7 +349,7 @@ export default function AdminUsersPage() {
                   </td>
                 </tr>
               ))}
-              {users.length === 0 ? <tr><td className="py-3 pl-3 text-muted-foreground" colSpan={7}>No users found.</td></tr> : null}
+              {users.length === 0 ? <tr><td className="px-4 py-4 text-muted-foreground" colSpan={7}>No users found.</td></tr> : null}
             </tbody>
           </table>
         </div>
