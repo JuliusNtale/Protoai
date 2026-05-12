@@ -288,7 +288,7 @@ export default function AdminUsersPage() {
             <option value="inactive">inactive</option>
           </select>
         </div>
-        <div className="mt-3 flex gap-2">
+        <div className="mt-3 mb-5 flex gap-2">
           <button onClick={() => void fetchUsers()} className="rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" disabled={usersLoading}>
             {usersLoading ? "Loading..." : "Refresh"}
           </button>
