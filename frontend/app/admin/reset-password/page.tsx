@@ -109,6 +109,7 @@ export default function AdminResetPasswordPage() {
       appName="ProctorAI Admin"
       title="Reset Password"
       subtitle="Change your own password and reset temporary passwords for users."
+      avatarName="Admin"
       sidebarItems={[
         { label: "Dashboard", href: "/admin" },
         { label: "Users", href: "/admin/users" },

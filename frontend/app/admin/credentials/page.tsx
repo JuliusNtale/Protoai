@@ -51,6 +51,7 @@ export default function AdminCredentialsPage() {
       appName="ProctorAI Admin"
       title="Credentials"
       subtitle="Temporary credentials generated for newly provisioned or reset users."
+      avatarName="Admin"
       sidebarItems={[
         { label: "Dashboard", href: "/admin" },
         { label: "Users", href: "/admin/users" },

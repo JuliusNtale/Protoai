@@ -104,6 +104,7 @@ function StudentDashboardInner() {
   const [newPassword, setNewPassword] = useState("")
   const [passwordMsg, setPasswordMsg] = useState("")
   const [isExiting, setIsExiting] = useState(false)
+  const [baselineImageUrl, setBaselineImageUrl] = useState<string | null>(null)
 
   useEffect(() => {
     const rawToken = localStorage.getItem("token")
@@ -114,6 +115,12 @@ function StudentDashboardInner() {
     setToken(rawToken)
     void load(rawToken)
   }, [router])
+
+  useEffect(() => {
+    return () => {
+      if (baselineImageUrl) URL.revokeObjectURL(baselineImageUrl)
+    }
+  }, [baselineImageUrl])
 
   async function load(activeToken: string) {
     setLoading(true)
@@ -152,8 +159,29 @@ function StudentDashboardInner() {
       setExams(examsPayload.exams || [])
       setSessions(sessionsPayload.sessions || [])
       setReports(reportsPayload.reports || [])
+      await loadBaselineImage(activeToken)
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function loadBaselineImage(activeToken = token) {
+    try {
+      const res = await fetch(getApiPath("/images/me"), {
+        headers: { Authorization: `Bearer ${activeToken}` },
+      })
+      if (!res.ok) {
+        setBaselineImageUrl(null)
+        return
+      }
+      const blob = await res.blob()
+      const objectUrl = URL.createObjectURL(blob)
+      setBaselineImageUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev)
+        return objectUrl
+      })
+    } catch {
+      setBaselineImageUrl(null)
     }
   }
 
@@ -212,6 +240,7 @@ function StudentDashboardInner() {
         return
       }
       setProfileMsg("Baseline face image uploaded successfully.")
+      await loadBaselineImage(token)
     } finally {
       setUploadingImage(false)
     }
@@ -265,6 +294,8 @@ function StudentDashboardInner() {
         { label: "Reports", href: "/dashboard?tab=reports", active: tab === "reports" },
         { label: "Profile", href: "/dashboard?tab=profile", active: tab === "profile" },
       ]}
+      avatarName={me?.full_name}
+      avatarImageUrl={baselineImageUrl}
       rightTopSlot={
         <button onClick={() => void logout()} className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-3 py-1.5 text-sm font-semibold text-foreground">
           <LogOut className="h-4 w-4" /> Logout
@@ -442,6 +473,27 @@ function StudentDashboardInner() {
               </label>
             </div>
             {profileMsg ? <p className="mt-2 text-sm text-muted-foreground">{profileMsg}</p> : null}
+          </DashboardPanel>
+          <DashboardPanel title="Baseline Image" subtitle="This image is used for identity verification before exams.">
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="h-24 w-24 overflow-hidden rounded-xl border border-border bg-muted/40">
+                {baselineImageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={baselineImageUrl} alt="Baseline preview" className="h-full w-full object-cover" />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">No image</div>
+                )}
+              </div>
+              <div className="flex flex-col gap-2">
+                <p className="text-sm text-muted-foreground">
+                  Status: <span className="font-medium text-foreground">{baselineImageUrl ? "Uploaded" : "Not uploaded"}</span>
+                </p>
+                <label className="w-fit cursor-pointer rounded-md border px-3 py-1.5 text-sm font-semibold">
+                  {uploadingImage ? "Uploading..." : baselineImageUrl ? "Replace Image" : "Upload Image"}
+                  <input type="file" accept="image/jpeg,image/png" className="hidden" onChange={(e) => void uploadBaselineImage(e.target.files?.[0] ?? null)} />
+                </label>
+              </div>
+            </div>
           </DashboardPanel>
           <DashboardPanel title="Reset Password">
             <div className="grid gap-3 md:grid-cols-2">

@@ -87,6 +87,7 @@ export default function AdminDashboardSummary() {
       appName="ProctorAI Admin"
       title="Admin Dashboard"
       subtitle="Summary view. Use sidebar navigation for users, credentials, and logs operations."
+      avatarName="Admin"
       sidebarItems={[
         { label: "Dashboard", href: "/admin", active: true },
         { label: "Users", href: "/admin/users" },

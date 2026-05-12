@@ -434,6 +434,7 @@ function LecturerDashboardInner() {
       appName="ProctorAI Lecturer"
       title={tabTitleMap[tab] || "Lecturer Dashboard"}
       subtitle={me?.full_name || ""}
+      avatarName={me?.full_name}
       sidebarItems={[
         { label: "Dashboard", href: "/lecturer", active: tab === "dashboard" },
         { label: "Exams", href: "/lecturer?tab=exams", active: tab === "exams" },

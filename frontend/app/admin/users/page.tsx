@@ -214,6 +214,7 @@ export default function AdminUsersPage() {
       appName="ProctorAI Admin"
       title="Users"
       subtitle="Manage user accounts and student baseline images."
+      avatarName="Admin"
       sidebarItems={[
         { label: "Dashboard", href: "/admin" },
         { label: "Users", href: "/admin/users", active: true },

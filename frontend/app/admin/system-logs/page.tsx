@@ -197,6 +197,7 @@ export default function AdminLogsPage() {
       appName="ProctorAI Admin"
       title="System Logs"
       subtitle="Review audit activity and exam session behavior with operational filters."
+      avatarName="Admin"
       sidebarItems={[
         { label: "Dashboard", href: "/admin" },
         { label: "Users", href: "/admin/users" },

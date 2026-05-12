@@ -20,6 +20,8 @@ type DashboardShellProps = {
   subtitle?: string
   sidebarItems: SidebarItem[]
   rightTopSlot?: ReactNode
+  avatarName?: string
+  avatarImageUrl?: string | null
   isExiting?: boolean
   exitMessage?: string
   children: ReactNode
@@ -39,6 +41,8 @@ export function DashboardShell({
   subtitle,
   sidebarItems,
   rightTopSlot,
+  avatarName,
+  avatarImageUrl,
   isExiting = false,
   exitMessage = "Signing out...",
   children,
@@ -105,6 +109,13 @@ export function DashboardShell({
 
   const activeItem = sidebarItems.find((item) => item.active) || sidebarItems[0]
   const navItems = sidebarItems.filter((item) => item.href)
+
+  const avatarInitials = (avatarName || "")
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() || "")
+    .join("") || "U"
 
   return (
     <main className="relative min-h-screen bg-background p-4 text-foreground md:p-6">
@@ -193,6 +204,14 @@ export function DashboardShell({
                   ) : null}
                 </div>
                 <ThemeToggle />
+                <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border border-border bg-muted text-xs font-semibold text-foreground">
+                  {avatarImageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={avatarImageUrl} alt={avatarName || "User avatar"} className="h-full w-full object-cover" />
+                  ) : (
+                    <span>{avatarInitials}</span>
+                  )}
+                </div>
                 {rightTopSlot}
               </div>
             </div>

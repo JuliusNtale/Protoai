@@ -129,6 +129,18 @@ def upload_my_image():
     return jsonify({"message": "Baseline image uploaded", "image_id": image.image_id}), 201
 
 
+@images_bp.get("/me")
+@jwt_required()
+def get_my_image():
+    user_id = int(get_jwt_identity())
+    image = FacialImage.query.filter_by(user_id=user_id).order_by(FacialImage.captured_at.desc()).first()
+    if not image:
+        return jsonify({"error": {"message": "Image not found"}}), 404
+    if not os.path.isfile(image.file_path):
+        return jsonify({"error": {"message": "Stored image file is missing"}}), 404
+    return send_file(image.file_path, mimetype="image/jpeg")
+
+
 @images_bp.get("/internal/<int:user_id>/baseline")
 def get_user_image_internal(user_id):
     expected_token = os.getenv("AI_SERVICE_TOKEN", "").strip()
