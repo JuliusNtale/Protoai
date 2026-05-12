@@ -118,11 +118,11 @@ export function DashboardShell({
           <div className="px-2">
             <h2 className="text-lg font-semibold text-foreground">{appName}</h2>
           </div>
-          <nav className="mt-7 space-y-2.5">
+          <nav className="mt-7 space-y-3 px-1">
             {sidebarItems.map((item, index) => {
               const body = (
                 <div
-                  className={`flex items-center gap-3 rounded-xl px-3.5 py-3 text-sm transition ${
+                  className={`mx-1 flex items-center gap-3 rounded-xl px-4 py-3.5 text-sm transition ${
                     item.active ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:bg-card hover:text-foreground"
                   }`}
                 >

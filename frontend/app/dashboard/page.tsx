@@ -4,7 +4,7 @@ import Link from "next/link"
 import { Suspense } from "react"
 import { useEffect, useMemo, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { LogOut } from "lucide-react"
+import { BookOpenCheck, ClipboardList, FileText, LogOut, UserCircle2 } from "lucide-react"
 import { getApiPath } from "@/lib/api-url"
 import { DashboardPanel, DashboardShell, MetricCard } from "@/components/dashboard-shell"
 
@@ -32,6 +32,7 @@ type ExamRow = {
 
 type SessionRow = {
   session_id: number
+  exam_id?: number
   exam_title: string
   course_code: string
   session_status: string
@@ -225,12 +226,19 @@ function StudentDashboardInner() {
   }
 
   const completed = useMemo(() => sessions.filter(s => s.session_status === "completed").length, [sessions])
+  const sessionByExamId = useMemo(() => {
+    const map = new Map<number, SessionRow>()
+    for (const session of sessions) {
+      if (typeof session.exam_id === "number") map.set(session.exam_id, session)
+    }
+    return map
+  }, [sessions])
 
   return (
     <DashboardShell
       appName="ProctorAI Student"
       title={tab === "dashboard" ? "Dashboard" : tab.charAt(0).toUpperCase() + tab.slice(1)}
-      subtitle={`${me?.full_name || ""} (${me?.registration_number || ""})`}
+      subtitle={`Profile | ${me?.full_name || ""} (${me?.registration_number || ""}) | ${me?.department || "Course not set"}`}
       sidebarItems={[
         { label: "Dashboard", href: "/dashboard", active: tab === "dashboard" },
         { label: "Exams", href: "/dashboard?tab=exams", active: tab === "exams" },
@@ -265,12 +273,28 @@ function StudentDashboardInner() {
             <MetricCard label="Completed Sessions" value={completed} />
             <MetricCard label="Reports" value={reports.length} />
           </section>
-          <DashboardPanel title="Shortcuts">
-            <div className="flex flex-wrap gap-2">
-              <Link href="/dashboard?tab=exams" className="rounded-md border px-3 py-2 text-sm font-semibold">Go to Exams</Link>
-              <Link href="/dashboard?tab=sessions" className="rounded-md border px-3 py-2 text-sm font-semibold">Go to Sessions</Link>
-              <Link href="/dashboard?tab=reports" className="rounded-md border px-3 py-2 text-sm font-semibold">Go to Reports</Link>
-              <Link href="/dashboard?tab=profile" className="rounded-md border px-3 py-2 text-sm font-semibold">Go to Profile</Link>
+          <DashboardPanel title="Quick Shortcuts" subtitle="Move quickly between core student tasks.">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <Link href="/dashboard?tab=exams" className="rounded-xl border border-border bg-gradient-to-br from-blue-50 to-indigo-50 p-4 transition hover:shadow-md dark:from-slate-900 dark:to-slate-800">
+                <BookOpenCheck className="h-5 w-5 text-[#1a2d5a]" />
+                <p className="mt-2 text-sm font-semibold text-foreground">Exams</p>
+                <p className="mt-1 text-xs text-muted-foreground">Start your assigned exams.</p>
+              </Link>
+              <Link href="/dashboard?tab=sessions" className="rounded-xl border border-border bg-gradient-to-br from-emerald-50 to-teal-50 p-4 transition hover:shadow-md dark:from-slate-900 dark:to-slate-800">
+                <ClipboardList className="h-5 w-5 text-emerald-700" />
+                <p className="mt-2 text-sm font-semibold text-foreground">Sessions</p>
+                <p className="mt-1 text-xs text-muted-foreground">Track session status and score.</p>
+              </Link>
+              <Link href="/dashboard?tab=reports" className="rounded-xl border border-border bg-gradient-to-br from-amber-50 to-orange-50 p-4 transition hover:shadow-md dark:from-slate-900 dark:to-slate-800">
+                <FileText className="h-5 w-5 text-amber-700" />
+                <p className="mt-2 text-sm font-semibold text-foreground">Reports</p>
+                <p className="mt-1 text-xs text-muted-foreground">View anomalies and risk level.</p>
+              </Link>
+              <Link href="/dashboard?tab=profile" className="rounded-xl border border-border bg-gradient-to-br from-violet-50 to-fuchsia-50 p-4 transition hover:shadow-md dark:from-slate-900 dark:to-slate-800">
+                <UserCircle2 className="h-5 w-5 text-violet-700" />
+                <p className="mt-2 text-sm font-semibold text-foreground">Profile</p>
+                <p className="mt-1 text-xs text-muted-foreground">Update required verification info.</p>
+              </Link>
             </div>
           </DashboardPanel>
         </>
@@ -297,9 +321,15 @@ function StudentDashboardInner() {
                     <td>{formatDateTime(exam.scheduled_at)}</td>
                     <td><span className={`rounded-full border px-2 py-1 text-xs font-medium ${badgeTone(exam.status)}`}>{exam.status}</span></td>
                     <td className="pr-3">
+                      {(() => {
+                        const session = sessionByExamId.get(exam.exam_id)
+                        const started = Boolean(session && session.session_status !== "completed" && session.session_status !== "locked")
+                        return (
                       <button onClick={() => void startExam(exam.exam_id)} className="rounded-md bg-[#1a2d5a] px-3 py-1.5 text-xs font-semibold text-white">
-                        Start / Resume
+                        {started ? "Resume Exam" : "Start Exam"}
                       </button>
+                        )
+                      })()}
                     </td>
                   </tr>
                 ))}
