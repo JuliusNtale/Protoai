@@ -103,6 +103,9 @@ export function DashboardShell({
     router.push(result.href)
   }
 
+  const activeItem = sidebarItems.find((item) => item.active) || sidebarItems[0]
+  const navItems = sidebarItems.filter((item) => item.href)
+
   return (
     <main className="relative min-h-screen bg-background p-4 text-foreground md:p-6">
       {isExiting ? (
@@ -147,6 +150,11 @@ export function DashboardShell({
               <div>
                 <h1 className="text-xl font-semibold text-foreground">{title}</h1>
                 {subtitle ? <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p> : null}
+                <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground lg:hidden">
+                  <span>{appName}</span>
+                  <span>/</span>
+                  <span className="font-medium text-foreground">{activeItem?.label || title}</span>
+                </div>
               </div>
               <div className="flex items-center gap-3">
                 <div ref={searchContainerRef} className="relative hidden md:block">
@@ -188,6 +196,23 @@ export function DashboardShell({
                 {rightTopSlot}
               </div>
             </div>
+            {navItems.length > 0 ? (
+              <div className="mt-3 flex gap-2 overflow-x-auto pb-1 lg:hidden">
+                {navItems.map((item, index) => (
+                  <Link
+                    key={`${item.label}-${index}`}
+                    href={item.href as string}
+                    className={`whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                      item.active
+                        ? "border-transparent bg-[#1a2d5a] text-white"
+                        : "border-border bg-card text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                    }`}
+                  >
+                    {item.label}
+                  </Link>
+                ))}
+              </div>
+            ) : null}
           </header>
           <section className="flex-1 space-y-5 px-4 py-5 md:px-6">{children}</section>
         </div>
