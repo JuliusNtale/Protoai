@@ -1,9 +1,10 @@
 import base64
+import mimetypes
 import os
 from datetime import datetime
 from uuid import uuid4
 
-from flask import Blueprint, jsonify, request, send_file
+from flask import Blueprint, jsonify, request, send_file, make_response
 from flask_jwt_extended import get_jwt, get_jwt_identity, jwt_required
 
 from app.audit import log_audit
@@ -138,7 +139,12 @@ def get_my_image():
         return jsonify({"error": {"message": "Image not found"}}), 404
     if not os.path.isfile(image.file_path):
         return jsonify({"error": {"message": "Stored image file is missing"}}), 404
-    return send_file(image.file_path, mimetype="image/jpeg")
+    guessed_type, _ = mimetypes.guess_type(image.file_path)
+    mimetype = guessed_type or "application/octet-stream"
+    response = make_response(send_file(image.file_path, mimetype=mimetype))
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    return response
 
 
 @images_bp.get("/internal/<int:user_id>/baseline")

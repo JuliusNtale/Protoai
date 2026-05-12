@@ -167,8 +167,9 @@ function StudentDashboardInner() {
 
   async function loadBaselineImage(activeToken = token) {
     try {
-      const res = await fetch(getApiPath("/images/me"), {
+      const res = await fetch(`${getApiPath("/images/me")}?t=${Date.now()}`, {
         headers: { Authorization: `Bearer ${activeToken}` },
+        cache: "no-store",
       })
       if (!res.ok) {
         setBaselineImageUrl(null)
