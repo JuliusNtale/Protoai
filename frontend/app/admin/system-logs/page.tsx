@@ -192,21 +192,6 @@ export default function AdminLogsPage() {
     [sessionQuery, sessionRisk, sessions],
   )
 
-  if (loading) {
-    return (
-      <main className="min-h-screen bg-background p-6 text-foreground">
-        <div className="mx-auto w-full max-w-3xl rounded-3xl border border-border bg-card p-8 text-center shadow-[0_24px_70px_rgba(15,23,42,0.12)] dark:shadow-[0_24px_70px_rgba(0,0,0,0.45)]">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#1a2d5a]/10">
-            <span className="absolute h-8 w-8 animate-spin rounded-full border-2 border-[#1a2d5a] border-t-transparent" />
-            <span className="absolute h-12 w-12 animate-[spin_2.2s_linear_infinite_reverse] rounded-full border-2 border-blue-300/70 border-b-transparent" />
-          </div>
-          <h1 className="text-xl font-semibold">Loading Logs</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Fetching audit and session activity...</p>
-        </div>
-      </main>
-    )
-  }
-
   return (
     <DashboardShell
       appName="ProctorAI Admin"
@@ -237,8 +222,18 @@ export default function AdminLogsPage() {
       {isExiting ? (
         <div className="rounded-xl border border-border bg-card p-3 text-sm text-muted-foreground animate-pulse">Signing out...</div>
       ) : null}
+      {loading ? (
+        <DashboardPanel title="Loading Logs">
+          <div className="flex items-center gap-3 text-sm text-muted-foreground">
+            <span className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            Fetching audit and session activity...
+          </div>
+        </DashboardPanel>
+      ) : null}
       {error && <p className="text-sm text-red-600">{error}</p>}
 
+      {!loading ? (
+      <>
       <DashboardPanel title="Audit Logs" subtitle="Human-readable security actions with date/time and actor details.">
         <div className="grid gap-2 md:grid-cols-3">
           <input
@@ -364,6 +359,8 @@ export default function AdminLogsPage() {
           </table>
         </div>
       </DashboardPanel>
+      </>
+      ) : null}
     </DashboardShell>
   )
 }
