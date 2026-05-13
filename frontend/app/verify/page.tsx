@@ -64,6 +64,7 @@ export default function VerifyPage() {
   const [isVerifyingIdentity, setIsVerifyingIdentity] = useState(false)
   const [identityError, setIdentityError] = useState<string | null>(null)
   const [phaseError, setPhaseError] = useState<string | null>(null)
+  const [telemetry, setTelemetry] = useState<{ yaw: number; pitch: number; anomalies: string[] } | null>(null)
   const [monitorErrors, setMonitorErrors] = useState(0)
   const phaseHoldStartRef = useRef<number | null>(null)
   const monitorLockRef = useRef(false)
@@ -224,7 +225,8 @@ export default function VerifyPage() {
   function isPhaseConditionSatisfied(currentPhase: Phase, yaw: number, pitch: number, facePresent: boolean) {
     if (!facePresent) return false
     if (currentPhase === "idle") return true
-    if (currentPhase === "scanning") return Math.abs(yaw) <= 15 && Math.abs(pitch) <= 15
+    // Face detection should verify stable face presence without over-strict pose gating.
+    if (currentPhase === "scanning") return true
     if (currentPhase === "move_up") return pitch <= -15
     if (currentPhase === "move_down") return pitch >= 15
     if (currentPhase === "move_left") return yaw <= -18
@@ -298,6 +300,7 @@ export default function VerifyPage() {
         const pose = result?.head_pose || {}
         const yaw = Number(pose?.yaw || 0)
         const pitch = Number(pose?.pitch || 0)
+        setTelemetry({ yaw, pitch, anomalies })
         const facePresent = !anomalies.includes("face_absent")
         const satisfied = isPhaseConditionSatisfied(phase, yaw, pitch, facePresent)
 
@@ -746,6 +749,11 @@ export default function VerifyPage() {
                 <p className="text-xs text-red-400">{cameraError}</p>
               ) : phaseError ? (
                 <p className="text-xs text-amber-300">{phaseError}</p>
+              ) : null}
+              {telemetry ? (
+                <p className="text-[11px] text-zinc-500">
+                  yaw {telemetry.yaw.toFixed(1)} | pitch {telemetry.pitch.toFixed(1)} | {telemetry.anomalies.join(", ") || "no_anomalies"}
+                </p>
               ) : null}
             </>
           )}
