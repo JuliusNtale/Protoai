@@ -103,6 +103,21 @@ export default function VerifyPage() {
     streamRef.current = null
   }
 
+  async function attachStreamToVideo() {
+    const video = videoRef.current
+    const stream = streamRef.current
+    if (!video || !stream) return
+    if (video.srcObject !== stream) {
+      video.srcObject = stream
+    }
+    try {
+      await video.play()
+      setVideoFeedReady(true)
+    } catch {
+      setVideoFeedReady(false)
+    }
+  }
+
   async function requestFullscreenMode() {
     const element = document.documentElement
     if (!element) return
@@ -155,10 +170,7 @@ export default function VerifyPage() {
       streamRef.current = stream
       setCameraError(null)
       setCameraReady(true)
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream
-        await videoRef.current.play()
-      }
+      await attachStreamToVideo()
     } catch (error) {
       if (error instanceof DOMException && error.name === "NotAllowedError") {
         setCameraError("Camera permission denied. Allow access to continue face verification.")
@@ -175,6 +187,11 @@ export default function VerifyPage() {
       stopCameraStream()
     }
   }, [])
+
+  useEffect(() => {
+    if (!cameraReady) return
+    void attachStreamToVideo()
+  }, [cameraReady])
 
   useEffect(() => {
     function handleFullscreenChange() {
