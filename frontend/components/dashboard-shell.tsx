@@ -48,11 +48,17 @@ export function DashboardShell({
   children,
 }: DashboardShellProps) {
   const router = useRouter()
+  const IDLE_TIMEOUT_MS = 5 * 60 * 1000
+  const IDLE_WARNING_MS = 60 * 1000
   const [query, setQuery] = useState("")
   const [results, setResults] = useState<SearchResultItem[]>([])
   const [searching, setSearching] = useState(false)
   const [open, setOpen] = useState(false)
+  const [idleWarningOpen, setIdleWarningOpen] = useState(false)
+  const [secondsUntilLogout, setSecondsUntilLogout] = useState(Math.ceil(IDLE_WARNING_MS / 1000))
   const searchContainerRef = useRef<HTMLDivElement | null>(null)
+  const lastActivityRef = useRef<number>(Date.now())
+  const logoutTriggeredRef = useRef(false)
 
   useEffect(() => {
     function handleOutsideClick(event: MouseEvent) {
@@ -101,6 +107,60 @@ export function DashboardShell({
     }
   }, [query])
 
+  useEffect(() => {
+    function markActivity() {
+      lastActivityRef.current = Date.now()
+      if (idleWarningOpen) {
+        setIdleWarningOpen(false)
+      }
+    }
+
+    const events: Array<keyof WindowEventMap> = [
+      "mousemove",
+      "mousedown",
+      "keydown",
+      "touchstart",
+      "scroll",
+      "focus",
+    ]
+    events.forEach((eventName) => window.addEventListener(eventName, markActivity, { passive: true }))
+
+    const tick = window.setInterval(() => {
+      if (logoutTriggeredRef.current || isExiting) return
+      const elapsed = Date.now() - lastActivityRef.current
+      const warningThreshold = IDLE_TIMEOUT_MS - IDLE_WARNING_MS
+
+      if (elapsed >= IDLE_TIMEOUT_MS) {
+        logoutTriggeredRef.current = true
+        setIdleWarningOpen(false)
+        localStorage.removeItem("token")
+        localStorage.removeItem("user")
+        localStorage.removeItem("session_id")
+        localStorage.removeItem("exam_id")
+        router.push("/")
+        return
+      }
+
+      if (elapsed >= warningThreshold) {
+        const remainingMs = Math.max(IDLE_TIMEOUT_MS - elapsed, 0)
+        setSecondsUntilLogout(Math.ceil(remainingMs / 1000))
+        setIdleWarningOpen(true)
+      } else if (idleWarningOpen) {
+        setIdleWarningOpen(false)
+      }
+    }, 1000)
+
+    return () => {
+      window.clearInterval(tick)
+      events.forEach((eventName) => window.removeEventListener(eventName, markActivity))
+    }
+  }, [router, isExiting, idleWarningOpen])
+
+  function staySignedIn() {
+    lastActivityRef.current = Date.now()
+    setIdleWarningOpen(false)
+  }
+
   function onSelect(result: SearchResultItem) {
     setOpen(false)
     setQuery("")
@@ -119,6 +179,24 @@ export function DashboardShell({
 
   return (
     <main className="relative min-h-screen bg-background p-4 text-foreground md:p-6">
+      {idleWarningOpen ? (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/70 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-xl">
+            <h3 className="text-base font-semibold text-foreground">Still there?</h3>
+            <p className="mt-2 text-sm text-muted-foreground">
+              You will be logged out in {secondsUntilLogout}s due to inactivity.
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                onClick={staySignedIn}
+                className="rounded-md border border-border bg-background px-3 py-2 text-sm font-medium text-foreground transition hover:bg-accent"
+              >
+                Stay Signed In
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       {isExiting ? (
         <div className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center bg-background/70 backdrop-blur-sm">
           <div className="rounded-2xl border border-border bg-card px-6 py-5 text-center shadow-xl">
