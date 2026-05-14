@@ -6,7 +6,7 @@ import requests
 from services.preprocessing import base64_to_numpy, preprocess_for_facenet
 from services.face_detector import detect_and_crop_face
 from services.embedding_store import load_embedding, save_embedding, cosine_similarity
-from services.model_loader import get_facenet
+from services.model_loader import get_facenet, get_loaded_model_paths
 
 verify_bp = Blueprint('verify', __name__)
 
@@ -91,7 +91,12 @@ def verify_identity():
 
     facenet = get_facenet()
     if facenet is None:
-        return jsonify({'error': 'FaceNet model not loaded'}), 503
+        model_paths = get_loaded_model_paths()
+        return jsonify({
+            'error': 'FaceNet model not loaded',
+            'details': 'Ensure FACENET model file exists in MODELS_DIR and restart ai-service',
+            'model_paths': model_paths,
+        }), 503
 
     face_input = preprocess_for_facenet(face_crop)
     embedding = facenet.run(['embedding'], {'input': face_input})[0][0]

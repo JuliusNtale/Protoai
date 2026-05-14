@@ -257,12 +257,12 @@ export default function VerifyPage() {
       monitorLockRef.current = true
       try {
         const canvas = document.createElement("canvas")
-        canvas.width = 320
-        canvas.height = 240
+        canvas.width = 480
+        canvas.height = 360
         const ctx = canvas.getContext("2d")
         if (!ctx) return
         ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height)
-        const frameBase64 = canvas.toDataURL("image/jpeg", 0.7)
+        const frameBase64 = canvas.toDataURL("image/jpeg", 0.85)
 
         const rawSessionId = localStorage.getItem("session_id")
         const sessionId = rawSessionId && Number(rawSessionId) > 0 ? Number(rawSessionId) : 0
@@ -593,11 +593,11 @@ export default function VerifyPage() {
       />
 
       {/* Center — face + ring */}
-      <div className="flex flex-1 flex-col items-center justify-center gap-10">
+      <div className="flex flex-1 flex-col items-center justify-center gap-8">
 
         {/* SVG face ring */}
-        <div className="relative" style={{ width: 280, height: 280 }}>
-          <svg width="280" height="280" viewBox="0 0 280 280" fill="none">
+        <div className="relative" style={{ width: 360, height: 360 }}>
+          <svg width="360" height="360" viewBox="0 0 280 280" fill="none">
             {/* Background dim ring */}
             <path
               d={fullRingPath}
@@ -655,8 +655,8 @@ export default function VerifyPage() {
             <div
               className="relative overflow-hidden"
               style={{
-                width: 176,
-                height: 208,
+                width: 220,
+                height: 280,
                 borderRadius: "50%",
                 background: "rgba(255,255,255,0.04)",
               }}
