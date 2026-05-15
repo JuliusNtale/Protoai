@@ -16,6 +16,12 @@ _AI_SERVICE_TOKEN = os.getenv("AI_SERVICE_TOKEN", "").strip()
 _MODEL_VERSION = os.getenv("FACENET_MODEL_VERSION", "facenet_best.onnx")
 
 
+def _run_facenet_embedding(facenet, face_input: np.ndarray) -> np.ndarray:
+    input_name = facenet.get_inputs()[0].name
+    output_name = facenet.get_outputs()[0].name
+    return facenet.run([output_name], {input_name: face_input})[0][0]
+
+
 def _persist_verification(session_id: int, match: bool, confidence: float):
     if not _AI_SERVICE_TOKEN:
         return False, "AI_SERVICE_TOKEN is not configured"
@@ -61,7 +67,7 @@ def _load_registered_baseline_embedding(user_id: int, facenet):
         return None, "No face detected in registered baseline image"
 
     baseline_input = preprocess_for_facenet(baseline_face)
-    baseline_embedding = facenet.run(['embedding'], {'input': baseline_input})[0][0]
+    baseline_embedding = _run_facenet_embedding(facenet, baseline_input)
     norm = np.linalg.norm(baseline_embedding)
     if norm > 0:
         baseline_embedding = baseline_embedding / norm
@@ -99,7 +105,10 @@ def verify_identity():
         }), 503
 
     face_input = preprocess_for_facenet(face_crop)
-    embedding = facenet.run(['embedding'], {'input': face_input})[0][0]
+    try:
+        embedding = _run_facenet_embedding(facenet, face_input)
+    except Exception as exc:
+        return jsonify({'error': f'Face embedding inference failed: {exc}'}), 500
     norm = np.linalg.norm(embedding)
     if norm > 0:
         embedding = embedding / norm  # L2 normalise
