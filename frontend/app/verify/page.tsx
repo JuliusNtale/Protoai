@@ -65,6 +65,8 @@ export default function VerifyPage() {
   const [identityError, setIdentityError] = useState<string | null>(null)
   const [phaseError, setPhaseError] = useState<string | null>(null)
   const [telemetry, setTelemetry] = useState<{ yaw: number; pitch: number; anomalies: string[] } | null>(null)
+  const [lightingStatus, setLightingStatus] = useState<"good" | "low" | "high" | "flat">("good")
+  const [lightingHint, setLightingHint] = useState<string | null>(null)
   const [monitorErrors, setMonitorErrors] = useState(0)
   const phaseHoldStartRef = useRef<number | null>(null)
   const monitorLockRef = useRef(false)
@@ -102,6 +104,40 @@ export default function VerifyPage() {
     if (!streamRef.current) return
     streamRef.current.getTracks().forEach(track => track.stop())
     streamRef.current = null
+  }
+
+  function evaluateLighting(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D) {
+    const image = ctx.getImageData(0, 0, canvas.width, canvas.height).data
+    let sum = 0
+    let sumSq = 0
+    const pixels = canvas.width * canvas.height
+    for (let i = 0; i < image.length; i += 4) {
+      const y = 0.2126 * image[i] + 0.7152 * image[i + 1] + 0.0722 * image[i + 2]
+      sum += y
+      sumSq += y * y
+    }
+    const mean = sum / pixels
+    const variance = Math.max(sumSq / pixels - mean * mean, 0)
+    const std = Math.sqrt(variance)
+
+    if (mean > 190) {
+      setLightingStatus("high")
+      setLightingHint("Background is too bright. Face a softer front light and avoid strong backlight.")
+      return false
+    }
+    if (mean < 55) {
+      setLightingStatus("low")
+      setLightingHint("Scene is too dark. Increase front lighting on your face.")
+      return false
+    }
+    if (std < 28) {
+      setLightingStatus("flat")
+      setLightingHint("Image contrast is too low. Improve lighting and reduce glare.")
+      return false
+    }
+    setLightingStatus("good")
+    setLightingHint(null)
+    return true
   }
 
   async function attachStreamToVideo() {
@@ -262,6 +298,7 @@ export default function VerifyPage() {
         const ctx = canvas.getContext("2d")
         if (!ctx) return
         ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height)
+        evaluateLighting(canvas, ctx)
         const frameBase64 = canvas.toDataURL("image/jpeg", 0.85)
 
         const rawSessionId = localStorage.getItem("session_id")
@@ -458,6 +495,11 @@ export default function VerifyPage() {
       }
 
       ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height)
+      const lightingOk = evaluateLighting(canvas, ctx)
+      if (!lightingOk) {
+        setIdentityError(lightingHint || "Lighting quality is not sufficient for reliable verification.")
+        return
+      }
       const imageBase64 = canvas.toDataURL("image/jpeg", 0.8)
 
       const aiBase = resolveAiBaseUrl()
@@ -755,6 +797,10 @@ export default function VerifyPage() {
                   yaw {telemetry.yaw.toFixed(1)} | pitch {telemetry.pitch.toFixed(1)} | {telemetry.anomalies.join(", ") || "no_anomalies"}
                 </p>
               ) : null}
+              <p className={`text-[11px] ${lightingStatus === "good" ? "text-emerald-300" : "text-amber-300"}`}>
+                Lighting: {lightingStatus === "good" ? "Good" : lightingStatus === "high" ? "Too Bright" : lightingStatus === "low" ? "Too Dark" : "Low Contrast"}
+              </p>
+              {lightingHint ? <p className="text-[11px] text-amber-300">{lightingHint}</p> : null}
             </>
           )}
         </div>
