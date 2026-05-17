@@ -85,6 +85,7 @@ export default function OrientPage() {
   const [secondsLeft, setSecondsLeft] = useState(ORIENT_SECONDS)
   const [canSkip, setCanSkip] = useState(false)
   const [starting, setStarting] = useState(false)
+  const [rulesAccepted, setRulesAccepted] = useState(false)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const cameraStatus = useCameraStatus({
     secureOriginMessage: "Camera needs HTTPS or localhost to work during orientation.",
@@ -112,9 +113,68 @@ export default function OrientPage() {
   }, [router])
 
   function handleBegin() {
+    if (!rulesAccepted) return
     if (intervalRef.current) clearInterval(intervalRef.current)
     setStarting(true)
     setTimeout(() => router.push("/exam"), 800)
+  }
+
+  function escapePdfText(text: string) {
+    return text.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)")
+  }
+
+  function downloadRulesPdf() {
+    const lines = [
+      "PROCTORAI EXAM RULES & REGULATIONS",
+      "",
+      "1. Keep your face centered and visible for the entire exam.",
+      "2. Do not switch tabs, apps, or browser windows.",
+      "3. Do not allow any second person into camera frame.",
+      "4. Keep your environment quiet and well lit.",
+      "5. Three major violations may trigger auto-submission.",
+      "6. Submit before timer expiry to avoid data loss risk.",
+      "",
+      "By starting the exam, you agree to active proctoring.",
+    ]
+    const commands = ["BT", "/F1 12 Tf", "72 760 Td"]
+    for (let idx = 0; idx < lines.length; idx += 1) {
+      if (idx > 0) commands.push("0 -18 Td")
+      commands.push(`(${escapePdfText(lines[idx])}) Tj`)
+    }
+    commands.push("ET")
+    const contentStream = `${commands.join("\n")}\n`
+    const streamLength = contentStream.length
+
+    const objects = [
+      "1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n",
+      "2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n",
+      "3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>\nendobj\n",
+      `4 0 obj\n<< /Length ${streamLength} >>\nstream\n${contentStream}endstream\nendobj\n`,
+      "5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n",
+    ]
+
+    let pdf = "%PDF-1.4\n"
+    const offsets: number[] = [0]
+    for (const obj of objects) {
+      offsets.push(pdf.length)
+      pdf += obj
+    }
+
+    const xrefOffset = pdf.length
+    pdf += `xref\n0 ${objects.length + 1}\n`
+    pdf += "0000000000 65535 f \n"
+    for (let i = 1; i <= objects.length; i += 1) {
+      pdf += `${String(offsets[i]).padStart(10, "0")} 00000 n \n`
+    }
+    pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`
+
+    const blob = new Blob([pdf], { type: "application/pdf" })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.href = url
+    link.download = "proctorai-exam-rules-and-regulations.pdf"
+    link.click()
+    URL.revokeObjectURL(url)
   }
 
   const mins = String(Math.floor(secondsLeft / 60)).padStart(2, "0")
@@ -262,9 +322,24 @@ export default function OrientPage() {
             <p className="text-xs text-gray-500 mt-0.5">
               The exam will start automatically in {mins}:{secs}. You can also start it now.
             </p>
+            <label className="mt-3 flex items-start gap-2 text-xs text-gray-700">
+              <input
+                type="checkbox"
+                checked={rulesAccepted}
+                onChange={(e) => setRulesAccepted(e.target.checked)}
+                className="mt-0.5"
+              />
+              <span>I have read and agree to all exam rules and regulations.</span>
+            </label>
           </div>
 
           <div className="flex items-center gap-3">
+            <button
+              onClick={downloadRulesPdf}
+              className="px-4 py-2.5 rounded-lg border border-gray-300 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+            >
+              Download Rules (PDF)
+            </button>
             <button
               onClick={() => router.push("/dashboard")}
               className="px-4 py-2.5 rounded-lg border border-gray-300 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
@@ -273,7 +348,7 @@ export default function OrientPage() {
             </button>
             <button
               onClick={handleBegin}
-              disabled={starting}
+              disabled={starting || !rulesAccepted}
               className="flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-semibold text-white transition-all disabled:opacity-70 shadow-md"
               style={{ background: "#1a2d5a" }}
             >

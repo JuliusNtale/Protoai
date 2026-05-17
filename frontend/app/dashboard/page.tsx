@@ -4,7 +4,7 @@ import Link from "next/link"
 import { Suspense } from "react"
 import { useEffect, useMemo, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { BookOpenCheck, ClipboardList, FileText, LogOut, UserCircle2 } from "lucide-react"
+import { BookOpenCheck, ClipboardList, Eye, EyeOff, FileText, LogOut, UserCircle2 } from "lucide-react"
 import { getApiPath } from "@/lib/api-url"
 import { DashboardPanel, DashboardShell, MetricCard } from "@/components/dashboard-shell"
 
@@ -102,6 +102,8 @@ function StudentDashboardInner() {
   const [uploadingImage, setUploadingImage] = useState(false)
   const [currentPassword, setCurrentPassword] = useState("")
   const [newPassword, setNewPassword] = useState("")
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false)
+  const [showNewPassword, setShowNewPassword] = useState(false)
   const [passwordMsg, setPasswordMsg] = useState("")
   const [isExiting, setIsExiting] = useState(false)
   const [baselineImageUrl, setBaselineImageUrl] = useState<string | null>(null)
@@ -207,10 +209,14 @@ function StudentDashboardInner() {
     }
     if (res.status === 409) {
       const backendMessage = String(payload?.error?.message || "").toLowerCase()
+      localStorage.removeItem("session_id")
+      localStorage.removeItem("exam_id")
       if (backendMessage.includes("already has an active exam session")) {
         setError("No active exam session found. Previous attempts are auto-submitted and cannot be resumed. Start a new assigned exam.")
+        await load(token)
         return
       }
+      await load(token)
     }
     setError(payload?.error?.message || "Could not start exam.")
   }
@@ -388,7 +394,7 @@ function StudentDashboardInner() {
                         const started = Boolean(session && session.session_status !== "completed" && session.session_status !== "locked")
                         return (
                       <button onClick={() => void startExam(exam.exam_id)} className="rounded-md bg-[#1a2d5a] px-3 py-1.5 text-xs font-semibold text-white">
-                        {started ? "Resume Exam" : "Start Exam"}
+                        {started ? "Start New Attempt" : "Start Exam"}
                       </button>
                         )
                       })()}
@@ -506,8 +512,18 @@ function StudentDashboardInner() {
           </DashboardPanel>
           <DashboardPanel title="Reset Password">
             <div className="grid gap-3 md:grid-cols-2">
-              <input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} placeholder="Current password" className="rounded-md border border-border bg-background p-2 text-sm text-foreground" />
-              <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="New password" className="rounded-md border border-border bg-background p-2 text-sm text-foreground" />
+              <div className="relative">
+                <input type={showCurrentPassword ? "text" : "password"} value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} placeholder="Current password" className="w-full rounded-md border border-border bg-background p-2 pr-10 text-sm text-foreground" />
+                <button type="button" onClick={() => setShowCurrentPassword(v => !v)} className="absolute inset-y-0 right-0 px-3 text-muted-foreground" aria-label={showCurrentPassword ? "Hide password" : "Show password"}>
+                  {showCurrentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+              <div className="relative">
+                <input type={showNewPassword ? "text" : "password"} value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="New password" className="w-full rounded-md border border-border bg-background p-2 pr-10 text-sm text-foreground" />
+                <button type="button" onClick={() => setShowNewPassword(v => !v)} className="absolute inset-y-0 right-0 px-3 text-muted-foreground" aria-label={showNewPassword ? "Hide password" : "Show password"}>
+                  {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
             </div>
             {passwordMsg ? <p className="mt-2 text-sm text-muted-foreground">{passwordMsg}</p> : null}
             <button onClick={() => void changePassword()} className="mt-3 rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white">Update Password</button>

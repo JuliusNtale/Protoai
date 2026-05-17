@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { KeyRound, LogOut } from "lucide-react"
+import { Eye, EyeOff, KeyRound, LogOut } from "lucide-react"
 import { getApiPath } from "@/lib/api-url"
 import { appendGeneratedCredential } from "@/lib/generated-credentials"
 import { DashboardPanel, DashboardShell } from "@/components/dashboard-shell"
@@ -23,6 +23,8 @@ export default function AdminResetPasswordPage() {
   const [users, setUsers] = useState<ManagedUser[]>([])
   const [currentPassword, setCurrentPassword] = useState("")
   const [newPassword, setNewPassword] = useState("")
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false)
+  const [showNewPassword, setShowNewPassword] = useState(false)
   const [passwordMsg, setPasswordMsg] = useState("")
   const [msg, setMsg] = useState("")
   const [isExiting, setIsExiting] = useState(false)
@@ -141,8 +143,18 @@ export default function AdminResetPasswordPage() {
           <h2 className="text-base font-semibold">Admin Password</h2>
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-2">
-          <input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} placeholder="Current password" className="rounded-md border border-border bg-background p-2 text-sm text-foreground" />
-          <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="New password" className="rounded-md border border-border bg-background p-2 text-sm text-foreground" />
+          <div className="relative">
+            <input type={showCurrentPassword ? "text" : "password"} value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} placeholder="Current password" className="w-full rounded-md border border-border bg-background p-2 pr-10 text-sm text-foreground" />
+            <button type="button" onClick={() => setShowCurrentPassword(v => !v)} className="absolute inset-y-0 right-0 px-3 text-muted-foreground" aria-label={showCurrentPassword ? "Hide password" : "Show password"}>
+              {showCurrentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
+          <div className="relative">
+            <input type={showNewPassword ? "text" : "password"} value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="New password" className="w-full rounded-md border border-border bg-background p-2 pr-10 text-sm text-foreground" />
+            <button type="button" onClick={() => setShowNewPassword(v => !v)} className="absolute inset-y-0 right-0 px-3 text-muted-foreground" aria-label={showNewPassword ? "Hide password" : "Show password"}>
+              {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
         </div>
         {passwordMsg ? <p className="mt-2 text-sm">{passwordMsg}</p> : null}
         <button onClick={() => void resetMyPassword()} className="mt-3 rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white">

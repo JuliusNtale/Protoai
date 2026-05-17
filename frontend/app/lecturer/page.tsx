@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { BookOpen, KeyRound, LogOut, Plus, Users } from "lucide-react"
+import { BookOpen, Eye, EyeOff, KeyRound, LogOut, Plus, Users } from "lucide-react"
 import Link from "next/link"
 import { getApiPath } from "@/lib/api-url"
 import { DashboardPanel, DashboardShell, MetricCard } from "@/components/dashboard-shell"
@@ -121,6 +121,8 @@ function LecturerDashboardInner() {
   const [editingQuestionId, setEditingQuestionId] = useState<number | null>(null)
   const [currentPassword, setCurrentPassword] = useState("")
   const [newPassword, setNewPassword] = useState("")
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false)
+  const [showNewPassword, setShowNewPassword] = useState(false)
   const [savingPassword, setSavingPassword] = useState(false)
   const [passwordMsg, setPasswordMsg] = useState("")
   const [isExiting, setIsExiting] = useState(false)
@@ -165,9 +167,14 @@ function LecturerDashboardInner() {
       setExams(rows)
       setSessionResults(sessionsPayload.sessions || [])
       if (rows.length > 0) {
-        const first = rows[0].exam_id
-        setSelectedExamId(first)
-        await loadExamDetails(activeToken, first, rows[0].course_code)
+        const requestedExamId = Number(searchParams.get("examId"))
+        const candidate = Number.isFinite(requestedExamId)
+          ? rows.find((row: ExamRow) => row.exam_id === requestedExamId)
+          : null
+        const selected = candidate || rows[0]
+        const selectedId = selected.exam_id
+        setSelectedExamId(selectedId)
+        await loadExamDetails(activeToken, selectedId, selected.course_code)
       }
     } finally {
       setLoading(false)
@@ -215,6 +222,11 @@ function LecturerDashboardInner() {
     setNewCourseCode("")
     setNewDuration("60")
     setNewSchedule("")
+    const createdExamId = Number(payload?.exam_id || payload?.id)
+    if (Number.isFinite(createdExamId) && createdExamId > 0) {
+      router.push(`/lecturer?tab=questions&examId=${createdExamId}`)
+      return
+    }
     await load(token)
   }
 
@@ -521,7 +533,10 @@ function LecturerDashboardInner() {
               className="cursor-pointer rounded-md border border-border bg-background p-2 text-sm text-foreground focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100"
             />
           </div>
-          <button onClick={createExam} className="mt-3 rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#142145]">Create Exam</button>
+          <p className="mt-3 text-xs text-muted-foreground">
+            Workflow: create exam, add questions immediately, then set exam status to <span className="font-semibold">scheduled</span> or <span className="font-semibold">live</span>.
+          </p>
+          <button onClick={createExam} className="mt-3 rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#142145]">Create Exam & Add Questions</button>
         </DashboardPanel>
 
         <DashboardPanel title="My Exam List">
@@ -563,6 +578,16 @@ function LecturerDashboardInner() {
                       </select>
                     </td>
                     <td>
+                      <button
+                        onClick={async () => {
+                          setSelectedExamId(exam.exam_id)
+                          await loadExamDetails(token, exam.exam_id, exam.course_code)
+                          router.push(`/lecturer?tab=questions&examId=${exam.exam_id}`)
+                        }}
+                        className="mr-2 rounded-md border border-border bg-card px-2 py-1 text-xs font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                      >
+                        Questions
+                      </button>
                       <button
                         onClick={() => editExam(exam)}
                         className="rounded-md border border-border bg-card px-2 py-1 text-xs font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
@@ -774,20 +799,30 @@ function LecturerDashboardInner() {
             <h2 className="text-base font-semibold">Reset Password</h2>
           </div>
           <div className="mt-4 grid gap-3 md:grid-cols-2">
-            <input
-              type="password"
-              value={currentPassword}
-              onChange={e => setCurrentPassword(e.target.value)}
-              placeholder="Current password"
-              className="rounded-md border border-border bg-background p-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100"
-            />
-            <input
-              type="password"
-              value={newPassword}
-              onChange={e => setNewPassword(e.target.value)}
-              placeholder="New password"
-              className="rounded-md border border-border bg-background p-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100"
-            />
+            <div className="relative">
+              <input
+                type={showCurrentPassword ? "text" : "password"}
+                value={currentPassword}
+                onChange={e => setCurrentPassword(e.target.value)}
+                placeholder="Current password"
+                className="w-full rounded-md border border-border bg-background p-2 pr-10 text-sm text-foreground placeholder:text-muted-foreground focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100"
+              />
+              <button type="button" onClick={() => setShowCurrentPassword(v => !v)} className="absolute inset-y-0 right-0 px-3 text-muted-foreground" aria-label={showCurrentPassword ? "Hide password" : "Show password"}>
+                {showCurrentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+            <div className="relative">
+              <input
+                type={showNewPassword ? "text" : "password"}
+                value={newPassword}
+                onChange={e => setNewPassword(e.target.value)}
+                placeholder="New password"
+                className="w-full rounded-md border border-border bg-background p-2 pr-10 text-sm text-foreground placeholder:text-muted-foreground focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100"
+              />
+              <button type="button" onClick={() => setShowNewPassword(v => !v)} className="absolute inset-y-0 right-0 px-3 text-muted-foreground" aria-label={showNewPassword ? "Hide password" : "Show password"}>
+                {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
           </div>
           {passwordMsg && <p className="mt-2 text-sm text-slate-700">{passwordMsg}</p>}
           <button onClick={changePassword} disabled={savingPassword} className="mt-3 rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#142145] disabled:opacity-60">

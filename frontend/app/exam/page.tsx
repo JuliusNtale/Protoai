@@ -741,7 +741,7 @@ export default function ExamPage() {
         </main>
 
         {/* ── Right sidebar: Live Monitor ── */}
-        <aside className="hidden w-48 shrink-0 flex-col border-l border-gray-200 bg-white xl:flex">
+        <aside className="hidden w-48 shrink-0 flex-col border-l border-gray-200 bg-white lg:flex">
           <div className="border-b border-gray-100 px-4 py-2.5">
             <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Live Monitor</p>
           </div>
