@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
-import { BarChart3, LogOut, Users } from "lucide-react"
+import { BarChart3, ClipboardList, LogOut, Users } from "lucide-react"
 import { getApiPath } from "@/lib/api-url"
 import { DashboardPanel, DashboardShell, MetricCard } from "@/components/dashboard-shell"
 
@@ -91,6 +91,7 @@ export default function AdminDashboardSummary() {
       sidebarItems={[
         { label: "Dashboard", href: "/admin", active: true },
         { label: "Users", href: "/admin/users" },
+        { label: "Exams", href: "/admin/exams" },
         { label: "Credentials", href: "/admin/credentials" },
         { label: "Logs", href: "/admin/system-logs" },
         { label: "Reset Password", href: "/admin/reset-password" },
@@ -131,11 +132,16 @@ export default function AdminDashboardSummary() {
       </section>
 
       <DashboardPanel title="Quick Navigation" subtitle="Open the operational pages from here or from the left sidebar.">
-        <div className="grid gap-3 md:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-4">
           <Link href="/admin/users" className="rounded-xl border border-border bg-card p-4 transition hover:bg-accent/50">
             <Users className="h-5 w-5 text-[#1a2d5a]" />
             <p className="mt-2 text-sm font-semibold text-foreground">Users</p>
             <p className="mt-1 text-xs text-muted-foreground">Provision, manage, and activate/deactivate accounts.</p>
+          </Link>
+          <Link href="/admin/exams" className="rounded-xl border border-border bg-card p-4 transition hover:bg-accent/50">
+            <ClipboardList className="h-5 w-5 text-[#1a2d5a]" />
+            <p className="mt-2 text-sm font-semibold text-foreground">Exams</p>
+            <p className="mt-1 text-xs text-muted-foreground">View all exams, assigned lecturers, and delete unwanted exams.</p>
           </Link>
           <Link href="/admin/credentials" className="rounded-xl border border-border bg-card p-4 transition hover:bg-accent/50">
             <BarChart3 className="h-5 w-5 text-[#1a2d5a]" />

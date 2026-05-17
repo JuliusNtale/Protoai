@@ -55,6 +55,7 @@ export default function AdminCredentialsPage() {
       sidebarItems={[
         { label: "Dashboard", href: "/admin" },
         { label: "Users", href: "/admin/users" },
+        { label: "Exams", href: "/admin/exams" },
         { label: "Credentials", href: "/admin/credentials", active: true },
         { label: "Logs", href: "/admin/system-logs" },
         { label: "Reset Password", href: "/admin/reset-password" },

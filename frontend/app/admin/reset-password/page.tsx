@@ -115,6 +115,7 @@ export default function AdminResetPasswordPage() {
       sidebarItems={[
         { label: "Dashboard", href: "/admin" },
         { label: "Users", href: "/admin/users" },
+        { label: "Exams", href: "/admin/exams" },
         { label: "Credentials", href: "/admin/credentials" },
         { label: "Logs", href: "/admin/system-logs" },
         { label: "Reset Password", href: "/admin/reset-password", active: true },

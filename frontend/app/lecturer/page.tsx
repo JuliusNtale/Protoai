@@ -632,6 +632,32 @@ function LecturerDashboardInner() {
 
         {tab === "questions" && (
         <DashboardPanel title={`Question Builder ${selectedExam ? `- ${selectedExam.title}` : ""}`}>
+          <div className="mb-4 grid gap-3 md:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Select Exam
+              </label>
+              <select
+                value={selectedExamId ?? ""}
+                onChange={async (e) => {
+                  const nextExamId = Number(e.target.value)
+                  if (!Number.isFinite(nextExamId) || nextExamId <= 0) return
+                  const picked = exams.find((row) => row.exam_id === nextExamId)
+                  setSelectedExamId(nextExamId)
+                  await loadExamDetails(token, nextExamId, picked?.course_code)
+                  router.push(`/lecturer?tab=questions&examId=${nextExamId}`)
+                }}
+                className="w-full rounded-md border border-border bg-background p-2 text-sm text-foreground focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100"
+              >
+                {exams.length === 0 ? <option value="">No exams available</option> : null}
+                {exams.map((exam) => (
+                  <option key={exam.exam_id} value={exam.exam_id}>
+                    {exam.title} - {exam.course_code} ({exam.status})
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
           <div className="mt-4 grid gap-3 md:grid-cols-2">
             <select value={questionType} onChange={e => setQuestionType(e.target.value as "mcq" | "true_false")} className="rounded-md border border-border bg-background p-2 text-sm text-foreground focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100">
               <option value="mcq">mcq</option>
