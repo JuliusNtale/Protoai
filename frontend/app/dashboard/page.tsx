@@ -17,6 +17,8 @@ type MeUser = {
   email: string
   phone_number?: string | null
   department?: string | null
+  academic_year?: string | null
+  year_enrolled?: number | null
   role: string
   must_change_password: boolean
 }
@@ -99,6 +101,8 @@ function StudentDashboardInner() {
   const [email, setEmail] = useState("")
   const [phone, setPhone] = useState("")
   const [department, setDepartment] = useState("")
+  const [academicYear, setAcademicYear] = useState("")
+  const [yearEnrolled, setYearEnrolled] = useState("")
   const [uploadingImage, setUploadingImage] = useState(false)
   const [currentPassword, setCurrentPassword] = useState("")
   const [newPassword, setNewPassword] = useState("")
@@ -108,6 +112,9 @@ function StudentDashboardInner() {
   const [isExiting, setIsExiting] = useState(false)
   const [baselineImageUrl, setBaselineImageUrl] = useState<string | null>(null)
   const [baselineLoadError, setBaselineLoadError] = useState<string | null>(null)
+  const [showOnboarding, setShowOnboarding] = useState(false)
+  const [onboardingSaving, setOnboardingSaving] = useState(false)
+  const [onboardingMsg, setOnboardingMsg] = useState("")
 
   useEffect(() => {
     const rawToken = localStorage.getItem("token")
@@ -159,10 +166,20 @@ function StudentDashboardInner() {
       setEmail(mePayload.user?.email || "")
       setPhone(mePayload.user?.phone_number || "")
       setDepartment(mePayload.user?.department || "")
+      setAcademicYear(mePayload.user?.academic_year || "")
+      setYearEnrolled(mePayload.user?.year_enrolled ? String(mePayload.user.year_enrolled) : "")
       setExams(examsPayload.exams || [])
       setSessions(sessionsPayload.sessions || [])
       setReports(reportsPayload.reports || [])
-      await loadBaselineImage(activeToken)
+      const hasBaseline = await loadBaselineImage(activeToken)
+      const needsOnboarding =
+        !String(mePayload.user?.full_name || "").trim() ||
+        !String(mePayload.user?.registration_number || "").trim() ||
+        !String(mePayload.user?.department || "").trim() ||
+        !String(mePayload.user?.academic_year || "").trim() ||
+        !Number.isFinite(Number(mePayload.user?.year_enrolled)) ||
+        !hasBaseline
+      setShowOnboarding(Boolean(needsOnboarding))
     } finally {
       setLoading(false)
     }
@@ -177,7 +194,7 @@ function StudentDashboardInner() {
       if (!res.ok) {
         setBaselineImageUrl(null)
         setBaselineLoadError(res.status === 404 ? null : "Could not load baseline image preview.")
-        return
+        return false
       }
       const blob = await res.blob()
       const objectUrl = URL.createObjectURL(blob)
@@ -186,13 +203,19 @@ function StudentDashboardInner() {
         return objectUrl
       })
       setBaselineLoadError(null)
+      return true
     } catch {
       setBaselineImageUrl(null)
       setBaselineLoadError("Could not load baseline image preview.")
+      return false
     }
   }
 
   async function startExam(examId: number) {
+    if (showOnboarding) {
+      setError("Complete onboarding details and upload baseline photo before starting exams.")
+      return
+    }
     setError("")
     const res = await fetch(getApiPath("/sessions/start"), {
       method: "POST",
@@ -226,7 +249,13 @@ function StudentDashboardInner() {
     const res = await fetch(getApiPath("/users/profile"), {
       method: "PUT",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ email, phone_number: phone, department }),
+      body: JSON.stringify({
+        email,
+        phone_number: phone,
+        department,
+        academic_year: academicYear,
+        year_enrolled: yearEnrolled ? Number(yearEnrolled) : undefined,
+      }),
     })
     const payload = await res.json().catch(() => ({}))
     if (!res.ok) {
@@ -281,6 +310,48 @@ function StudentDashboardInner() {
     setPasswordMsg("Password updated successfully.")
   }
 
+  async function submitOnboarding() {
+    setOnboardingMsg("")
+    const currentName = String(me?.full_name || "").trim()
+    const currentReg = String(me?.registration_number || "").trim()
+
+    if (!currentName) return setOnboardingMsg("Full name is required.")
+    if (!currentReg) return setOnboardingMsg("Registration number is required.")
+    if (!department.trim()) return setOnboardingMsg("Degree program is required.")
+    if (!academicYear.trim()) return setOnboardingMsg("Current academic year is required.")
+    if (!yearEnrolled.trim() || !Number.isFinite(Number(yearEnrolled))) return setOnboardingMsg("Year enrolled must be a valid year.")
+    if (!baselineImageUrl) return setOnboardingMsg("Baseline photo is required.")
+
+    setOnboardingSaving(true)
+    try {
+      const res = await fetch(getApiPath("/users/profile"), {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          full_name: currentName,
+          registration_number: currentReg,
+          email,
+          phone_number: phone,
+          department,
+          academic_year: academicYear,
+          year_enrolled: Number(yearEnrolled),
+        }),
+      })
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setOnboardingMsg(payload?.error?.message || "Could not save onboarding details.")
+        return
+      }
+      if (payload?.user) {
+        setMe(payload.user)
+        localStorage.setItem("user", JSON.stringify(payload.user))
+      }
+      setShowOnboarding(false)
+    } finally {
+      setOnboardingSaving(false)
+    }
+  }
+
   async function logout() {
     setIsExiting(true)
     await new Promise((r) => setTimeout(r, 350))
@@ -301,6 +372,7 @@ function StudentDashboardInner() {
   }, [sessions])
 
   return (
+    <>
     <DashboardShell
       appName="ProctorAI Student"
       title={tab === "dashboard" ? "Dashboard" : tab.charAt(0).toUpperCase() + tab.slice(1)}
@@ -482,6 +554,8 @@ function StudentDashboardInner() {
                   <option key={program} value={program}>{program}</option>
                 ))}
               </select>
+              <input value={academicYear} onChange={e => setAcademicYear(e.target.value)} placeholder="Current academic year (e.g. Year 2)" className="rounded-md border border-border bg-background p-2 text-sm text-foreground" />
+              <input value={yearEnrolled} onChange={e => setYearEnrolled(e.target.value)} placeholder="Year enrolled (e.g. 2024)" className="rounded-md border border-border bg-background p-2 text-sm text-foreground" />
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
               <button onClick={() => void updateProfile()} className="rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white">Save Profile</button>
@@ -533,6 +607,46 @@ function StudentDashboardInner() {
       </>
       ) : null}
     </DashboardShell>
+    {showOnboarding ? (
+      <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+        <div className="w-full max-w-2xl rounded-2xl border border-border bg-card p-5 shadow-2xl">
+          <h3 className="text-lg font-semibold text-foreground">Complete Student Onboarding</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Enter your registered details before continuing.
+          </p>
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <input value={me?.full_name || ""} readOnly className="rounded-md border border-border bg-muted/40 p-2 text-sm text-foreground" placeholder="Full name" />
+            <input value={me?.registration_number || ""} readOnly className="rounded-md border border-border bg-muted/40 p-2 text-sm text-foreground" placeholder="Registration number" />
+            <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email" className="rounded-md border border-border bg-background p-2 text-sm text-foreground" />
+            <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="Phone number" className="rounded-md border border-border bg-background p-2 text-sm text-foreground" />
+            <select value={department} onChange={e => setDepartment(e.target.value)} className="rounded-md border border-border bg-background p-2 text-sm text-foreground">
+              <option value="">Select Degree Program</option>
+              {DEGREE_PROGRAM_OPTIONS.map((program) => (
+                <option key={program} value={program}>{program}</option>
+              ))}
+            </select>
+            <input value={academicYear} onChange={e => setAcademicYear(e.target.value)} placeholder="Current academic year (e.g. Year 2)" className="rounded-md border border-border bg-background p-2 text-sm text-foreground" />
+            <input value={yearEnrolled} onChange={e => setYearEnrolled(e.target.value)} placeholder="Year enrolled (e.g. 2024)" className="rounded-md border border-border bg-background p-2 text-sm text-foreground" />
+            <div className="md:col-span-2">
+              <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm font-medium text-foreground">
+                Upload Baseline Photo
+                <input type="file" accept="image/jpeg,image/png" className="hidden" onChange={(e) => void uploadBaselineImage(e.target.files?.[0] ?? null)} />
+              </label>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Baseline status: {baselineImageUrl ? "Uploaded" : "Not uploaded"}
+              </p>
+            </div>
+          </div>
+          {onboardingMsg ? <p className="mt-3 text-sm text-red-600">{onboardingMsg}</p> : null}
+          <div className="mt-4 flex justify-end">
+            <button onClick={() => void submitOnboarding()} disabled={onboardingSaving} className="rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
+              {onboardingSaving ? "Saving..." : "Save & Continue"}
+            </button>
+          </div>
+        </div>
+      </div>
+    ) : null}
+    </>
   )
 }
 
