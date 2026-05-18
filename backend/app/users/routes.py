@@ -68,6 +68,34 @@ def update_profile():
 
     phone_number = (data.get("phone_number") or "").strip()
     department = (data.get("department") or "").strip()
+    is_student = user.role == "student"
+    student_profile_locked = bool(
+        (user.full_name or "").strip()
+        and (user.reg_number or "").strip()
+        and (user.department or "").strip()
+        and (user.academic_year or "").strip()
+        and (user.year_enrolled is not None)
+    )
+
+    if is_student and student_profile_locked:
+        if full_name and full_name != (user.full_name or ""):
+            return jsonify({"error": {"message": "Full name is locked. Contact admin for corrections."}}), 403
+        if reg_number and reg_number != (user.reg_number or ""):
+            return jsonify({"error": {"message": "Registration number is locked. Contact admin for corrections."}}), 403
+        if department and department != (user.department or ""):
+            return jsonify({"error": {"message": "Degree program is locked after onboarding."}}), 403
+        if academic_year and academic_year != (user.academic_year or ""):
+            return jsonify({"error": {"message": "Academic year is locked after onboarding."}}), 403
+        if year_enrolled is not None and year_enrolled != user.year_enrolled:
+            return jsonify({"error": {"message": "Year enrolled is locked after onboarding."}}), 403
+
+    before_complete = bool(
+        (user.full_name or "").strip()
+        and (user.reg_number or "").strip()
+        and (user.department or "").strip()
+        and (user.academic_year or "").strip()
+        and (user.year_enrolled is not None)
+    )
 
     if email:
         user.email = email
@@ -79,6 +107,14 @@ def update_profile():
     user.department = department or None
     user.academic_year = academic_year or None
     user.year_enrolled = year_enrolled
+
+    after_complete = bool(
+        (user.full_name or "").strip()
+        and (user.reg_number or "").strip()
+        and (user.department or "").strip()
+        and (user.academic_year or "").strip()
+        and (user.year_enrolled is not None)
+    )
 
     log_audit(
         action="user.profile_updated",
@@ -94,6 +130,18 @@ def update_profile():
             "year_enrolled_changed": True,
         },
     )
+    if is_student and not before_complete and after_complete:
+        log_audit(
+            action="student.onboarding_submitted",
+            actor_user_id=user.user_id,
+            target_user_id=user.user_id,
+            metadata={
+                "registration_number": user.reg_number,
+                "degree_program": user.department,
+                "academic_year": user.academic_year,
+                "year_enrolled": user.year_enrolled,
+            },
+        )
     db.session.commit()
 
     response_user = user.to_auth_user()
