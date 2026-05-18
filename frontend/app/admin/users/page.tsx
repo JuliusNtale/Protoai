@@ -30,7 +30,7 @@ export default function AdminUsersPage() {
   const [loadingMe, setLoadingMe] = useState(true)
   const [adminError, setAdminError] = useState("")
 
-  const [role, setRole] = useState<"student" | "lecturer">("student")
+  const [role, setRole] = useState<"student" | "lecturer" | "admin">("student")
   const [fullName, setFullName] = useState("")
   const [regNumber, setRegNumber] = useState("")
   const [email, setEmail] = useState("")
@@ -46,7 +46,7 @@ export default function AdminUsersPage() {
   const [uploadMessage, setUploadMessage] = useState("")
   const [isExiting, setIsExiting] = useState(false)
   const [query, setQuery] = useState("")
-  const [roleFilter, setRoleFilter] = useState<"all" | "student" | "lecturer">("all")
+  const [roleFilter, setRoleFilter] = useState<"all" | "student" | "lecturer" | "admin">("all")
   const [activeFilter, setActiveFilter] = useState<"all" | "active" | "inactive">("all")
   const fileInputs = useRef<Record<number, HTMLInputElement | null>>({})
 
@@ -195,8 +195,9 @@ export default function AdminUsersPage() {
   const summary = useMemo(() => {
     const students = users.filter(u => u.role === "student").length
     const lecturers = users.filter(u => u.role === "lecturer").length
+    const admins = users.filter(u => u.role === "admin" || u.role === "administrator").length
     const active = users.filter(u => u.is_active).length
-    return { students, lecturers, active, total: users.length }
+    return { students, lecturers, admins, active, total: users.length }
   }, [users])
 
   async function logout() {
@@ -246,18 +247,20 @@ export default function AdminUsersPage() {
         <MetricCard label="Total Users" value={summary.total} />
         <MetricCard label="Students" value={summary.students} />
         <MetricCard label="Lecturers" value={summary.lecturers} />
+        <MetricCard label="Admins" value={summary.admins} />
         <MetricCard label="Active Users" value={summary.active} />
       </section>
 
       <DashboardPanel title="Create Account">
         <div className="flex items-center gap-2">
           <UserPlus className="h-5 w-5 text-blue-700" />
-          <h2 className="text-base font-semibold">Create Lecturer/Student Account</h2>
+          <h2 className="text-base font-semibold">Create User Account</h2>
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-2">
-          <select value={role} onChange={e => setRole(e.target.value as "student" | "lecturer")} className="rounded-md border border-border bg-background p-2 text-sm text-foreground">
+          <select value={role} onChange={e => setRole(e.target.value as "student" | "lecturer" | "admin")} className="rounded-md border border-border bg-background p-2 text-sm text-foreground">
             <option value="student">student</option>
             <option value="lecturer">lecturer</option>
+            <option value="admin">admin</option>
           </select>
           <input value={fullName} onChange={e => setFullName(e.target.value)} placeholder="Full name" className="rounded-md border border-border bg-background p-2 text-sm text-foreground" />
           {role === "student" ? <input value={regNumber} onChange={e => setRegNumber(e.target.value)} placeholder="Registration number" className="rounded-md border border-border bg-background p-2 text-sm text-foreground" /> : null}
@@ -278,10 +281,11 @@ export default function AdminUsersPage() {
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-4">
           <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search name/email/reg number" className="rounded-md border border-border bg-background p-2 text-sm text-foreground md:col-span-2" />
-          <select value={roleFilter} onChange={e => setRoleFilter(e.target.value as "all" | "student" | "lecturer")} className="rounded-md border border-border bg-background p-2 text-sm text-foreground">
+          <select value={roleFilter} onChange={e => setRoleFilter(e.target.value as "all" | "student" | "lecturer" | "admin")} className="rounded-md border border-border bg-background p-2 text-sm text-foreground">
             <option value="all">all roles</option>
             <option value="student">student</option>
             <option value="lecturer">lecturer</option>
+            <option value="admin">admin</option>
           </select>
           <select value={activeFilter} onChange={e => setActiveFilter(e.target.value as "all" | "active" | "inactive")} className="rounded-md border border-border bg-background p-2 text-sm text-foreground">
             <option value="all">all status</option>
