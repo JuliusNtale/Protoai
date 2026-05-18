@@ -84,8 +84,6 @@ def update_profile():
             return jsonify({"error": {"message": "Registration number is locked. Contact admin for corrections."}}), 403
         if department and department != (user.department or ""):
             return jsonify({"error": {"message": "Degree program is locked after onboarding."}}), 403
-        if academic_year and academic_year != (user.academic_year or ""):
-            return jsonify({"error": {"message": "Academic year is locked after onboarding."}}), 403
         if year_enrolled is not None and year_enrolled != user.year_enrolled:
             return jsonify({"error": {"message": "Year enrolled is locked after onboarding."}}), 403
 

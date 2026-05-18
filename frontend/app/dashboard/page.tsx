@@ -564,10 +564,10 @@ function StudentDashboardInner() {
                   <option key={program} value={program}>{program}</option>
                 ))}
               </select>
-              <input value={academicYear} onChange={e => setAcademicYear(e.target.value)} disabled={studentProfileLocked} placeholder="Current academic year (e.g. Year 2)" className="rounded-md border border-border bg-background p-2 text-sm text-foreground disabled:cursor-not-allowed disabled:bg-muted/40" />
+              <input value={academicYear} onChange={e => setAcademicYear(e.target.value)} placeholder="Current academic year (e.g. Year 2)" className="rounded-md border border-border bg-background p-2 text-sm text-foreground" />
               <input value={yearEnrolled} onChange={e => setYearEnrolled(e.target.value)} disabled={studentProfileLocked} placeholder="Year enrolled (e.g. 2024)" className="rounded-md border border-border bg-background p-2 text-sm text-foreground disabled:cursor-not-allowed disabled:bg-muted/40" />
             </div>
-            {studentProfileLocked ? <p className="mt-2 text-xs text-muted-foreground">Degree program, academic year, and year enrolled are locked after onboarding. Contact admin for corrections.</p> : null}
+            {studentProfileLocked ? <p className="mt-2 text-xs text-muted-foreground">Only email, phone, and current academic year can be updated here. Degree program and year enrolled require admin change.</p> : null}
             <div className="mt-3 flex flex-wrap gap-2">
               <button onClick={() => void updateProfile()} className="rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white">Save Profile</button>
             </div>
