@@ -239,8 +239,8 @@ def provision_credentials():
         return jsonify({"error": {"message": "full_name and email are required"}}), 400
     if target_role == "student" and not reg_number:
         return jsonify({"error": {"message": "reg_number is required for student credentials"}}), 400
-    if target_role == "lecturer" and not username:
-        return jsonify({"error": {"message": "username is required for lecturer credentials"}}), 400
+    if target_role in {"lecturer", "admin"} and not username:
+        return jsonify({"error": {"message": f"username is required for {target_role} credentials"}}), 400
     if target_role == "lecturer" and not reg_number:
         reg_number = _generate_lecturer_reg_number()
         while User.query.filter_by(reg_number=reg_number).first():
@@ -328,8 +328,8 @@ def provision_bulk_credentials():
         if target_role == "student" and not reg_number:
             errors.append({"index": idx, "message": "reg_number is required for student"})
             continue
-        if target_role == "lecturer" and not username:
-            errors.append({"index": idx, "message": "username is required for lecturer"})
+        if target_role in {"lecturer", "admin"} and not username:
+            errors.append({"index": idx, "message": f"username is required for {target_role}"})
             continue
         if target_role == "lecturer" and not reg_number:
             reg_number = _generate_lecturer_reg_number()

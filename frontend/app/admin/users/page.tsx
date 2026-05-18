@@ -113,8 +113,8 @@ export default function AdminUsersPage() {
       setCreateError("registration number is required for student.")
       return
     }
-    if (role === "lecturer" && !username) {
-      setCreateError("username is required for lecturer.")
+    if ((role === "lecturer" || role === "admin") && !username) {
+      setCreateError(`username is required for ${role}.`)
       return
     }
     setCreating(true)
@@ -128,7 +128,7 @@ export default function AdminUsersPage() {
           registration_number: role === "student" ? regNumber : undefined,
           email,
           phone_number: phoneNumber,
-          username: role === "lecturer" ? username : undefined,
+          username: role === "lecturer" || role === "admin" ? username : undefined,
         }),
       })
       const payload = await res.json().catch(() => ({}))
@@ -266,7 +266,7 @@ export default function AdminUsersPage() {
           {role === "student" ? <input value={regNumber} onChange={e => setRegNumber(e.target.value)} placeholder="Registration number" className="rounded-md border border-border bg-background p-2 text-sm text-foreground" /> : null}
           <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email" className="rounded-md border border-border bg-background p-2 text-sm text-foreground" />
           <input value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)} placeholder="Phone number (optional)" className="rounded-md border border-border bg-background p-2 text-sm text-foreground" />
-          {role === "lecturer" ? <input value={username} onChange={e => setUsername(e.target.value)} placeholder="Username (required for lecturer)" className="rounded-md border border-border bg-background p-2 text-sm text-foreground" /> : null}
+          {role === "lecturer" || role === "admin" ? <input value={username} onChange={e => setUsername(e.target.value)} placeholder={`Username (required for ${role})`} className="rounded-md border border-border bg-background p-2 text-sm text-foreground" /> : null}
         </div>
         {createError && <p className="mt-2 text-sm text-red-600">{createError}</p>}
         <button onClick={provisionAccount} disabled={creating} className="mt-3 rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
