@@ -102,7 +102,7 @@ function LecturerDashboardInner() {
     exams: "Exams",
     questions: "Questions",
     students: "Students",
-    results: "Session Results",
+    results: "Sessions & Reports",
     profile: "Profile",
   }
   const [token, setToken] = useState("")
@@ -535,7 +535,7 @@ function LecturerDashboardInner() {
         { label: "Exams", href: "/lecturer?tab=exams", active: tab === "exams" },
         { label: "Questions", href: "/lecturer?tab=questions", active: tab === "questions" },
         { label: "Students", href: "/lecturer?tab=students", active: tab === "students" },
-        { label: "Session Results", href: "/lecturer?tab=results", active: tab === "results" },
+        { label: "Sessions & Reports", href: "/lecturer?tab=results", active: tab === "results" },
         { label: "Profile", href: "/lecturer?tab=profile", active: tab === "profile" },
       ]}
       rightTopSlot={
@@ -582,7 +582,7 @@ function LecturerDashboardInner() {
               <p className="mt-1 text-xs text-muted-foreground">View enrolled students.</p>
             </Link>
             <Link href="/lecturer?tab=results" className="rounded-xl border border-border bg-gradient-to-br from-violet-50 to-fuchsia-50 p-4 transition hover:shadow-md dark:from-slate-900 dark:to-slate-800">
-              <p className="text-sm font-semibold text-foreground">Session Results</p>
+              <p className="text-sm font-semibold text-foreground">Sessions & Reports</p>
               <p className="mt-1 text-xs text-muted-foreground">Inspect outcomes and risk.</p>
             </Link>
             <Link href="/lecturer?tab=profile" className="rounded-xl border border-border bg-gradient-to-br from-slate-100 to-slate-200 p-4 transition hover:shadow-md dark:from-slate-900 dark:to-slate-800">
@@ -865,7 +865,7 @@ function LecturerDashboardInner() {
         )}
 
         {tab === "results" && (
-        <DashboardPanel title="Session Results (Live Data)">
+        <DashboardPanel title="Sessions & Reports (Live Data)">
           <div className="mt-4 overflow-x-auto">
             <table className="w-full text-sm">
               <thead>

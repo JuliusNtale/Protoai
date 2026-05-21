@@ -56,6 +56,9 @@ export function DashboardShell({
   const [open, setOpen] = useState(false)
   const [idleWarningOpen, setIdleWarningOpen] = useState(false)
   const [secondsUntilLogout, setSecondsUntilLogout] = useState(Math.ceil(IDLE_WARNING_MS / 1000))
+  const [cameraPromptOpen, setCameraPromptOpen] = useState(false)
+  const [cameraPromptBusy, setCameraPromptBusy] = useState(false)
+  const [cameraPromptError, setCameraPromptError] = useState("")
   const searchContainerRef = useRef<HTMLDivElement | null>(null)
   const lastActivityRef = useRef<number>(Date.now())
   const logoutTriggeredRef = useRef(false)
@@ -156,6 +159,33 @@ export function DashboardShell({
     }
   }, [router, isExiting, idleWarningOpen])
 
+  useEffect(() => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null
+    if (!token) return
+    if (!window.isSecureContext) return
+    if (!navigator.mediaDevices?.getUserMedia) return
+    if (sessionStorage.getItem("camera_permission_prompted") === "1") return
+    setCameraPromptOpen(true)
+  }, [])
+
+  async function requestCameraPermission() {
+    setCameraPromptError("")
+    setCameraPromptBusy(true)
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user" },
+        audio: false,
+      })
+      stream.getTracks().forEach((track) => track.stop())
+      sessionStorage.setItem("camera_permission_prompted", "1")
+      setCameraPromptOpen(false)
+    } catch {
+      setCameraPromptError("Camera access denied. Allow permission to continue with monitored exams.")
+    } finally {
+      setCameraPromptBusy(false)
+    }
+  }
+
   function staySignedIn() {
     lastActivityRef.current = Date.now()
     setIdleWarningOpen(false)
@@ -192,6 +222,26 @@ export function DashboardShell({
                 className="rounded-md border border-border bg-background px-3 py-2 text-sm font-medium text-foreground transition hover:bg-accent"
               >
                 Stay Signed In
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {cameraPromptOpen ? (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/70 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-xl">
+            <h3 className="text-base font-semibold text-foreground">Enable Camera Access</h3>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Camera permission is required for exam verification and live monitoring.
+            </p>
+            {cameraPromptError ? <p className="mt-2 text-sm text-red-600">{cameraPromptError}</p> : null}
+            <div className="mt-4 flex justify-end">
+              <button
+                onClick={() => void requestCameraPermission()}
+                disabled={cameraPromptBusy}
+                className="rounded-md bg-[#1a2d5a] px-3 py-2 text-sm font-medium text-white transition hover:bg-[#142145] disabled:opacity-60"
+              >
+                {cameraPromptBusy ? "Requesting..." : "Allow Camera"}
               </button>
             </div>
           </div>

@@ -68,6 +68,8 @@ export default function ExamPage() {
   const answersRef = useRef<Record<number, number>>({})
   const frameCanvasRef = useRef<HTMLCanvasElement>(null)
   const socketRef = useRef<SocketLike | null>(null)
+  const tabViolationInFlightRef = useRef(false)
+  const lastTabViolationAtRef = useRef(0)
   const [current, setCurrent] = useState(0)
   const [answers, setAnswers] = useState<Record<number, number>>({})
   const [flagged, setFlagged] = useState<Set<number>>(new Set())
@@ -359,6 +361,47 @@ export default function ExamPage() {
     })
   }
 
+  async function logTabSwitchViolation(reason: "visibility_hidden" | "window_blur") {
+    if (!sessionId || sessionLocked) return
+    if (tabViolationInFlightRef.current) return
+    const now = Date.now()
+    if (now - lastTabViolationAtRef.current < 1500) return
+    const token = localStorage.getItem("token")
+    if (!token) return
+
+    tabViolationInFlightRef.current = true
+    lastTabViolationAtRef.current = now
+    try {
+      const res = await fetch(getApiPath("/sessions/log"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          session_id: sessionId,
+          event_type: "tab_switch",
+          metadata: { reason, source: "browser_lockdown", timestamp: new Date().toISOString() },
+        }),
+      })
+      const payload = await res.json().catch(() => ({}))
+      if (res.ok) {
+        const warningCount = Number(payload?.warning_count ?? 0)
+        applyWarning(warningCount)
+        return
+      }
+      const warningCount = Number(payload?.warning_count ?? 0)
+      if (warningCount > 0) applyWarning(warningCount)
+      if (String(payload?.error?.code || "").toUpperCase().includes("LOCKED")) {
+        setSessionLocked(true)
+      }
+    } catch {
+      // Ignore network errors; socket proctoring may still enforce violations.
+    } finally {
+      tabViolationInFlightRef.current = false
+    }
+  }
+
   async function ensureSocketClientLoaded() {
     if (window.io) return
     await new Promise<void>((resolve, reject) => {
@@ -483,6 +526,26 @@ export default function ExamPage() {
       setSocketConnected(false)
     }
   }, [applyWarning, examCameraReady, maxWarnings, sessionId, sessionLocked, setTabSwitches])
+
+  useEffect(() => {
+    if (!sessionId || sessionLocked) return
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        void logTabSwitchViolation("visibility_hidden")
+      }
+    }
+    const onWindowBlur = () => {
+      void logTabSwitchViolation("window_blur")
+    }
+
+    document.addEventListener("visibilitychange", onVisibilityChange)
+    window.addEventListener("blur", onWindowBlur)
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange)
+      window.removeEventListener("blur", onWindowBlur)
+    }
+  }, [sessionId, sessionLocked])
 
   // Status for each question bubble
   function bubbleStatus(i: number) {
