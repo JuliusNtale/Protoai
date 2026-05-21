@@ -9,7 +9,7 @@ from flask_jwt_extended import get_jwt, get_jwt_identity, jwt_required
 
 from app.audit import log_audit
 from app.extensions import db
-from app.models import AuditLog, FacialImage, User
+from app.models import AuditLog, BehavioralLog, Exam, ExamSession, FacialImage, Question, Report, SessionAnswer, User
 
 users_bp = Blueprint("users", __name__)
 
@@ -31,6 +31,20 @@ def _generate_temp_password(length=12):
 def _password_change_required(user_id: int) -> bool:
     user = db.session.get(User, user_id)
     return bool(user and user.must_change_password)
+
+
+def _delete_exam_cascade(exam_id: int) -> None:
+    session_ids = [
+        row[0]
+        for row in db.session.query(ExamSession.session_id).filter(ExamSession.exam_id == exam_id).all()
+    ]
+    if session_ids:
+        Report.query.filter(Report.session_id.in_(session_ids)).delete(synchronize_session=False)
+        SessionAnswer.query.filter(SessionAnswer.session_id.in_(session_ids)).delete(synchronize_session=False)
+        BehavioralLog.query.filter(BehavioralLog.session_id.in_(session_ids)).delete(synchronize_session=False)
+        ExamSession.query.filter(ExamSession.session_id.in_(session_ids)).delete(synchronize_session=False)
+    Question.query.filter_by(exam_id=exam_id).delete(synchronize_session=False)
+    Exam.query.filter_by(exam_id=exam_id).delete(synchronize_session=False)
 
 
 @users_bp.put("/profile")
@@ -243,6 +257,45 @@ def update_user_status(user_id: int):
     )
     db.session.commit()
     return jsonify({"message": "User status updated", "user": user.to_auth_user() | {"is_active": user.is_active}}), 200
+
+
+@users_bp.delete("/<int:user_id>")
+@jwt_required()
+def delete_user(user_id: int):
+    if not _is_admin():
+        return jsonify({"error": {"message": "Forbidden"}}), 403
+    actor_user_id = int(get_jwt_identity())
+    if _password_change_required(actor_user_id):
+        return jsonify({"error": {"message": "Password change required before admin actions"}}), 403
+    if actor_user_id == user_id:
+        return jsonify({"error": {"message": "You cannot delete your own account"}}), 400
+
+    user = db.session.get(User, user_id)
+    if not user:
+        return jsonify({"error": {"message": "User not found"}}), 404
+
+    if user.role == "lecturer":
+        exam_ids = [row[0] for row in db.session.query(Exam.exam_id).filter(Exam.lecturer_id == user.user_id).all()]
+        for exam_id in exam_ids:
+            _delete_exam_cascade(int(exam_id))
+
+    session_ids = [row[0] for row in db.session.query(ExamSession.session_id).filter(ExamSession.student_id == user.user_id).all()]
+    if session_ids:
+        Report.query.filter(Report.session_id.in_(session_ids)).delete(synchronize_session=False)
+        SessionAnswer.query.filter(SessionAnswer.session_id.in_(session_ids)).delete(synchronize_session=False)
+        BehavioralLog.query.filter(BehavioralLog.session_id.in_(session_ids)).delete(synchronize_session=False)
+        ExamSession.query.filter(ExamSession.session_id.in_(session_ids)).delete(synchronize_session=False)
+    FacialImage.query.filter_by(user_id=user.user_id).delete(synchronize_session=False)
+
+    db.session.delete(user)
+    log_audit(
+        action="admin.user_deleted",
+        actor_user_id=actor_user_id,
+        target_user_id=user_id,
+        metadata={"deleted_role": user.role, "deleted_email": user.email},
+    )
+    db.session.commit()
+    return jsonify({"message": "User deleted"}), 200
 
 
 @users_bp.post("/<int:user_id>/reset-credentials")

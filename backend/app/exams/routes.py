@@ -4,7 +4,7 @@ from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt, get_jwt_identity, jwt_required
 
 from app.extensions import db
-from app.models import Exam, ExamSession, Question, User
+from app.models import BehavioralLog, Exam, ExamSession, Question, Report, SessionAnswer, User
 
 exams_bp = Blueprint("exams", __name__)
 
@@ -17,6 +17,20 @@ def _password_change_required(user_id: int) -> bool:
 def _lecturer_profile_confirmed(user_id: int) -> bool:
     user = db.session.get(User, user_id)
     return bool(user and user.role == "lecturer" and user.lecturer_profile_confirmed)
+
+
+def _delete_exam_cascade(exam_id: int) -> None:
+    session_ids = [
+        row[0]
+        for row in db.session.query(ExamSession.session_id).filter(ExamSession.exam_id == exam_id).all()
+    ]
+    if session_ids:
+        Report.query.filter(Report.session_id.in_(session_ids)).delete(synchronize_session=False)
+        SessionAnswer.query.filter(SessionAnswer.session_id.in_(session_ids)).delete(synchronize_session=False)
+        BehavioralLog.query.filter(BehavioralLog.session_id.in_(session_ids)).delete(synchronize_session=False)
+        ExamSession.query.filter(ExamSession.session_id.in_(session_ids)).delete(synchronize_session=False)
+    Question.query.filter_by(exam_id=exam_id).delete(synchronize_session=False)
+    Exam.query.filter_by(exam_id=exam_id).delete(synchronize_session=False)
 
 
 @exams_bp.get("")
@@ -190,15 +204,17 @@ def delete_exam(exam_id):
         return jsonify({"error": {"message": "Exam not found"}}), 404
     if role == "lecturer" and exam.lecturer_id != user_id:
         return jsonify({"error": {"message": "Forbidden"}}), 403
+    force_delete = (request.args.get("force") or "").strip().lower() == "true"
+    if force_delete and role != "admin":
+        return jsonify({"error": {"message": "Only admin can force delete exams with session history"}}), 403
 
     # Prevent deletion once sessions exist to preserve integrity/audit history.
-    if ExamSession.query.filter_by(exam_id=exam.exam_id).first():
+    if ExamSession.query.filter_by(exam_id=exam.exam_id).first() and not force_delete:
         return jsonify({"error": {"message": "Exam has active/history sessions and cannot be deleted"}}), 409
 
-    Question.query.filter_by(exam_id=exam.exam_id).delete()
-    db.session.delete(exam)
+    _delete_exam_cascade(exam.exam_id)
     db.session.commit()
-    return jsonify({"message": "Exam deleted"}), 200
+    return jsonify({"message": "Exam deleted", "force_deleted": force_delete}), 200
 
 
 @exams_bp.get("/<int:exam_id>")

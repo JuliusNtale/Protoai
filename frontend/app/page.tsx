@@ -67,9 +67,9 @@ export default function LoginPage() {
               University of Dodoma
             </p>
             <h1 className="mt-4 text-4xl leading-tight text-[#1a2d5a] dark:text-[#e8eaef]" style={{ fontFamily: "'Iowan Old Style','Palatino Linotype',serif" }}>
-              Secure Examinations,
+              Trusted Examinations,
               <br />
-              Human-Centered Design
+              Institutional Integrity
             </h1>
             <p className="mt-4 max-w-lg text-sm leading-relaxed text-[#45536f] dark:text-[#b2bac7]">
               ProctoAI protects exam integrity through guided verification, invigilation analytics, and accountable audit trails.

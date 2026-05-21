@@ -40,6 +40,7 @@ export default function AdminExamsPage() {
   const [msg, setMsg] = useState("")
   const [isExiting, setIsExiting] = useState(false)
   const [deletingExamId, setDeletingExamId] = useState<number | null>(null)
+  const [forceDeletingExamId, setForceDeletingExamId] = useState<number | null>(null)
   const [exams, setExams] = useState<ExamRow[]>([])
 
   useEffect(() => {
@@ -107,6 +108,30 @@ export default function AdminExamsPage() {
       await fetchExams(token)
     } finally {
       setDeletingExamId(null)
+    }
+  }
+
+  async function forceDeleteExam(exam: ExamRow) {
+    const ok = window.confirm(`Force delete exam "${exam.title}" including active/history sessions? This is irreversible.`)
+    if (!ok) return
+
+    setForceDeletingExamId(exam.exam_id)
+    setError("")
+    setMsg("")
+    try {
+      const res = await fetch(`${getApiPath(`/exams/${exam.exam_id}`)}?force=true`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setError(payload?.error?.message || "Could not force delete exam.")
+        return
+      }
+      setMsg(`Force deleted exam: ${exam.title}`)
+      await fetchExams(token)
+    } finally {
+      setForceDeletingExamId(null)
     }
   }
 
@@ -185,13 +210,22 @@ export default function AdminExamsPage() {
                     <td>{formatDateTime(exam.scheduled_at)}</td>
                     <td><span className={`rounded-full border px-2 py-1 text-xs font-medium ${badgeTone(exam.status)}`}>{exam.status}</span></td>
                     <td className="pr-3">
-                      <button
-                        onClick={() => void deleteExam(exam)}
-                        disabled={deletingExamId === exam.exam_id}
-                        className="rounded-md border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-60"
-                      >
-                        {deletingExamId === exam.exam_id ? "Deleting..." : "Delete"}
-                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => void deleteExam(exam)}
+                          disabled={deletingExamId === exam.exam_id || forceDeletingExamId === exam.exam_id}
+                          className="rounded-md border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-60"
+                        >
+                          {deletingExamId === exam.exam_id ? "Deleting..." : "Delete"}
+                        </button>
+                        <button
+                          onClick={() => void forceDeleteExam(exam)}
+                          disabled={deletingExamId === exam.exam_id || forceDeletingExamId === exam.exam_id}
+                          className="rounded-md border border-red-500 bg-red-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-600 disabled:opacity-60"
+                        >
+                          {forceDeletingExamId === exam.exam_id ? "Force Deleting..." : "Force Delete"}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

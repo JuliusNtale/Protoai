@@ -99,13 +99,28 @@ export default function ForgotPasswordPage() {
               {error ? <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-300">{error}</p> : null}
               {success ? <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-300">{success}</p> : null}
 
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full rounded-xl bg-[#1e2f4d] py-2.5 text-sm font-semibold text-white transition hover:bg-[#192740] disabled:cursor-not-allowed disabled:opacity-70"
-              >
-                {loading ? "Sending..." : "Send temporary password"}
-              </button>
+              {!success ? (
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full rounded-xl bg-[#1e2f4d] py-2.5 text-sm font-semibold text-white transition hover:bg-[#192740] disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {loading ? "Sending..." : "Send temporary password"}
+                </button>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="rounded-xl border border-[#cfc5b2] bg-white py-2.5 text-sm font-semibold text-[#1e2f4d] transition hover:bg-[#f7f9fc] disabled:cursor-not-allowed disabled:opacity-70 dark:border-[#333b4c] dark:bg-[#11151d] dark:text-[#e8eaef]"
+                  >
+                    {loading ? "Sending..." : "Resend"}
+                  </button>
+                  <Link href="/" className="inline-flex items-center justify-center rounded-xl bg-[#1e2f4d] py-2.5 text-sm font-semibold text-white transition hover:bg-[#192740]">
+                    Go to login
+                  </Link>
+                </div>
+              )}
             </form>
 
             <p className="mt-5 text-center text-xs text-[#6f737b] dark:text-[#97a0af]">

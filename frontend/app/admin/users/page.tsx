@@ -44,6 +44,7 @@ export default function AdminUsersPage() {
   const [usersError, setUsersError] = useState("")
   const [uploadingByUser, setUploadingByUser] = useState<Record<number, boolean>>({})
   const [uploadMessage, setUploadMessage] = useState("")
+  const [deletingUserId, setDeletingUserId] = useState<number | null>(null)
   const [isExiting, setIsExiting] = useState(false)
   const [query, setQuery] = useState("")
   const [roleFilter, setRoleFilter] = useState<"all" | "student" | "lecturer" | "admin">("all")
@@ -166,6 +167,27 @@ export default function AdminUsersPage() {
       return
     }
     await fetchUsers()
+  }
+
+  async function deleteUser(user: ManagedUser) {
+    const ok = window.confirm(`Delete user "${user.full_name}" (${user.username || user.registration_number})? This is irreversible.`)
+    if (!ok) return
+    setDeletingUserId(user.user_id)
+    setUsersError("")
+    try {
+      const res = await fetch(getApiPath(`/users/${user.user_id}`), {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setUsersError(payload?.error?.message || "Failed to delete user.")
+        return
+      }
+      await fetchUsers()
+    } finally {
+      setDeletingUserId(null)
+    }
   }
 
   async function uploadBaselineImage(user: ManagedUser, file: File | null) {
@@ -345,12 +367,22 @@ export default function AdminUsersPage() {
                     )}
                   </td>
                   <td className="px-4 py-3 text-right align-middle">
-                    <button
-                      onClick={() => void toggleUserStatus(user)}
-                      className="rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-                    >
-                      {user.is_active ? "Deactivate" : "Activate"}
-                    </button>
+                    <div className="flex justify-end gap-2">
+                      <button
+                        onClick={() => void toggleUserStatus(user)}
+                        disabled={deletingUserId === user.user_id}
+                        className="rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:opacity-60"
+                      >
+                        {user.is_active ? "Deactivate" : "Activate"}
+                      </button>
+                      <button
+                        onClick={() => void deleteUser(user)}
+                        disabled={deletingUserId === user.user_id}
+                        className="rounded-md border border-red-200 px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-60"
+                      >
+                        {deletingUserId === user.user_id ? "Deleting..." : "Delete"}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
