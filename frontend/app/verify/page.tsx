@@ -265,8 +265,10 @@ export default function VerifyPage() {
     if (currentPhase === "scanning") return true
     if (currentPhase === "move_up") return pitch <= -15
     if (currentPhase === "move_down") return pitch >= 15
-    if (currentPhase === "move_left") return yaw <= -18
-    if (currentPhase === "move_right") return yaw >= 18
+    // Yaw sign is inverted relative to user-facing prompt direction in our current feed.
+    // Swap left/right checks so instruction text matches real movement.
+    if (currentPhase === "move_left") return yaw >= 18
+    if (currentPhase === "move_right") return yaw <= -18
     return false
   }
 
