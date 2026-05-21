@@ -17,6 +17,10 @@ type SessionRow = {
   warning_count: number
 }
 
+type MeUser = {
+  must_change_password?: boolean
+}
+
 export default function AdminDashboardSummary() {
   const router = useRouter()
   const [token, setToken] = useState("")
@@ -25,6 +29,12 @@ export default function AdminDashboardSummary() {
   const [isExiting, setIsExiting] = useState(false)
   const [users, setUsers] = useState<ManagedUser[]>([])
   const [sessions, setSessions] = useState<SessionRow[]>([])
+  const [me, setMe] = useState<MeUser | null>(null)
+  const [showForcePasswordModal, setShowForcePasswordModal] = useState(false)
+  const [currentPassword, setCurrentPassword] = useState("")
+  const [newPassword, setNewPassword] = useState("")
+  const [forcePasswordMsg, setForcePasswordMsg] = useState("")
+  const [savingPassword, setSavingPassword] = useState(false)
 
   useEffect(() => {
     const rawToken = localStorage.getItem("token")
@@ -50,6 +60,8 @@ export default function AdminDashboardSummary() {
         router.push("/")
         return
       }
+      setMe(mePayload.user || null)
+      setShowForcePasswordModal(Boolean(mePayload?.user?.must_change_password))
 
       const [usersRes, sessionsRes] = await Promise.all([
         fetch(getApiPath("/users"), { headers: { Authorization: `Bearer ${activeToken}` } }),
@@ -82,7 +94,32 @@ export default function AdminDashboardSummary() {
     router.push("/")
   }
 
+  async function submitForcedPasswordChange() {
+    setForcePasswordMsg("")
+    setSavingPassword(true)
+    try {
+      const res = await fetch(getApiPath("/auth/change-password"), {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+      })
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setForcePasswordMsg(payload?.error?.message || "Could not update password.")
+        return
+      }
+      setCurrentPassword("")
+      setNewPassword("")
+      setShowForcePasswordModal(false)
+      setMe((prev) => (prev ? { ...prev, must_change_password: false } : prev))
+      setForcePasswordMsg("Password updated successfully.")
+    } finally {
+      setSavingPassword(false)
+    }
+  }
+
   return (
+    <>
     <DashboardShell
       appName="ProctorAI Admin"
       title="Admin Dashboard"
@@ -158,5 +195,26 @@ export default function AdminDashboardSummary() {
       </>
       ) : null}
     </DashboardShell>
+    {showForcePasswordModal ? (
+      <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">
+        <div className="w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-2xl">
+          <h3 className="text-lg font-semibold text-foreground">Password Update Required</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            You signed in with a temporary password. Set a new password to continue.
+          </p>
+          <div className="mt-4 grid gap-3">
+            <input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} placeholder="Current temporary password" className="w-full rounded-md border border-border bg-background p-2 text-sm text-foreground" />
+            <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="New password" className="w-full rounded-md border border-border bg-background p-2 text-sm text-foreground" />
+          </div>
+          {forcePasswordMsg ? <p className="mt-3 text-sm text-red-600">{forcePasswordMsg}</p> : null}
+          <div className="mt-4 flex justify-end">
+            <button onClick={() => void submitForcedPasswordChange()} disabled={savingPassword} className="rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
+              {savingPassword ? "Updating..." : "Update Password"}
+            </button>
+          </div>
+        </div>
+      </div>
+    ) : null}
+    </>
   )
 }
