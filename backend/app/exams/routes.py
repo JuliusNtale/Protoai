@@ -29,6 +29,9 @@ def list_exams():
         query = query.filter_by(status=status_filter)
 
     exams = query.order_by(Exam.created_at.desc()).all()
+    lecturer_ids = list({int(exam.lecturer_id) for exam in exams if exam.lecturer_id is not None})
+    lecturer_rows = User.query.filter(User.user_id.in_(lecturer_ids)).all() if lecturer_ids else []
+    lecturer_map = {row.user_id: row.full_name for row in lecturer_rows}
     return jsonify(
         {
             "exams": [
@@ -41,6 +44,7 @@ def list_exams():
                     "scheduled_at": exam.scheduled_at.isoformat() if exam.scheduled_at else None,
                     "status": exam.status,
                     "lecturer_id": exam.lecturer_id,
+                    "lecturer_name": lecturer_map.get(exam.lecturer_id),
                 }
                 for exam in exams
             ]
@@ -400,11 +404,15 @@ def list_course_students(course_code: str):
     if not exam_ids:
         return jsonify({"students": []}), 200
 
+    distinct_students = (
+        db.session.query(ExamSession.student_id.label("student_id"))
+        .filter(ExamSession.exam_id.in_(exam_ids))
+        .distinct()
+        .subquery()
+    )
     rows = (
         db.session.query(User.user_id, User.full_name, User.reg_number, User.email)
-        .join(ExamSession, ExamSession.student_id == User.user_id)
-        .filter(ExamSession.exam_id.in_(exam_ids))
-        .distinct(User.user_id)
+        .join(distinct_students, distinct_students.c.student_id == User.user_id)
         .order_by(User.full_name.asc())
         .all()
     )

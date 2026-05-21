@@ -1,8 +1,11 @@
 "use client"
 
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { Search } from "lucide-react"
-import type { ReactNode } from "react"
+import { useEffect, useRef, useState, type ReactNode } from "react"
+import { ThemeToggle } from "@/components/theme-toggle"
+import { getApiPath } from "@/lib/api-url"
 
 type SidebarItem = {
   label: string
@@ -17,7 +20,19 @@ type DashboardShellProps = {
   subtitle?: string
   sidebarItems: SidebarItem[]
   rightTopSlot?: ReactNode
+  avatarName?: string
+  avatarImageUrl?: string | null
+  isExiting?: boolean
+  exitMessage?: string
   children: ReactNode
+}
+
+type SearchResultItem = {
+  type: string
+  id: number
+  title: string
+  subtitle: string
+  href: string
 }
 
 export function DashboardShell({
@@ -26,24 +41,184 @@ export function DashboardShell({
   subtitle,
   sidebarItems,
   rightTopSlot,
+  avatarName,
+  avatarImageUrl,
+  isExiting = false,
+  exitMessage = "Signing out...",
   children,
 }: DashboardShellProps) {
+  const router = useRouter()
+  const IDLE_TIMEOUT_MS = 5 * 60 * 1000
+  const IDLE_WARNING_MS = 60 * 1000
+  const [query, setQuery] = useState("")
+  const [results, setResults] = useState<SearchResultItem[]>([])
+  const [searching, setSearching] = useState(false)
+  const [open, setOpen] = useState(false)
+  const [idleWarningOpen, setIdleWarningOpen] = useState(false)
+  const [secondsUntilLogout, setSecondsUntilLogout] = useState(Math.ceil(IDLE_WARNING_MS / 1000))
+  const searchContainerRef = useRef<HTMLDivElement | null>(null)
+  const lastActivityRef = useRef<number>(Date.now())
+  const logoutTriggeredRef = useRef(false)
+
+  useEffect(() => {
+    function handleOutsideClick(event: MouseEvent) {
+      if (!searchContainerRef.current?.contains(event.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener("mousedown", handleOutsideClick)
+    return () => document.removeEventListener("mousedown", handleOutsideClick)
+  }, [])
+
+  useEffect(() => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null
+    const trimmed = query.trim()
+    if (!token || trimmed.length < 2) {
+      setResults([])
+      setSearching(false)
+      return
+    }
+
+    const controller = new AbortController()
+    const timeout = setTimeout(async () => {
+      try {
+        setSearching(true)
+        const res = await fetch(`${getApiPath("/search")}?q=${encodeURIComponent(trimmed)}&limit=12`, {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: controller.signal,
+        })
+        const payload = await res.json().catch(() => ({}))
+        if (!res.ok) {
+          setResults([])
+          return
+        }
+        setResults(payload.results || [])
+        setOpen(true)
+      } catch {
+        setResults([])
+      } finally {
+        setSearching(false)
+      }
+    }, 220)
+
+    return () => {
+      clearTimeout(timeout)
+      controller.abort()
+    }
+  }, [query])
+
+  useEffect(() => {
+    function markActivity() {
+      lastActivityRef.current = Date.now()
+      if (idleWarningOpen) {
+        setIdleWarningOpen(false)
+      }
+    }
+
+    const events: Array<keyof WindowEventMap> = [
+      "mousemove",
+      "mousedown",
+      "keydown",
+      "touchstart",
+      "scroll",
+      "focus",
+    ]
+    events.forEach((eventName) => window.addEventListener(eventName, markActivity, { passive: true }))
+
+    const tick = window.setInterval(() => {
+      if (logoutTriggeredRef.current || isExiting) return
+      const elapsed = Date.now() - lastActivityRef.current
+      const warningThreshold = IDLE_TIMEOUT_MS - IDLE_WARNING_MS
+
+      if (elapsed >= IDLE_TIMEOUT_MS) {
+        logoutTriggeredRef.current = true
+        setIdleWarningOpen(false)
+        localStorage.removeItem("token")
+        localStorage.removeItem("user")
+        localStorage.removeItem("session_id")
+        localStorage.removeItem("exam_id")
+        router.push("/")
+        return
+      }
+
+      if (elapsed >= warningThreshold) {
+        const remainingMs = Math.max(IDLE_TIMEOUT_MS - elapsed, 0)
+        setSecondsUntilLogout(Math.ceil(remainingMs / 1000))
+        setIdleWarningOpen(true)
+      } else if (idleWarningOpen) {
+        setIdleWarningOpen(false)
+      }
+    }, 1000)
+
+    return () => {
+      window.clearInterval(tick)
+      events.forEach((eventName) => window.removeEventListener(eventName, markActivity))
+    }
+  }, [router, isExiting, idleWarningOpen])
+
+  function staySignedIn() {
+    lastActivityRef.current = Date.now()
+    setIdleWarningOpen(false)
+  }
+
+  function onSelect(result: SearchResultItem) {
+    setOpen(false)
+    setQuery("")
+    router.push(result.href)
+  }
+
+  const activeItem = sidebarItems.find((item) => item.active) || sidebarItems[0]
+  const navItems = sidebarItems.filter((item) => item.href)
+
+  const avatarInitials = (avatarName || "")
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() || "")
+    .join("") || "U"
+
   return (
-    <main className="min-h-screen bg-[#eef2f7] p-4 text-slate-900 md:p-6">
-      <div className="mx-auto flex w-full max-w-[1400px] overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_18px_55px_rgba(15,23,42,0.08)]">
-        <aside className="hidden w-72 border-r border-slate-200 bg-[#f6f8fb] px-4 py-5 lg:block">
-          <div className="px-2">
-            <h2 className="text-lg font-semibold text-slate-900">{appName}</h2>
+    <main className="relative min-h-screen bg-background p-4 text-foreground md:p-6">
+      {idleWarningOpen ? (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/70 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-xl">
+            <h3 className="text-base font-semibold text-foreground">Still there?</h3>
+            <p className="mt-2 text-sm text-muted-foreground">
+              You will be logged out in {secondsUntilLogout}s due to inactivity.
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                onClick={staySignedIn}
+                className="rounded-md border border-border bg-background px-3 py-2 text-sm font-medium text-foreground transition hover:bg-accent"
+              >
+                Stay Signed In
+              </button>
+            </div>
           </div>
-          <nav className="mt-6 space-y-1">
+        </div>
+      ) : null}
+      {isExiting ? (
+        <div className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center bg-background/70 backdrop-blur-sm">
+          <div className="rounded-2xl border border-border bg-card px-6 py-5 text-center shadow-xl">
+            <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            <p className="text-sm font-medium text-foreground">{exitMessage}</p>
+          </div>
+        </div>
+      ) : null}
+      <div className="mx-auto flex min-h-[calc(100vh-2rem)] w-full overflow-hidden rounded-[28px] border border-border bg-card shadow-[0_18px_55px_rgba(15,23,42,0.08)] dark:shadow-[0_18px_55px_rgba(0,0,0,0.45)] md:min-h-[calc(100vh-3rem)]">
+        <aside className="hidden w-72 border-r border-border bg-muted/35 px-4 py-5 lg:block">
+          <div className="px-2">
+            <h2 className="text-lg font-semibold text-foreground">{appName}</h2>
+          </div>
+          <nav className="mt-7 space-y-3 px-1">
             {sidebarItems.map((item, index) => {
               const body = (
                 <div
-                  className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition ${
-                    item.active ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:bg-white hover:text-slate-900"
+                  className={`mx-1 flex items-center gap-3 rounded-xl px-4 py-3.5 text-sm transition ${
+                    item.active ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:bg-card hover:text-foreground"
                   }`}
                 >
-                  <span className="text-slate-500">{item.icon}</span>
+                  <span className="text-muted-foreground">{item.icon}</span>
                   <span>{item.label}</span>
                 </div>
               )
@@ -58,27 +233,85 @@ export function DashboardShell({
           </nav>
         </aside>
 
-        <div className="min-w-0 flex-1">
-          <header className="border-b border-slate-200 px-4 py-4 md:px-6">
+        <div className="flex min-h-full min-w-0 flex-1 flex-col">
+          <header className="border-b border-border px-4 py-4 md:px-6">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
-                <h1 className="text-xl font-semibold text-slate-900">{title}</h1>
-                {subtitle ? <p className="mt-1 text-sm text-slate-600">{subtitle}</p> : null}
+                <h1 className="text-xl font-semibold text-foreground">{title}</h1>
+                {subtitle ? <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p> : null}
+                <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground lg:hidden">
+                  <span>{appName}</span>
+                  <span>/</span>
+                  <span className="font-medium text-foreground">{activeItem?.label || title}</span>
+                </div>
               </div>
               <div className="flex items-center gap-3">
-                <label className="hidden items-center gap-2 rounded-xl border border-slate-200 bg-[#f8fafc] px-3 py-2 text-sm text-slate-500 md:flex">
-                  <Search className="h-4 w-4" />
-                  <input
-                    readOnly
-                    placeholder="Search"
-                    className="w-44 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
-                  />
-                </label>
+                <div ref={searchContainerRef} className="relative hidden md:block">
+                  <label className="flex items-center gap-2 rounded-xl border border-border bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
+                    <Search className="h-4 w-4" />
+                    <input
+                      value={query}
+                      onChange={(event) => setQuery(event.target.value)}
+                      onFocus={() => setOpen(results.length > 0)}
+                      placeholder="Search exams, users, sessions..."
+                      className="w-64 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+                    />
+                  </label>
+                  {open ? (
+                    <div className="absolute right-0 z-30 mt-2 w-[30rem] overflow-hidden rounded-xl border border-border bg-card shadow-xl">
+                      {searching ? (
+                        <div className="px-3 py-2 text-sm text-muted-foreground">Searching...</div>
+                      ) : results.length === 0 ? (
+                        <div className="px-3 py-2 text-sm text-muted-foreground">No results</div>
+                      ) : (
+                        <ul className="max-h-80 overflow-y-auto">
+                          {results.map((result) => (
+                            <li key={`${result.type}-${result.id}`}>
+                              <button
+                                onClick={() => onSelect(result)}
+                                className="w-full border-b border-border px-3 py-2 text-left transition-colors hover:bg-accent last:border-b-0"
+                              >
+                                <p className="text-sm font-medium text-foreground">{result.title}</p>
+                                <p className="text-xs text-muted-foreground">{result.subtitle}</p>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+                <ThemeToggle />
+                <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border border-border bg-muted text-xs font-semibold text-foreground">
+                  {avatarImageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={avatarImageUrl} alt={avatarName || "User avatar"} className="h-full w-full object-cover" />
+                  ) : (
+                    <span>{avatarInitials}</span>
+                  )}
+                </div>
                 {rightTopSlot}
               </div>
             </div>
+            {navItems.length > 0 ? (
+              <div className="mt-3 flex gap-2 overflow-x-auto pb-1 lg:hidden">
+                {navItems.map((item, index) => (
+                  <Link
+                    key={`${item.label}-${index}`}
+                    href={item.href as string}
+                    className={`whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                      item.active
+                        ? "border-transparent bg-[#1a2d5a] text-white"
+                        : "border-border bg-card text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                    }`}
+                  >
+                    {item.label}
+                  </Link>
+                ))}
+              </div>
+            ) : null}
           </header>
-          <section className="space-y-5 px-4 py-5 md:px-6">{children}</section>
+          <section className="flex-1 space-y-5 px-4 py-5 md:px-6">{children}</section>
         </div>
       </div>
     </main>
@@ -87,10 +320,10 @@ export function DashboardShell({
 
 export function DashboardPanel({ title, subtitle, children }: { title: string; subtitle?: string; children: ReactNode }) {
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+    <section className="rounded-2xl border border-border bg-card p-4 shadow-sm md:p-5">
       <div className="mb-3">
-        <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
-        {subtitle ? <p className="mt-1 text-sm text-slate-600">{subtitle}</p> : null}
+        <h3 className="text-lg font-semibold text-foreground">{title}</h3>
+        {subtitle ? <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p> : null}
       </div>
       {children}
     </section>
@@ -99,10 +332,9 @@ export function DashboardPanel({ title, subtitle, children }: { title: string; s
 
 export function MetricCard({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <p className="text-xs uppercase tracking-[0.12em] text-slate-500">{label}</p>
-      <p className="mt-2 text-3xl font-semibold text-slate-900">{value}</p>
+    <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+      <p className="text-xs uppercase tracking-[0.12em] text-muted-foreground">{label}</p>
+      <p className="mt-2 text-3xl font-semibold text-foreground">{value}</p>
     </div>
   )
 }
-

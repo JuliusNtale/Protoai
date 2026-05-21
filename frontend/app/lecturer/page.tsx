@@ -1,8 +1,9 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
-import { useRouter } from "next/navigation"
-import { BookOpen, Plus, Users } from "lucide-react"
+import { Suspense, useEffect, useMemo, useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
+import { BookOpen, Eye, EyeOff, KeyRound, LogOut, Plus, Users } from "lucide-react"
+import Link from "next/link"
 import { getApiPath } from "@/lib/api-url"
 import { DashboardPanel, DashboardShell, MetricCard } from "@/components/dashboard-shell"
 
@@ -65,8 +66,33 @@ type SessionResultRow = {
   risk_level: string
 }
 
-export default function LecturerDashboard() {
+function formatDateTime(value?: string | null) {
+  if (!value) return "TBD"
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return "TBD"
+  return date.toLocaleString()
+}
+
+function badgeTone(value: string) {
+  const normalized = value.toLowerCase()
+  if (normalized === "completed" || normalized === "live" || normalized === "low") return "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-900/50"
+  if (normalized === "scheduled" || normalized === "medium") return "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-900/50"
+  if (normalized === "high" || normalized === "locked") return "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/30 dark:text-red-300 dark:border-red-900/50"
+  return "bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700"
+}
+
+function LecturerDashboardInner() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const tab = (searchParams.get("tab") || "dashboard").toLowerCase()
+  const tabTitleMap: Record<string, string> = {
+    dashboard: "Dashboard",
+    exams: "Exams",
+    questions: "Questions",
+    students: "Students",
+    results: "Session Results",
+    profile: "Profile",
+  }
   const [token, setToken] = useState("")
   const [me, setMe] = useState<MeUser | null>(null)
   const [exams, setExams] = useState<ExamRow[]>([])
@@ -93,6 +119,13 @@ export default function LecturerDashboard() {
   const [correctAnswer, setCorrectAnswer] = useState("")
   const [marks, setMarks] = useState("1")
   const [editingQuestionId, setEditingQuestionId] = useState<number | null>(null)
+  const [currentPassword, setCurrentPassword] = useState("")
+  const [newPassword, setNewPassword] = useState("")
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false)
+  const [showNewPassword, setShowNewPassword] = useState(false)
+  const [savingPassword, setSavingPassword] = useState(false)
+  const [passwordMsg, setPasswordMsg] = useState("")
+  const [isExiting, setIsExiting] = useState(false)
 
   useEffect(() => {
     const rawToken = localStorage.getItem("token")
@@ -134,9 +167,14 @@ export default function LecturerDashboard() {
       setExams(rows)
       setSessionResults(sessionsPayload.sessions || [])
       if (rows.length > 0) {
-        const first = rows[0].exam_id
-        setSelectedExamId(first)
-        await loadExamDetails(activeToken, first, rows[0].course_code)
+        const requestedExamId = Number(searchParams.get("examId"))
+        const candidate = Number.isFinite(requestedExamId)
+          ? rows.find((row: ExamRow) => row.exam_id === requestedExamId)
+          : null
+        const selected = candidate || rows[0]
+        const selectedId = selected.exam_id
+        setSelectedExamId(selectedId)
+        await loadExamDetails(activeToken, selectedId, selected.course_code)
       }
     } finally {
       setLoading(false)
@@ -184,6 +222,11 @@ export default function LecturerDashboard() {
     setNewCourseCode("")
     setNewDuration("60")
     setNewSchedule("")
+    const createdExamId = Number(payload?.exam_id || payload?.id)
+    if (Number.isFinite(createdExamId) && createdExamId > 0) {
+      router.push(`/lecturer?tab=questions&examId=${createdExamId}`)
+      return
+    }
     await load(token)
   }
 
@@ -358,44 +401,142 @@ export default function LecturerDashboard() {
     }
   }
 
-  if (loading) {
-    return <main className="min-h-screen bg-[#f4f5f7] p-6 text-slate-900"><div className="mx-auto max-w-6xl rounded-xl border bg-white p-5 text-sm text-slate-700">Loading lecturer dashboard...</div></main>
+  async function changePassword() {
+    setPasswordMsg("")
+    if (!currentPassword || !newPassword) {
+      setPasswordMsg("Current and new password are required.")
+      return
+    }
+    if (newPassword.length < 8) {
+      setPasswordMsg("New password must be at least 8 characters.")
+      return
+    }
+    setSavingPassword(true)
+    try {
+      const res = await fetch(getApiPath("/auth/change-password"), {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+      })
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setPasswordMsg(payload?.error?.message || "Could not update password.")
+        return
+      }
+      setCurrentPassword("")
+      setNewPassword("")
+      setPasswordMsg("Password updated successfully.")
+    } finally {
+      setSavingPassword(false)
+    }
+  }
+
+  async function logout() {
+    setIsExiting(true)
+    await new Promise((r) => setTimeout(r, 350))
+    localStorage.removeItem("token")
+    localStorage.removeItem("user")
+    localStorage.removeItem("session_id")
+    localStorage.removeItem("exam_id")
+    router.push("/")
   }
 
   return (
     <DashboardShell
       appName="ProctorAI Lecturer"
-      title="Lecturer Dashboard"
+      title={tabTitleMap[tab] || "Lecturer Dashboard"}
       subtitle={me?.full_name || ""}
+      avatarName={me?.full_name}
       sidebarItems={[
-        { label: "Dashboard", active: true },
-        { label: "Exams" },
-        { label: "Questions" },
-        { label: "Students" },
-        { label: "Session Results" },
+        { label: "Dashboard", href: "/lecturer", active: tab === "dashboard" },
+        { label: "Exams", href: "/lecturer?tab=exams", active: tab === "exams" },
+        { label: "Questions", href: "/lecturer?tab=questions", active: tab === "questions" },
+        { label: "Students", href: "/lecturer?tab=students", active: tab === "students" },
+        { label: "Session Results", href: "/lecturer?tab=results", active: tab === "results" },
+        { label: "Profile", href: "/lecturer?tab=profile", active: tab === "profile" },
       ]}
-      rightTopSlot={<Users className="h-5 w-5 text-slate-600" />}
+      rightTopSlot={
+        <div className="flex items-center gap-2">
+          <button onClick={logout} className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-3 py-1.5 text-sm font-semibold text-foreground">
+            <LogOut className="h-4 w-4" /> Logout
+          </button>
+        </div>
+      }
+      isExiting={isExiting}
+      exitMessage="Signing out of lecturer account..."
     >
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+      {loading ? (
+        <DashboardPanel title="Loading Lecturer Dashboard">
+          <div className="flex items-center gap-3 text-sm text-muted-foreground">
+            <span className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            Preparing your dashboard...
+          </div>
+        </DashboardPanel>
+      ) : null}
 
+      {!loading ? (
+      <>
+        {tab === "dashboard" && (
+          <>
         <section className="grid gap-3 md:grid-cols-3">
           <MetricCard label="My Exams" value={exams.length} />
           <MetricCard label="Questions (Selected Exam)" value={questions.length} />
           <MetricCard label="Students (Selected Exam)" value={students.length} />
         </section>
+        <DashboardPanel title="Quick Shortcuts" subtitle="Move quickly between lecturer workflows.">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            <Link href="/lecturer?tab=exams" className="rounded-xl border border-border bg-gradient-to-br from-blue-50 to-indigo-50 p-4 transition hover:shadow-md dark:from-slate-900 dark:to-slate-800">
+              <p className="text-sm font-semibold text-foreground">Exams</p>
+              <p className="mt-1 text-xs text-muted-foreground">Create and manage exams.</p>
+            </Link>
+            <Link href="/lecturer?tab=questions" className="rounded-xl border border-border bg-gradient-to-br from-emerald-50 to-teal-50 p-4 transition hover:shadow-md dark:from-slate-900 dark:to-slate-800">
+              <p className="text-sm font-semibold text-foreground">Questions</p>
+              <p className="mt-1 text-xs text-muted-foreground">Build question banks.</p>
+            </Link>
+            <Link href="/lecturer?tab=students" className="rounded-xl border border-border bg-gradient-to-br from-amber-50 to-orange-50 p-4 transition hover:shadow-md dark:from-slate-900 dark:to-slate-800">
+              <p className="text-sm font-semibold text-foreground">Students</p>
+              <p className="mt-1 text-xs text-muted-foreground">View enrolled students.</p>
+            </Link>
+            <Link href="/lecturer?tab=results" className="rounded-xl border border-border bg-gradient-to-br from-violet-50 to-fuchsia-50 p-4 transition hover:shadow-md dark:from-slate-900 dark:to-slate-800">
+              <p className="text-sm font-semibold text-foreground">Session Results</p>
+              <p className="mt-1 text-xs text-muted-foreground">Inspect outcomes and risk.</p>
+            </Link>
+            <Link href="/lecturer?tab=profile" className="rounded-xl border border-border bg-gradient-to-br from-slate-100 to-slate-200 p-4 transition hover:shadow-md dark:from-slate-900 dark:to-slate-800">
+              <p className="text-sm font-semibold text-foreground">Profile</p>
+              <p className="mt-1 text-xs text-muted-foreground">Reset account password.</p>
+            </Link>
+          </div>
+        </DashboardPanel>
+          </>
+        )}
 
+        {tab === "exams" && (
+          <>
         <DashboardPanel title="Create Exam">
           <div className="flex items-center gap-2">
             <Plus className="h-5 w-5 text-blue-700" />
             <h2 className="text-base font-semibold">Create Exam</h2>
           </div>
           <div className="mt-4 grid gap-3 md:grid-cols-2">
-            <input value={newTitle} onChange={e => setNewTitle(e.target.value)} placeholder="Exam title" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />
-            <input value={newCourseCode} onChange={e => setNewCourseCode(e.target.value)} placeholder="Course code" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />
-            <input value={newDuration} onChange={e => setNewDuration(e.target.value)} placeholder="Duration minutes" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />
-            <input value={newSchedule} onChange={e => setNewSchedule(e.target.value)} placeholder="Scheduled at ISO (optional)" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />
+            <input value={newTitle} onChange={e => setNewTitle(e.target.value)} placeholder="Exam title" className="rounded-md border border-border bg-background p-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100" />
+            <input value={newCourseCode} onChange={e => setNewCourseCode(e.target.value)} placeholder="Course code" className="rounded-md border border-border bg-background p-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100" />
+            <input value={newDuration} onChange={e => setNewDuration(e.target.value)} placeholder="Duration minutes" className="rounded-md border border-border bg-background p-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100" />
+            <input
+              type="datetime-local"
+              value={newSchedule}
+              onChange={e => setNewSchedule(e.target.value)}
+              onClick={(e) => {
+                const el = e.currentTarget as HTMLInputElement & { showPicker?: () => void }
+                el.showPicker?.()
+              }}
+              className="cursor-pointer rounded-md border border-border bg-background p-2 text-sm text-foreground focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100"
+            />
           </div>
-          <button onClick={createExam} className="mt-3 rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white">Create Exam</button>
+          <p className="mt-3 text-xs text-muted-foreground">
+            Workflow: create exam, add questions immediately, then set exam status to <span className="font-semibold">scheduled</span> or <span className="font-semibold">live</span>.
+          </p>
+          <button onClick={createExam} className="mt-3 rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#142145]">Create Exam & Add Questions</button>
         </DashboardPanel>
 
         <DashboardPanel title="My Exam List">
@@ -403,11 +544,11 @@ export default function LecturerDashboard() {
             <BookOpen className="h-5 w-5 text-blue-700" />
             <h2 className="text-base font-semibold">My Exam List</h2>
           </div>
-          <div className="mt-4 overflow-x-auto">
+          <div className="mt-4 overflow-x-auto rounded-xl border border-border">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b text-left">
-                  <th className="py-2">Title</th>
+                <tr className="border-b border-border bg-muted/50 text-left">
+                  <th className="py-2 pl-3">Title</th>
                   <th>Course</th>
                   <th>Schedule</th>
                   <th>Status</th>
@@ -419,14 +560,14 @@ export default function LecturerDashboard() {
               </thead>
               <tbody>
                 {exams.map((exam) => (
-                  <tr key={exam.exam_id} className="border-b">
-                    <td className="py-2">{exam.title}</td>
+                  <tr key={exam.exam_id} className="border-b last:border-b-0">
+                    <td className="py-2 pl-3 font-medium">{exam.title}</td>
                     <td>{exam.course_code}</td>
-                    <td>{exam.scheduled_at ? new Date(exam.scheduled_at).toLocaleString() : "TBD"}</td>
-                    <td>{exam.status}</td>
+                    <td>{formatDateTime(exam.scheduled_at)}</td>
+                    <td><span className={`rounded-full border px-2 py-1 text-xs font-medium ${badgeTone(exam.status)}`}>{exam.status}</span></td>
                     <td>
                       <select
-                        className="rounded border p-1 text-xs"
+                        className="rounded-md border border-border bg-background p-1 text-xs text-foreground focus:border-[#1a2d5a] focus:outline-none"
                         value={exam.status}
                         onChange={async (e) => updateExamStatus(exam.exam_id, e.target.value)}
                       >
@@ -437,10 +578,25 @@ export default function LecturerDashboard() {
                       </select>
                     </td>
                     <td>
-                      <button onClick={() => editExam(exam)} className="rounded border px-2 py-1 text-xs">Edit</button>
+                      <button
+                        onClick={async () => {
+                          setSelectedExamId(exam.exam_id)
+                          await loadExamDetails(token, exam.exam_id, exam.course_code)
+                          router.push(`/lecturer?tab=questions&examId=${exam.exam_id}`)
+                        }}
+                        className="mr-2 rounded-md border border-border bg-card px-2 py-1 text-xs font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                      >
+                        Questions
+                      </button>
+                      <button
+                        onClick={() => editExam(exam)}
+                        className="rounded-md border border-border bg-card px-2 py-1 text-xs font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                      >
+                        Edit
+                      </button>
                     </td>
                     <td>
-                      <button onClick={() => deleteExam(exam)} className="rounded border px-2 py-1 text-xs text-red-700">
+                      <button onClick={() => deleteExam(exam)} className="rounded-md border border-red-200 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50">
                         Delete
                       </button>
                     </td>
@@ -450,14 +606,14 @@ export default function LecturerDashboard() {
                           setSelectedExamId(exam.exam_id)
                           await loadExamDetails(token, exam.exam_id, exam.course_code)
                         }}
-                        className="rounded border px-2 py-1 text-xs"
+                        className="rounded-md bg-[#1a2d5a] px-2.5 py-1 text-xs font-semibold text-white hover:bg-[#142145]"
                       >
                         Select
                       </button>
                     </td>
                   </tr>
                 ))}
-                {exams.length === 0 && <tr><td colSpan={8} className="py-3 text-slate-600">No exams created yet.</td></tr>}
+                {exams.length === 0 && <tr><td colSpan={8} className="py-3 pl-3 text-slate-600">No exams created yet.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -465,28 +621,57 @@ export default function LecturerDashboard() {
             <button
               onClick={exportSelectedExamReport}
               disabled={!selectedExamId || exporting}
-              className="rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+              className="rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#142145] disabled:opacity-60"
             >
               {exporting ? "Exporting..." : "Export Selected Exam CSV"}
             </button>
           </div>
         </DashboardPanel>
+          </>
+        )}
 
+        {tab === "questions" && (
         <DashboardPanel title={`Question Builder ${selectedExam ? `- ${selectedExam.title}` : ""}`}>
+          <div className="mb-4 grid gap-3 md:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Select Exam
+              </label>
+              <select
+                value={selectedExamId ?? ""}
+                onChange={async (e) => {
+                  const nextExamId = Number(e.target.value)
+                  if (!Number.isFinite(nextExamId) || nextExamId <= 0) return
+                  const picked = exams.find((row) => row.exam_id === nextExamId)
+                  setSelectedExamId(nextExamId)
+                  await loadExamDetails(token, nextExamId, picked?.course_code)
+                  router.push(`/lecturer?tab=questions&examId=${nextExamId}`)
+                }}
+                className="w-full rounded-md border border-border bg-background p-2 text-sm text-foreground focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100"
+              >
+                {exams.length === 0 ? <option value="">No exams available</option> : null}
+                {exams.map((exam) => (
+                  <option key={exam.exam_id} value={exam.exam_id}>
+                    {exam.title} - {exam.course_code} ({exam.status})
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
           <div className="mt-4 grid gap-3 md:grid-cols-2">
-            <select value={questionType} onChange={e => setQuestionType(e.target.value as "mcq" | "true_false")} className="rounded-md border bg-white p-2 text-sm text-slate-900">
+            <select value={questionType} onChange={e => setQuestionType(e.target.value as "mcq" | "true_false")} className="rounded-md border border-border bg-background p-2 text-sm text-foreground focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100">
               <option value="mcq">mcq</option>
               <option value="true_false">true_false</option>
             </select>
-            <input value={marks} onChange={e => setMarks(e.target.value)} placeholder="Marks" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />
-            <input value={questionText} onChange={e => setQuestionText(e.target.value)} placeholder="Question text" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500 md:col-span-2" />
-            <input value={optionA} onChange={e => setOptionA(e.target.value)} placeholder="Option A" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />
-            <input value={optionB} onChange={e => setOptionB(e.target.value)} placeholder="Option B" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />
-            {questionType === "mcq" && <input value={optionC} onChange={e => setOptionC(e.target.value)} placeholder="Option C" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />}
-            {questionType === "mcq" && <input value={optionD} onChange={e => setOptionD(e.target.value)} placeholder="Option D" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500" />}
-            <input value={correctAnswer} onChange={e => setCorrectAnswer(e.target.value)} placeholder="Correct answer (e.g. A or TRUE)" className="rounded-md border bg-white p-2 text-sm text-slate-900 placeholder:text-slate-500 md:col-span-2" />
+            <input value={marks} onChange={e => setMarks(e.target.value)} placeholder="Marks" className="rounded-md border border-border bg-background p-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100" />
+            <input value={questionText} onChange={e => setQuestionText(e.target.value)} placeholder="Question text" className="rounded-md border border-border bg-background p-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100 md:col-span-2" />
+            <input value={optionA} onChange={e => setOptionA(e.target.value)} placeholder="Option A" className="rounded-md border border-border bg-background p-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100" />
+            <input value={optionB} onChange={e => setOptionB(e.target.value)} placeholder="Option B" className="rounded-md border border-border bg-background p-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100" />
+            {questionType === "mcq" && <input value={optionC} onChange={e => setOptionC(e.target.value)} placeholder="Option C" className="rounded-md border border-border bg-background p-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100" />}
+            {questionType === "mcq" && <input value={optionD} onChange={e => setOptionD(e.target.value)} placeholder="Option D" className="rounded-md border border-border bg-background p-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100" />}
+            <input value={correctAnswer} onChange={e => setCorrectAnswer(e.target.value)} placeholder="Correct answer (e.g. A or TRUE)" className="rounded-md border border-border bg-background p-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100 md:col-span-2" />
           </div>
-          <button onClick={createQuestion} disabled={!selectedExamId} className="mt-3 rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
+          <button onClick={createQuestion} disabled={!selectedExamId} className="mt-3 rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#142145] disabled:opacity-60">
             Add Question
           </button>
 
@@ -528,7 +713,10 @@ export default function LecturerDashboard() {
             </table>
           </div>
         </DashboardPanel>
+        )}
 
+        {tab === "students" && (
+          <>
         <DashboardPanel title={`Enrolled Students ${selectedExam ? `- ${selectedExam.title}` : ""}`}>
           <div className="flex items-center gap-2">
             <Users className="h-5 w-5 text-blue-700" />
@@ -590,7 +778,10 @@ export default function LecturerDashboard() {
             </table>
           </div>
         </DashboardPanel>
+          </>
+        )}
 
+        {tab === "results" && (
         <DashboardPanel title="Session Results (Live Data)">
           <div className="mt-4 overflow-x-auto">
             <table className="w-full text-sm">
@@ -624,6 +815,74 @@ export default function LecturerDashboard() {
             </table>
           </div>
         </DashboardPanel>
+        )}
+
+        {tab === "profile" && (
+        <div className="scroll-mt-24">
+        <DashboardPanel title="Change Password">
+          <div className="flex items-center gap-2">
+            <KeyRound className="h-5 w-5 text-blue-700" />
+            <h2 className="text-base font-semibold">Reset Password</h2>
+          </div>
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <div className="relative">
+              <input
+                type={showCurrentPassword ? "text" : "password"}
+                value={currentPassword}
+                onChange={e => setCurrentPassword(e.target.value)}
+                placeholder="Current password"
+                className="w-full rounded-md border border-border bg-background p-2 pr-10 text-sm text-foreground placeholder:text-muted-foreground focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100"
+              />
+              <button type="button" onClick={() => setShowCurrentPassword(v => !v)} className="absolute inset-y-0 right-0 px-3 text-muted-foreground" aria-label={showCurrentPassword ? "Hide password" : "Show password"}>
+                {showCurrentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+            <div className="relative">
+              <input
+                type={showNewPassword ? "text" : "password"}
+                value={newPassword}
+                onChange={e => setNewPassword(e.target.value)}
+                placeholder="New password"
+                className="w-full rounded-md border border-border bg-background p-2 pr-10 text-sm text-foreground placeholder:text-muted-foreground focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100"
+              />
+              <button type="button" onClick={() => setShowNewPassword(v => !v)} className="absolute inset-y-0 right-0 px-3 text-muted-foreground" aria-label={showNewPassword ? "Hide password" : "Show password"}>
+                {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+          </div>
+          {passwordMsg && <p className="mt-2 text-sm text-slate-700">{passwordMsg}</p>}
+          <button onClick={changePassword} disabled={savingPassword} className="mt-3 rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#142145] disabled:opacity-60">
+            {savingPassword ? "Updating..." : "Update Password"}
+          </button>
+        </DashboardPanel>
+        </div>
+        )}
+      </>
+      ) : null}
     </DashboardShell>
+  )
+}
+
+export default function LecturerDashboard() {
+  return (
+    <Suspense
+      fallback={
+        <DashboardShell
+          appName="ProctorAI Lecturer"
+          title="Lecturer Dashboard"
+          subtitle=""
+          sidebarItems={[]}
+        >
+          <DashboardPanel title="Loading Lecturer Dashboard">
+            <div className="flex items-center gap-3 text-sm text-muted-foreground">
+              <span className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+              Preparing your dashboard...
+            </div>
+          </DashboardPanel>
+        </DashboardShell>
+      }
+    >
+      <LecturerDashboardInner />
+    </Suspense>
   )
 }

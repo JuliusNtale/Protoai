@@ -64,9 +64,11 @@ def estimate_head_pose(img_bgr: np.ndarray):
         rot_matrix, _ = cv2.Rodrigues(rot_vec)
         angles, _, _, _, _, _ = cv2.RQDecomp3x3(rot_matrix)
 
-        yaw   = angles[1] * 360
-        pitch = angles[0] * 360
-        roll  = angles[2] * 360
+        # cv2.RQDecomp3x3 already returns Euler angles in degrees.
+        # Multiplying by 360 inflated values and broke verification phase checks.
+        yaw = float(angles[1])
+        pitch = float(angles[0])
+        roll = float(angles[2])
 
         alert = abs(yaw) > _YAW_THRESHOLD or abs(pitch) > _PITCH_THRESHOLD
 

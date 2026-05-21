@@ -1,10 +1,13 @@
 from datetime import datetime, timezone
+import os
 
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt, get_jwt_identity, jwt_required
 
+from app.audit import log_audit
 from app.extensions import db
 from app.models import BehavioralLog, Exam, ExamSession, Question, SessionAnswer, User
+from app.models import FacialImage
 
 sessions_bp = Blueprint("sessions", __name__)
 VALID_EVENTS = {"gaze_away", "head_turned", "face_absent", "tab_switch", "multiple_faces"}
@@ -13,6 +16,30 @@ VALID_EVENTS = {"gaze_away", "head_turned", "face_absent", "tab_switch", "multip
 def _password_change_required(user_id: int) -> bool:
     user = db.session.get(User, user_id)
     return bool(user and user.must_change_password)
+
+
+def _student_profile_ready_for_verification(user: User) -> tuple[bool, str]:
+    if not user:
+        return False, "User not found"
+    if not (user.full_name or "").strip():
+        return False, "Complete your profile: full name is required."
+    if not (user.reg_number or "").strip():
+        return False, "Complete your profile: registration number is required."
+    if not (user.email or "").strip():
+        return False, "Complete your profile: email is required."
+    if not (user.phone_number or "").strip():
+        return False, "Complete your profile: phone number is required."
+    if not (user.department or "").strip():
+        return False, "Complete your profile: course/department is required."
+    has_image = (
+        FacialImage.query.filter_by(user_id=user.user_id)
+        .order_by(FacialImage.captured_at.desc())
+        .first()
+        is not None
+    )
+    if not has_image:
+        return False, "Upload your profile face image before starting an exam."
+    return True, ""
 
 
 @sessions_bp.post("/start")
@@ -37,11 +64,31 @@ def start_session():
             return jsonify({"error": {"message": "Exam has not started yet"}}), 409
 
     student_id = int(get_jwt_identity())
+    student = db.session.get(User, student_id)
+    ready, message = _student_profile_ready_for_verification(student)
+    if not ready:
+        return jsonify({"error": {"message": message}}), 409
     if _password_change_required(student_id):
         return jsonify({"error": {"message": "Password change required before exam start"}}), 403
     existing = ExamSession.query.filter_by(student_id=student_id, exam_id=exam.exam_id).first()
     if existing:
-        return jsonify({"error": "Session already exists for this exam", "session_id": existing.session_id}), 409
+        if existing.session_status in {"active", "pending"} and not existing.submitted_at:
+            existing.submitted_at = datetime.utcnow()
+            existing.session_status = "completed"
+            db.session.commit()
+            return (
+                jsonify(
+                    {
+                        "error": {
+                            "message": "Existing in-progress session was auto-submitted and cannot be resumed."
+                        },
+                        "session_id": existing.session_id,
+                        "auto_submitted": True,
+                    }
+                ),
+                409,
+            )
+        return jsonify({"error": {"message": "Exam session already exists and cannot be resumed."}, "session_id": existing.session_id}), 409
 
     session = ExamSession(
         student_id=student_id,
@@ -72,23 +119,79 @@ def start_session():
 
 @sessions_bp.post("/verify")
 def verify_session_identity():
+    expected_token = os.getenv("AI_SERVICE_TOKEN", "").strip()
+    provided_token = (request.headers.get("X-Internal-Token") or "").strip()
+    if not expected_token or provided_token != expected_token:
+        return jsonify({"error": {"message": "Unauthorized internal request"}}), 401
+
     data = request.get_json(silent=True) or {}
     session_id = data.get("session_id")
-    confidence_score = float(data.get("confidence_score") or 0)
+    match_value = data.get("match")
+    confidence_value = data.get("confidence_score")
+    method = str(data.get("verification_method") or "ai-face-embedding")[:50]
+    model_version = data.get("model_version")
 
-    if not session_id:
-        return jsonify({"error": {"message": "session_id is required"}}), 400
+    if session_id is None or match_value is None or confidence_value is None:
+        return jsonify({"error": {"message": "session_id, match, and confidence_score are required"}}), 400
+    if not isinstance(match_value, bool):
+        return jsonify({"error": {"message": "match must be a boolean"}}), 400
+
+    try:
+        confidence_score = float(confidence_value)
+    except (TypeError, ValueError):
+        return jsonify({"error": {"message": "confidence_score must be numeric"}}), 400
+    if confidence_score < 0 or confidence_score > 1:
+        return jsonify({"error": {"message": "confidence_score must be between 0 and 1"}}), 400
 
     session = db.session.get(ExamSession, int(session_id))
     if not session:
         return jsonify({"error": {"message": "Session not found"}}), 404
 
-    if confidence_score < 0.6:
-        return jsonify({"identity_verified": False, "message": "Score below threshold"}), 422
+    threshold = 0.6
+    is_verified = bool(match_value) and confidence_score >= threshold
 
-    session.identity_verified = True
+    session.identity_verified = is_verified
+    session.verification_score = confidence_score
+    session.verification_method = method
+    session.verification_details = {
+        "match": bool(match_value),
+        "threshold": threshold,
+        "model_version": model_version,
+    }
+    if is_verified:
+        session.verified_at = datetime.utcnow()
+
+    db.session.add(
+        BehavioralLog(
+            session_id=session.session_id,
+            event_type="identity_verification",
+            event_data={
+                "verified": is_verified,
+                "match": bool(match_value),
+                "confidence_score": round(confidence_score, 4),
+                "threshold": threshold,
+                "method": method,
+                "model_version": model_version,
+            },
+        )
+    )
+    log_audit(
+        action="session.identity_verification",
+        actor_user_id=None,
+        target_user_id=session.student_id,
+        metadata={
+            "session_id": session.session_id,
+            "verified": is_verified,
+            "confidence_score": round(confidence_score, 4),
+            "threshold": threshold,
+            "method": method,
+            "model_version": model_version,
+        },
+    )
     db.session.commit()
-    return jsonify({"identity_verified": True}), 200
+    if not is_verified:
+        return jsonify({"identity_verified": False, "message": "Face verification failed threshold check"}), 422
+    return jsonify({"identity_verified": True, "confidence_score": round(confidence_score, 4), "verified_at": session.verified_at.isoformat() if session.verified_at else None}), 200
 
 
 @sessions_bp.post("/log")

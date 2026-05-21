@@ -14,6 +14,8 @@ class User(db.Model):
     email = db.Column(db.String(150), unique=True, nullable=False)
     phone_number = db.Column(db.String(30))
     department = db.Column(db.String(100))
+    academic_year = db.Column(db.String(30))
+    year_enrolled = db.Column(db.Integer)
     password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(20), nullable=False, default="student")
     username = db.Column(db.String(80), unique=True)
@@ -39,5 +41,8 @@ class User(db.Model):
             "must_change_password": self.must_change_password,
             "email": self.email,
             "phone_number": self.phone_number,
+            "department": self.department,
+            "academic_year": self.academic_year,
+            "year_enrolled": self.year_enrolled,
             "role": role_value,
         }

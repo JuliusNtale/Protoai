@@ -4,6 +4,8 @@ import { useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { CheckCircle, ArrowLeft, Mail, Phone } from "lucide-react"
+import { getApiPath } from "@/lib/api-url"
+import { ThemeToggle } from "@/components/theme-toggle"
 
 const features = [
   { label: "Enter your registration number to find your account" },
@@ -31,7 +33,7 @@ export default function ForgotPasswordPage() {
     setError(null)
     setLoading(true)
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/lookup`, {
+      const res = await fetch(getApiPath("/auth/lookup"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ registration_number: regNum.trim() }),
@@ -62,7 +64,7 @@ export default function ForgotPasswordPage() {
     setError(null)
     setLoading(true)
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/reset-password`, {
+      const res = await fetch(getApiPath("/auth/reset-password"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ registration_number: regNum.trim(), recovery_method: method }),
@@ -82,7 +84,10 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <div className="flex min-h-screen" style={{ fontFamily: "var(--font-sans, system-ui, sans-serif)" }}>
+    <div className="relative flex min-h-screen bg-background text-foreground" style={{ fontFamily: "var(--font-sans, system-ui, sans-serif)" }}>
+      <div className="absolute right-4 top-4 z-20">
+        <ThemeToggle />
+      </div>
 
       {/* ── Left sidebar — identical to login page ── */}
       <aside
@@ -135,7 +140,7 @@ export default function ForgotPasswordPage() {
       </aside>
 
       {/* ── Right panel ── */}
-      <main className="flex flex-1 flex-col items-center justify-center bg-[#f4f5f7] px-6 py-12">
+      <main className="flex flex-1 flex-col items-center justify-center bg-[#f4f5f7] px-6 py-12 dark:bg-slate-950">
         <div className="w-full max-w-105">
 
           <Link

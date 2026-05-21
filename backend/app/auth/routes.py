@@ -35,6 +35,9 @@ def _generate_temp_password(length=12):
 def _generate_lecturer_reg_number() -> str:
     return f"LEC-{uuid4().hex[:8].upper()}"
 
+def _generate_admin_reg_number() -> str:
+    return f"ADM-{uuid4().hex[:8].upper()}"
+
 
 def _attempt_key(login_id: str, ip: str) -> str:
     return f"{(login_id or '').lower()}|{ip or ''}"
@@ -230,18 +233,22 @@ def provision_credentials():
     email = (data.get("email") or "").strip().lower()
     username = (data.get("username") or "").strip()
 
-    if target_role not in {"student", "lecturer"}:
-        return jsonify({"error": {"message": "Role must be student or lecturer"}}), 400
+    if target_role not in {"student", "lecturer", "admin"}:
+        return jsonify({"error": {"message": "Role must be student, lecturer or admin"}}), 400
     if not full_name or not email:
         return jsonify({"error": {"message": "full_name and email are required"}}), 400
     if target_role == "student" and not reg_number:
         return jsonify({"error": {"message": "reg_number is required for student credentials"}}), 400
-    if target_role == "lecturer" and not username:
-        return jsonify({"error": {"message": "username is required for lecturer credentials"}}), 400
+    if target_role in {"lecturer", "admin"} and not username:
+        return jsonify({"error": {"message": f"username is required for {target_role} credentials"}}), 400
     if target_role == "lecturer" and not reg_number:
         reg_number = _generate_lecturer_reg_number()
         while User.query.filter_by(reg_number=reg_number).first():
             reg_number = _generate_lecturer_reg_number()
+    if target_role == "admin" and not reg_number:
+        reg_number = _generate_admin_reg_number()
+        while User.query.filter_by(reg_number=reg_number).first():
+            reg_number = _generate_admin_reg_number()
     if User.query.filter_by(reg_number=reg_number).first():
         return jsonify({"error": {"message": "Registration number already exists"}}), 409
     if User.query.filter_by(email=email).first():
@@ -312,8 +319,8 @@ def provision_bulk_credentials():
         email = ((row or {}).get("email") or "").strip().lower()
         username = ((row or {}).get("username") or "").strip()
 
-        if target_role not in {"student", "lecturer"}:
-            errors.append({"index": idx, "message": "Role must be student or lecturer"})
+        if target_role not in {"student", "lecturer", "admin"}:
+            errors.append({"index": idx, "message": "Role must be student, lecturer or admin"})
             continue
         if not full_name or not email:
             errors.append({"index": idx, "message": "full_name and email are required"})
@@ -321,13 +328,17 @@ def provision_bulk_credentials():
         if target_role == "student" and not reg_number:
             errors.append({"index": idx, "message": "reg_number is required for student"})
             continue
-        if target_role == "lecturer" and not username:
-            errors.append({"index": idx, "message": "username is required for lecturer"})
+        if target_role in {"lecturer", "admin"} and not username:
+            errors.append({"index": idx, "message": f"username is required for {target_role}"})
             continue
         if target_role == "lecturer" and not reg_number:
             reg_number = _generate_lecturer_reg_number()
             while User.query.filter_by(reg_number=reg_number).first() or reg_number in seen_reg_numbers:
                 reg_number = _generate_lecturer_reg_number()
+        if target_role == "admin" and not reg_number:
+            reg_number = _generate_admin_reg_number()
+            while User.query.filter_by(reg_number=reg_number).first() or reg_number in seen_reg_numbers:
+                reg_number = _generate_admin_reg_number()
         if reg_number in seen_reg_numbers:
             errors.append({"index": idx, "message": f"Duplicate registration number in request: {reg_number}"})
             continue

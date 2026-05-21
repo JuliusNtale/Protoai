@@ -8,6 +8,7 @@ import { SystemStatusIndicators } from "@/components/system-status-indicators"
 import { useBrowserLockdown } from "@/hooks/use-browser-lockdown"
 import { useNetworkStatus } from "@/hooks/use-network-status"
 import { CheckCircle2, Circle, Loader2 } from "lucide-react"
+import { ThemeToggle } from "@/components/theme-toggle"
 
 // ─── phase machine ────────────────────────────────────────────────────────────
 type Phase = "idle" | "scanning" | "move_up" | "move_down" | "move_left" | "move_right" | "done"
@@ -25,15 +26,10 @@ const STEPS: { phase: Phase; label: string; description: string }[] = [
   { phase: "move_right", label: "Look Right",           description: "Slowly tilt your head to the right" },
 ]
 
-const PHASE_DURATIONS: Record<Phase, number> = {
-  idle: 2500,
-  scanning: 5000,
-  move_up: 4000,
-  move_down: 4000,
-  move_left: 4000,
-  move_right: 4000,
-  done: 0,
-}
+const HOLD_DURATION_MS = 1200
+const MONITOR_INTERVAL_MS = 700
+const MONITOR_REQUEST_TIMEOUT_MS = 6000
+const MAX_CONSECUTIVE_MONITOR_ERRORS = 4
 
 const PHASE_HINTS: Record<Phase, string> = {
   idle:       "Position your face in the frame",
@@ -60,14 +56,21 @@ export default function VerifyPage() {
   const [segmentsFilled, setSegmentsFilled] = useState<Set<string>>(new Set())
   const [scanProgress, setScanProgress] = useState(0)
   const [cameraReady, setCameraReady] = useState(false)
+  const [videoFeedReady, setVideoFeedReady] = useState(false)
   const [cameraError, setCameraError] = useState<string | null>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [fullscreenError, setFullscreenError] = useState<string | null>(null)
   const [securityAlert, setSecurityAlert] = useState<string | null>(null)
   const [isVerifyingIdentity, setIsVerifyingIdentity] = useState(false)
   const [identityError, setIdentityError] = useState<string | null>(null)
-  const rafRef = useRef<number | null>(null)
-  const startRef = useRef<number | null>(null)
+  const [phaseError, setPhaseError] = useState<string | null>(null)
+  const [telemetry, setTelemetry] = useState<{ yaw: number; pitch: number; anomalies: string[] } | null>(null)
+  const [lightingStatus, setLightingStatus] = useState<"good" | "low" | "high" | "flat">("good")
+  const [lightingHint, setLightingHint] = useState<string | null>(null)
+  const [monitorErrors, setMonitorErrors] = useState(0)
+  const phaseHoldStartRef = useRef<number | null>(null)
+  const monitorLockRef = useRef(false)
+  const monitorAbortRef = useRef<AbortController | null>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const networkStatus = useNetworkStatus()
@@ -83,10 +86,73 @@ export default function VerifyPage() {
     ? { label: "Blocked", detail: cameraError, tone: "error" as const }
     : { label: "Checking", detail: "Preparing camera access", tone: "neutral" as const }
 
+  function resolveAiBaseUrl() {
+    const configured = (process.env.NEXT_PUBLIC_AI_URL || "").trim().replace(/\/+$/, "")
+    if (typeof window === "undefined") return configured || "http://localhost:8000"
+    if (!configured) return window.location.origin
+    if (window.location.protocol === "https:" && configured.startsWith("http://")) {
+      return window.location.origin
+    }
+    return configured
+  }
+
   function stopCameraStream() {
+    if (monitorAbortRef.current) {
+      monitorAbortRef.current.abort()
+      monitorAbortRef.current = null
+    }
     if (!streamRef.current) return
     streamRef.current.getTracks().forEach(track => track.stop())
     streamRef.current = null
+  }
+
+  function evaluateLighting(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D) {
+    const image = ctx.getImageData(0, 0, canvas.width, canvas.height).data
+    let sum = 0
+    let sumSq = 0
+    const pixels = canvas.width * canvas.height
+    for (let i = 0; i < image.length; i += 4) {
+      const y = 0.2126 * image[i] + 0.7152 * image[i + 1] + 0.0722 * image[i + 2]
+      sum += y
+      sumSq += y * y
+    }
+    const mean = sum / pixels
+    const variance = Math.max(sumSq / pixels - mean * mean, 0)
+    const std = Math.sqrt(variance)
+
+    if (mean > 190) {
+      setLightingStatus("high")
+      setLightingHint("Background is too bright. Face a softer front light and avoid strong backlight.")
+      return false
+    }
+    if (mean < 55) {
+      setLightingStatus("low")
+      setLightingHint("Scene is too dark. Increase front lighting on your face.")
+      return false
+    }
+    if (std < 28) {
+      setLightingStatus("flat")
+      setLightingHint("Image contrast is too low. Improve lighting and reduce glare.")
+      return false
+    }
+    setLightingStatus("good")
+    setLightingHint(null)
+    return true
+  }
+
+  async function attachStreamToVideo() {
+    const video = videoRef.current
+    const stream = streamRef.current
+    if (!video || !stream) return
+    if (video.srcObject !== stream) {
+      video.srcObject = stream
+    }
+    try {
+      await video.play()
+      setVideoFeedReady(true)
+    } catch {
+      setVideoFeedReady(false)
+    }
   }
 
   async function requestFullscreenMode() {
@@ -129,6 +195,9 @@ export default function VerifyPage() {
 
     stopCameraStream()
     setCameraReady(false)
+    setVideoFeedReady(false)
+    setMonitorErrors(0)
+    setPhaseError(null)
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -138,10 +207,7 @@ export default function VerifyPage() {
       streamRef.current = stream
       setCameraError(null)
       setCameraReady(true)
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream
-        await videoRef.current.play()
-      }
+      await attachStreamToVideo()
     } catch (error) {
       if (error instanceof DOMException && error.name === "NotAllowedError") {
         setCameraError("Camera permission denied. Allow access to continue face verification.")
@@ -160,6 +226,11 @@ export default function VerifyPage() {
   }, [])
 
   useEffect(() => {
+    if (!cameraReady) return
+    void attachStreamToVideo()
+  }, [cameraReady])
+
+  useEffect(() => {
     function handleFullscreenChange() {
       const active = Boolean(document.fullscreenElement)
       setIsFullscreen(active)
@@ -175,40 +246,152 @@ export default function VerifyPage() {
     }
   }, [])
 
-  // advance through phases
-  useEffect(() => {
-    if (isDone) return
-    const duration = PHASE_DURATIONS[phase]
-    if (duration === 0) return
-
-    // progress animation
-    startRef.current = null
+  function nextPhase() {
+    setSegmentsFilled(prev => {
+      const next = new Set(prev)
+      if (phase !== "idle") next.add(phase)
+      return next
+    })
     setScanProgress(0)
+    setPhaseError(null)
+    phaseHoldStartRef.current = null
+    setPhaseIndex(i => Math.min(i + 1, PHASE_SEQUENCE.length - 1))
+  }
 
-    const animate = (ts: number) => {
-      if (startRef.current === null) startRef.current = ts
-      const elapsed = ts - startRef.current
-      setScanProgress(Math.min(elapsed / duration, 1))
-      if (elapsed < duration) {
-        rafRef.current = requestAnimationFrame(animate)
+  function isPhaseConditionSatisfied(currentPhase: Phase, yaw: number, pitch: number, facePresent: boolean) {
+    if (!facePresent) return false
+    if (currentPhase === "idle") return true
+    // Face detection should verify stable face presence without over-strict pose gating.
+    if (currentPhase === "scanning") return true
+    if (currentPhase === "move_up") return pitch <= -15
+    if (currentPhase === "move_down") return pitch >= 15
+    if (currentPhase === "move_left") return yaw <= -18
+    if (currentPhase === "move_right") return yaw >= 18
+    return false
+  }
+
+  // strict phase validation loop driven by AI monitor output
+  useEffect(() => {
+    if (isDone || !cameraReady || !videoFeedReady || cameraError) return
+
+    const runValidation = async () => {
+      if (monitorLockRef.current) return
+      if (!videoRef.current) return
+      if (!streamRef.current || streamRef.current.getVideoTracks().every(t => t.readyState !== "live")) {
+        setPhaseError("Camera stream paused. Reconnect camera to continue.")
+        setCameraReady(false)
+        return
+      }
+      const hasRenderableFrame =
+        videoRef.current.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
+        videoRef.current.videoWidth > 0 &&
+        videoRef.current.videoHeight > 0
+      if (!hasRenderableFrame) {
+        setPhaseError("Waiting for camera feed...")
+        return
+      }
+      monitorLockRef.current = true
+      try {
+        const canvas = document.createElement("canvas")
+        canvas.width = 480
+        canvas.height = 360
+        const ctx = canvas.getContext("2d")
+        if (!ctx) return
+        ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height)
+        evaluateLighting(canvas, ctx)
+        const frameBase64 = canvas.toDataURL("image/jpeg", 0.85)
+
+        const rawSessionId = localStorage.getItem("session_id")
+        const sessionId = rawSessionId && Number(rawSessionId) > 0 ? Number(rawSessionId) : 0
+        if (!sessionId) {
+          setPhaseError("No active exam session found. Restart from dashboard.")
+          return
+        }
+        const aiBase = resolveAiBaseUrl()
+        const controller = new AbortController()
+        monitorAbortRef.current = controller
+        const timeout = setTimeout(() => controller.abort(), MONITOR_REQUEST_TIMEOUT_MS)
+        let response: Response
+        try {
+          response = await fetch(`${aiBase}/monitor-frame`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            signal: controller.signal,
+            body: JSON.stringify({ session_id: sessionId || 1, frame_base64: frameBase64 }),
+          })
+        } finally {
+          clearTimeout(timeout)
+        }
+        monitorAbortRef.current = null
+        if (!response.ok) {
+          setMonitorErrors(prev => prev + 1)
+          phaseHoldStartRef.current = null
+          setScanProgress(0)
+          setPhaseError("Unable to analyze camera frame. Keep camera active and retry.")
+          return
+        }
+        setMonitorErrors(0)
+
+        const result = await response.json()
+        const anomalies: string[] = Array.isArray(result?.anomalies) ? result.anomalies : []
+        const pose = result?.head_pose || {}
+        const yaw = Number(pose?.yaw || 0)
+        const pitch = Number(pose?.pitch || 0)
+        setTelemetry({ yaw, pitch, anomalies })
+        const facePresent = !anomalies.includes("face_absent")
+        const satisfied = isPhaseConditionSatisfied(phase, yaw, pitch, facePresent)
+
+        if (!facePresent) {
+          setPhaseError("Face not detected. Position your face inside the frame.")
+        } else if (!satisfied) {
+          if (phase === "scanning") setPhaseError("Hold your face still and centered.")
+          if (phase === "move_up") setPhaseError("Tilt your head up to continue.")
+          if (phase === "move_down") setPhaseError("Tilt your head down to continue.")
+          if (phase === "move_left") setPhaseError("Tilt your head left to continue.")
+          if (phase === "move_right") setPhaseError("Tilt your head right to continue.")
+        } else {
+          setPhaseError(null)
+        }
+
+        if (!satisfied) {
+          phaseHoldStartRef.current = null
+          setScanProgress(0)
+          return
+        }
+
+        const now = performance.now()
+        if (phaseHoldStartRef.current === null) phaseHoldStartRef.current = now
+        const elapsed = now - phaseHoldStartRef.current
+        setScanProgress(Math.min(elapsed / HOLD_DURATION_MS, 1))
+
+        if (elapsed >= HOLD_DURATION_MS) {
+          nextPhase()
+        }
+      } catch {
+        setMonitorErrors(prev => prev + 1)
+        phaseHoldStartRef.current = null
+        setScanProgress(0)
+        setPhaseError("Live verification stream interrupted. Check network, HTTPS routing, and camera, then retry.")
+      } finally {
+        monitorLockRef.current = false
       }
     }
-    rafRef.current = requestAnimationFrame(animate)
 
-    const timer = setTimeout(() => {
-      setSegmentsFilled(prev => {
-        const next = new Set(prev)
-        if (phase !== "idle") next.add(phase)
-        return next
-      })
-      setPhaseIndex(i => i + 1)
-    }, duration)
+    const interval = setInterval(() => {
+      void runValidation()
+    }, MONITOR_INTERVAL_MS)
+    void runValidation()
 
     return () => {
-      clearTimeout(timer)
-      if (rafRef.current) cancelAnimationFrame(rafRef.current)
+      clearInterval(interval)
     }
-  }, [phase, isDone])
+  }, [phase, isDone, cameraReady, videoFeedReady, cameraError])
+
+  useEffect(() => {
+    if (monitorErrors < MAX_CONSECUTIVE_MONITOR_ERRORS) return
+    setPhaseError("Verification stream unstable. Restarting camera...")
+    void startCamera()
+  }, [monitorErrors])
 
   // ─── SVG ring geometry ──────────────────────────────────────────────────────
   const cx = 140
@@ -273,7 +456,11 @@ export default function VerifyPage() {
   const completedStepPhases = Array.from(segmentsFilled)
 
   async function handleContinueToExam() {
-    if (!videoRef.current || !cameraReady || isVerifyingIdentity) return
+    if (!videoRef.current || !cameraReady || !videoFeedReady || isVerifyingIdentity) return
+    if (!isDone) {
+      setIdentityError("Complete all verification steps before continuing.")
+      return
+    }
 
     setIdentityError(null)
     setIsVerifyingIdentity(true)
@@ -289,6 +476,7 @@ export default function VerifyPage() {
         setIdentityError("No active exam session found. Start the exam again from dashboard.")
         return
       }
+      const sessionId = Number(rawSessionId)
 
       const parsed = JSON.parse(rawUser)
       const userId = Number(parsed.user_id ?? parsed.id)
@@ -307,13 +495,19 @@ export default function VerifyPage() {
       }
 
       ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height)
+      const lightingOk = evaluateLighting(canvas, ctx)
+      if (!lightingOk) {
+        setIdentityError(lightingHint || "Lighting quality is not sufficient for reliable verification.")
+        return
+      }
       const imageBase64 = canvas.toDataURL("image/jpeg", 0.8)
 
-      const aiBase = (process.env.NEXT_PUBLIC_AI_URL || "http://localhost:8000").replace(/\/+$/, "")
+      const aiBase = resolveAiBaseUrl()
       const response = await fetch(`${aiBase}/verify-identity`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          session_id: sessionId,
           user_id: userId,
           image_base64: imageBase64,
         }),
@@ -340,7 +534,10 @@ export default function VerifyPage() {
   }
 
   return (
-    <div className="flex min-h-screen bg-black select-none">
+    <div className="relative flex min-h-screen bg-black text-white select-none dark:bg-black dark:text-white">
+      <div className="absolute right-4 top-4 z-30">
+        <ThemeToggle className="border-white/20 bg-white/10 text-white hover:bg-white/20" />
+      </div>
 
       {/* ── Left step sidebar ── */}
       <aside className="hidden lg:flex flex-col justify-between w-72 xl:w-80 shrink-0 border-r border-white/5 px-8 py-10">
@@ -438,11 +635,11 @@ export default function VerifyPage() {
       />
 
       {/* Center — face + ring */}
-      <div className="flex flex-1 flex-col items-center justify-center gap-10">
+      <div className="flex flex-1 flex-col items-center justify-center gap-8">
 
         {/* SVG face ring */}
-        <div className="relative" style={{ width: 280, height: 280 }}>
-          <svg width="280" height="280" viewBox="0 0 280 280" fill="none">
+        <div className="relative" style={{ width: 360, height: 360 }}>
+          <svg width="360" height="360" viewBox="0 0 280 280" fill="none">
             {/* Background dim ring */}
             <path
               d={fullRingPath}
@@ -500,8 +697,8 @@ export default function VerifyPage() {
             <div
               className="relative overflow-hidden"
               style={{
-                width: 176,
-                height: 208,
+                width: 220,
+                height: 280,
                 borderRadius: "50%",
                 background: "rgba(255,255,255,0.04)",
               }}
@@ -513,6 +710,8 @@ export default function VerifyPage() {
                   autoPlay
                   muted
                   playsInline
+                  onLoadedData={() => setVideoFeedReady(true)}
+                  onCanPlay={() => setVideoFeedReady(true)}
                   className="absolute inset-0 h-full w-full object-cover"
                 />
               ) : (
@@ -590,7 +789,18 @@ export default function VerifyPage() {
               )}
               {cameraError ? (
                 <p className="text-xs text-red-400">{cameraError}</p>
+              ) : phaseError ? (
+                <p className="text-xs text-amber-300">{phaseError}</p>
               ) : null}
+              {telemetry ? (
+                <p className="text-[11px] text-zinc-500">
+                  yaw {telemetry.yaw.toFixed(1)} | pitch {telemetry.pitch.toFixed(1)} | {telemetry.anomalies.join(", ") || "no_anomalies"}
+                </p>
+              ) : null}
+              <p className={`text-[11px] ${lightingStatus === "good" ? "text-emerald-300" : "text-amber-300"}`}>
+                Lighting: {lightingStatus === "good" ? "Good" : lightingStatus === "high" ? "Too Bright" : lightingStatus === "low" ? "Too Dark" : "Low Contrast"}
+              </p>
+              {lightingHint ? <p className="text-[11px] text-amber-300">{lightingHint}</p> : null}
             </>
           )}
         </div>

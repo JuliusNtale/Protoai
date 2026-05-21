@@ -8,9 +8,9 @@ export function getApiPath(path: string) {
   }
 
   if (typeof window !== "undefined") {
-    const { protocol, hostname, port } = window.location
-    // If frontend is accessed directly on :3000, backend is expected on :5000.
-    if (port === "3000") {
+    const { protocol, hostname } = window.location
+    // Development fallback when frontend is opened on localhost without NEXT_PUBLIC_API_URL.
+    if (hostname === "localhost" || hostname === "127.0.0.1") {
       return `${protocol}//${hostname}:5000/api${normalizedPath}`
     }
   }
