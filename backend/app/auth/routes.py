@@ -1,8 +1,10 @@
 import base64
 import os
 import random
+import smtplib
 import string
 from datetime import datetime, timedelta
+from email.message import EmailMessage
 from uuid import uuid4
 
 from flask import Blueprint, current_app, jsonify, request
@@ -31,6 +33,61 @@ def _normalize_role(role):
 def _generate_temp_password(length=12):
     alphabet = string.ascii_letters + string.digits
     return "".join(random.choice(alphabet) for _ in range(length))
+
+
+def _send_temporary_password_email(recipient_email: str, registration_number: str, temporary_password: str) -> None:
+    mode = (os.getenv("EMAIL_MODE") or "smtp").strip().lower()
+    from_addr = (os.getenv("EMAIL_FROM") or "no-reply@proctoai.local").strip()
+
+    subject = "ProctoAI Password Reset"
+    text_body = (
+        "Your temporary password was requested.\n\n"
+        f"Registration Number: {registration_number}\n"
+        f"Temporary Password: {temporary_password}\n\n"
+        "Please sign in immediately and change your password from Profile/Settings.\n"
+        "If you did not request this reset, contact your administrator."
+    )
+    html_body = f"""
+    <div style="font-family:Arial,sans-serif;color:#0f172a;line-height:1.5">
+      <h2 style="margin:0 0 8px 0;color:#1a2d5a;">ProctoAI Password Reset</h2>
+      <p style="margin:0 0 12px 0;">Your temporary password was requested.</p>
+      <p style="margin:0 0 4px 0;"><strong>Registration Number:</strong> {registration_number}</p>
+      <p style="margin:0 0 12px 0;"><strong>Temporary Password:</strong> {temporary_password}</p>
+      <p style="margin:0;">Sign in immediately and change your password from Profile/Settings.</p>
+      <p style="margin:8px 0 0 0;">If you did not request this reset, contact your administrator.</p>
+    </div>
+    """
+
+    if mode == "dev":
+        current_app.logger.info(
+            "DEV EMAIL RESET -> to=%s reg=%s temp_password=%s", recipient_email, registration_number, temporary_password
+        )
+        return
+
+    host = (os.getenv("EMAIL_HOST") or "").strip()
+    port = int((os.getenv("EMAIL_PORT") or "587").strip())
+    user = (os.getenv("EMAIL_USER") or "").strip()
+    password = (os.getenv("EMAIL_PASS") or "").strip()
+    use_tls = (os.getenv("EMAIL_USE_TLS") or "true").strip().lower() != "false"
+
+    if not host or not user or not password:
+        raise RuntimeError("Email SMTP configuration is incomplete")
+
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = from_addr
+    msg["To"] = recipient_email
+    msg.set_content(text_body)
+    msg.add_alternative(html_body, subtype="html")
+
+    with smtplib.SMTP(host, port, timeout=20) as server:
+        server.ehlo()
+        if use_tls:
+            server.starttls()
+            server.ehlo()
+        server.login(user, password)
+        server.send_message(msg)
+
 
 def _generate_lecturer_reg_number() -> str:
     return f"LEC-{uuid4().hex[:8].upper()}"
@@ -176,7 +233,32 @@ def login():
 
 @auth_bp.post("/reset-password")
 def reset_password():
-    return jsonify({"message": "Reset link sent if email exists"}), 200
+    data = request.get_json(silent=True) or {}
+    reg_number = (data.get("reg_number") or data.get("registration_number") or "").strip()
+    recovery_method = (data.get("recovery_method") or "email").strip().lower()
+    generic_success = {"message": "If an account exists, a temporary password has been sent."}
+
+    if not reg_number:
+        return jsonify({"error": {"message": "Registration number is required"}}), 400
+    if recovery_method != "email":
+        return jsonify({"error": {"message": "Only email recovery is currently supported"}}), 400
+
+    user = User.query.filter_by(reg_number=reg_number).first()
+    if not user or not user.email:
+        return jsonify(generic_success), 200
+
+    temp_password = _generate_temp_password()
+    user.set_password(temp_password)
+    user.must_change_password = True
+    db.session.commit()
+
+    try:
+        _send_temporary_password_email(user.email, user.reg_number, temp_password)
+    except Exception as exc:
+        current_app.logger.exception("Failed to send password reset email: %s", exc)
+        return jsonify({"error": {"message": "Password was reset but email delivery failed. Contact administrator."}}), 502
+
+    return jsonify(generic_success), 200
 
 
 @auth_bp.post("/lookup")
