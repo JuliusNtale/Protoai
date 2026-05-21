@@ -37,6 +37,7 @@ export default function LoginPage() {
 
       localStorage.setItem("token", data.token)
       localStorage.setItem("user", JSON.stringify(data.user))
+      document.cookie = `auth_token=${data.token}; Path=/; Max-Age=${60 * 60 * 8}; SameSite=Lax`
 
       const role = data.user?.role
       if (role === "lecturer") {
@@ -106,7 +107,7 @@ export default function LoginPage() {
                   type="text"
                   value={loginId}
                   onChange={(e) => setLoginId(e.target.value)}
-                  placeholder="Reg No / Username / Email"
+                  placeholder="Enter your Login ID"
                   required
                   className="w-full rounded-xl border border-[#cfc5b2] bg-white px-3 py-2.5 text-sm text-[#20262f] outline-none transition focus:border-[#7a5f3a] focus:ring-4 focus:ring-[#e8ddca] dark:border-[#333b4c] dark:bg-[#11151d] dark:text-[#e8eaef] dark:focus:ring-[#2f3647]"
                 />

@@ -42,6 +42,7 @@ export default function AdminDashboardSummary() {
       router.push("/")
       return
     }
+    document.cookie = `auth_token=${rawToken}; Path=/; Max-Age=${60 * 60 * 8}; SameSite=Lax`
     setToken(rawToken)
     void load(rawToken)
   }, [router])
@@ -91,6 +92,8 @@ export default function AdminDashboardSummary() {
     await new Promise((r) => setTimeout(r, 350))
     localStorage.removeItem("token")
     localStorage.removeItem("user")
+    localStorage.removeItem("verified_session_id")
+    document.cookie = "auth_token=; Path=/; Max-Age=0; SameSite=Lax"
     router.push("/")
   }
 

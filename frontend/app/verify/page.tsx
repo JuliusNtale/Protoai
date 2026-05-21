@@ -218,6 +218,12 @@ export default function VerifyPage() {
   }
 
   useEffect(() => {
+    const rawSessionId = localStorage.getItem("session_id")
+    const verifiedSessionId = localStorage.getItem("verified_session_id")
+    if (rawSessionId && verifiedSessionId && rawSessionId === verifiedSessionId) {
+      router.replace("/exam")
+      return
+    }
     void startCamera()
 
     return () => {
@@ -527,7 +533,8 @@ export default function VerifyPage() {
         return
       }
 
-      router.push("/exam")
+      localStorage.setItem("verified_session_id", String(sessionId))
+      router.replace("/exam")
     } catch {
       setIdentityError("Unable to reach AI verification service. Check network and try again.")
     } finally {

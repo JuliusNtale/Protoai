@@ -148,6 +148,7 @@ function LecturerDashboardInner() {
       router.push("/unauthorized?reason=auth")
       return
     }
+    document.cookie = `auth_token=${rawToken}; Path=/; Max-Age=${60 * 60 * 8}; SameSite=Lax`
     setToken(rawToken)
     void load(rawToken)
   }, [router])
@@ -511,6 +512,8 @@ function LecturerDashboardInner() {
     localStorage.removeItem("user")
     localStorage.removeItem("session_id")
     localStorage.removeItem("exam_id")
+    localStorage.removeItem("verified_session_id")
+    document.cookie = "auth_token=; Path=/; Max-Age=0; SameSite=Lax"
     router.push("/")
   }
 

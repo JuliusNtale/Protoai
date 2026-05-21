@@ -62,7 +62,8 @@ function useProctoringStats() {
 
 export default function ExamPage() {
   const router = useRouter()
-  const examVideoRef = useRef<HTMLVideoElement>(null)
+  const examCaptureVideoRef = useRef<HTMLVideoElement>(null)
+  const examMonitorVideoRef = useRef<HTMLVideoElement>(null)
   const examStreamRef = useRef<MediaStream | null>(null)
   const answersRef = useRef<Record<number, number>>({})
   const frameCanvasRef = useRef<HTMLCanvasElement>(null)
@@ -136,7 +137,22 @@ export default function ExamPage() {
     } catch {
       // Ignore fullscreen exit errors and continue navigation.
     }
+    localStorage.removeItem("session_id")
+    localStorage.removeItem("exam_id")
+    localStorage.removeItem("verified_session_id")
     router.push("/dashboard")
+  }
+
+  async function attachExamStreamToVideos(stream: MediaStream) {
+    const targets = [examCaptureVideoRef.current, examMonitorVideoRef.current].filter(Boolean) as HTMLVideoElement[]
+    for (const video of targets) {
+      if (video.srcObject !== stream) video.srcObject = stream
+      try {
+        await video.play()
+      } catch {
+        // Ignore per-element play errors and keep trying other targets.
+      }
+    }
   }
 
   function stopExamCameraStream() {
@@ -162,10 +178,7 @@ export default function ExamPage() {
       examStreamRef.current = stream
       setExamCameraError(null)
       setExamCameraReady(true)
-      if (examVideoRef.current) {
-        examVideoRef.current.srcObject = stream
-        await examVideoRef.current.play()
-      }
+      await attachExamStreamToVideos(stream)
     } catch (error) {
       if (error instanceof DOMException && error.name === "NotAllowedError") {
         setExamCameraError("Camera permission denied")
@@ -176,6 +189,12 @@ export default function ExamPage() {
   }
 
   useEffect(() => {
+    const rawSessionId = localStorage.getItem("session_id")
+    const verifiedSessionId = localStorage.getItem("verified_session_id")
+    if (!rawSessionId || !verifiedSessionId || rawSessionId !== verifiedSessionId) {
+      router.replace("/verify")
+      return
+    }
     const raw = localStorage.getItem("session_id")
     if (!raw) return
     const parsed = Number(raw)
@@ -188,7 +207,7 @@ export default function ExamPage() {
     if (Number.isFinite(parsedExam) && parsedExam > 0) {
       setExamId(parsedExam)
     }
-  }, [])
+  }, [router])
 
   useEffect(() => {
     if (!examId) {
@@ -439,11 +458,11 @@ export default function ExamPage() {
         })
 
         interval = setInterval(() => {
-          if (!examVideoRef.current || !frameCanvasRef.current || !socket) return
+          if (!examCaptureVideoRef.current || !frameCanvasRef.current || !socket) return
           const ctx = frameCanvasRef.current.getContext("2d")
           if (!ctx) return
 
-          ctx.drawImage(examVideoRef.current, 0, 0, 320, 240)
+          ctx.drawImage(examCaptureVideoRef.current, 0, 0, 320, 240)
           const frameBase64 = frameCanvasRef.current.toDataURL("image/jpeg", 0.6)
           socket.emit("webcam_frame", {
             session_id: sessionId,
@@ -755,7 +774,7 @@ export default function ExamPage() {
             </div>
             {examCameraReady ? (
               <video
-                ref={examVideoRef}
+                ref={examMonitorVideoRef}
                 autoPlay
                 muted
                 playsInline
@@ -767,6 +786,7 @@ export default function ExamPage() {
               </p>
             )}
           </div>
+          <video ref={examCaptureVideoRef} autoPlay muted playsInline style={{ display: "none" }} />
           <canvas ref={frameCanvasRef} width={320} height={240} style={{ display: "none" }} />
 
           {!examCameraReady ? (
