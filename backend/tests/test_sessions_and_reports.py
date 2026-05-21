@@ -27,9 +27,19 @@ def _complete_student_verification_prerequisites(app, reg_number: str, tmp_path:
         student = User.query.filter_by(reg_number=reg_number).first()
         student.phone_number = "+255700000000"
         student.department = "BSc Computer Science"
+        student.student_profile_confirmed = True
         image_path = tmp_path / f"{reg_number}.jpg"
         image_path.write_bytes(b"fake-jpeg-bytes")
         db.session.add(FacialImage(user_id=student.user_id, file_path=str(image_path)))
+        db.session.commit()
+
+
+def _complete_lecturer_verification_prerequisites(app, reg_number: str):
+    with app.app_context():
+        lecturer = User.query.filter_by(reg_number=reg_number).first()
+        lecturer.phone_number = "+255711111111"
+        lecturer.department = "School of Computing"
+        lecturer.lecturer_profile_confirmed = True
         db.session.commit()
 
 
@@ -37,13 +47,17 @@ def test_start_session_returns_409_if_existing(client, app, tmp_path):
     student_token = _register_and_login(client, "T22-03-30001")
     lecturer_token = _register_and_login(client, "L22-03-40001", role="lecturer")
     _complete_student_verification_prerequisites(app, "T22-03-30001", tmp_path)
+    _complete_lecturer_verification_prerequisites(app, "L22-03-40001")
 
     create_exam = client.post(
         "/api/exams",
         json={"title": "Algorithms", "course_code": "CS301", "duration_min": 120},
         headers={"Authorization": f"Bearer {lecturer_token}"},
     )
-    exam_id = create_exam.get_json()["exam_id"]
+    create_exam_json = create_exam.get_json() or {}
+    assert create_exam.status_code == 201, create_exam_json
+    assert "exam_id" in create_exam_json, f"Exam creation failed: {create_exam_json}"
+    exam_id = create_exam_json["exam_id"]
     client.post(
         f"/api/exams/{exam_id}/questions",
         json={
@@ -107,7 +121,10 @@ def test_reports_access_control_and_csv_export(client, app, tmp_path):
         json={"exam_id": exam_id},
         headers={"Authorization": f"Bearer {student_token}"},
     )
-    session_id = start.get_json()["session_id"]
+    start_json = start.get_json() or {}
+    assert start.status_code == 201, start_json
+    assert "session_id" in start_json, f"Session start failed: {start_json}"
+    session_id = start_json["session_id"]
 
     own_access = client.get(
         f"/api/reports/{session_id}",
