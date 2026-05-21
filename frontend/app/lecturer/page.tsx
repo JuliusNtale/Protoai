@@ -142,7 +142,7 @@ function LecturerDashboardInner() {
   useEffect(() => {
     const rawToken = localStorage.getItem("token")
     if (!rawToken) {
-      router.push("/")
+      router.push("/unauthorized?reason=auth")
       return
     }
     setToken(rawToken)
@@ -163,7 +163,7 @@ function LecturerDashboardInner() {
       if (!meRes.ok) {
         localStorage.removeItem("token")
         localStorage.removeItem("user")
-        router.push("/")
+        router.push("/unauthorized?reason=auth")
         return
       }
       if (mePayload?.user?.role === "administrator" || mePayload?.user?.role === "admin") {
@@ -171,7 +171,7 @@ function LecturerDashboardInner() {
         return
       }
       if (mePayload?.user?.role !== "lecturer") {
-        router.push("/dashboard")
+        router.push("/unauthorized?reason=role")
         return
       }
       setMe(mePayload.user)
