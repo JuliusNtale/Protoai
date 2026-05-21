@@ -10,6 +10,11 @@ import { DashboardPanel, DashboardShell, MetricCard } from "@/components/dashboa
 type MeUser = {
   user_id: number
   full_name: string
+  registration_number?: string
+  email?: string
+  phone_number?: string | null
+  department?: string | null
+  lecturer_profile_confirmed?: boolean
   role: string
 }
 
@@ -98,6 +103,13 @@ function LecturerDashboardInner() {
   const [exams, setExams] = useState<ExamRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
+  const [profileMsg, setProfileMsg] = useState("")
+  const [email, setEmail] = useState("")
+  const [phone, setPhone] = useState("")
+  const [department, setDepartment] = useState("")
+  const [showOnboarding, setShowOnboarding] = useState(false)
+  const [onboardingSaving, setOnboardingSaving] = useState(false)
+  const [onboardingMsg, setOnboardingMsg] = useState("")
 
   const [newTitle, setNewTitle] = useState("")
   const [newCourseCode, setNewCourseCode] = useState("")
@@ -163,6 +175,16 @@ function LecturerDashboardInner() {
         return
       }
       setMe(mePayload.user)
+      setEmail(mePayload.user?.email || "")
+      setPhone(mePayload.user?.phone_number || "")
+      setDepartment(mePayload.user?.department || "")
+      const needsOnboarding =
+        !Boolean(mePayload.user?.lecturer_profile_confirmed) ||
+        !String(mePayload.user?.full_name || "").trim() ||
+        !String(mePayload.user?.email || "").trim() ||
+        !String(mePayload.user?.phone_number || "").trim() ||
+        !String(mePayload.user?.department || "").trim()
+      setShowOnboarding(Boolean(needsOnboarding))
       const rows = examsPayload.exams || []
       setExams(rows)
       setSessionResults(sessionsPayload.sessions || [])
@@ -428,6 +450,47 @@ function LecturerDashboardInner() {
       setPasswordMsg("Password updated successfully.")
     } finally {
       setSavingPassword(false)
+    }
+  }
+
+  async function updateProfile(confirmProfile = false) {
+    setProfileMsg("")
+    setOnboardingMsg("")
+    const res = await fetch(getApiPath("/users/profile"), {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        email,
+        phone_number: phone,
+        department,
+        confirm_profile: confirmProfile,
+      }),
+    })
+    const payload = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      const message = payload?.error?.message || "Could not update profile."
+      setProfileMsg(message)
+      setOnboardingMsg(message)
+      return false
+    }
+    if (payload?.user) {
+      setMe(payload.user)
+      localStorage.setItem("user", JSON.stringify(payload.user))
+    }
+    setProfileMsg("Profile updated successfully.")
+    return true
+  }
+
+  async function submitOnboarding() {
+    if (!String(email || "").trim()) return setOnboardingMsg("Email is required.")
+    if (!String(phone || "").trim()) return setOnboardingMsg("Phone number is required.")
+    if (!String(department || "").trim()) return setOnboardingMsg("Department is required.")
+    setOnboardingSaving(true)
+    try {
+      const ok = await updateProfile(true)
+      if (ok) setShowOnboarding(false)
+    } finally {
+      setOnboardingSaving(false)
     }
   }
 
@@ -819,6 +882,17 @@ function LecturerDashboardInner() {
 
         {tab === "profile" && (
         <div className="scroll-mt-24">
+        <DashboardPanel title="Profile Details">
+          <div className="grid gap-3 md:grid-cols-2">
+            <input value={me?.full_name || ""} readOnly className="rounded-md border border-border bg-muted/40 p-2 text-sm text-foreground" placeholder="Full name" />
+            <input value={me?.registration_number || ""} readOnly className="rounded-md border border-border bg-muted/40 p-2 text-sm text-foreground" placeholder="Registration number" />
+            <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email" className="rounded-md border border-border bg-background p-2 text-sm text-foreground" />
+            <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="Phone number" className="rounded-md border border-border bg-background p-2 text-sm text-foreground" />
+            <input value={department} onChange={e => setDepartment(e.target.value)} placeholder="Department / Programme" className="rounded-md border border-border bg-background p-2 text-sm text-foreground md:col-span-2" />
+          </div>
+          {profileMsg ? <p className="mt-2 text-sm text-muted-foreground">{profileMsg}</p> : null}
+          <button onClick={() => void updateProfile(false)} className="mt-3 rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#142145]">Save Profile</button>
+        </DashboardPanel>
         <DashboardPanel title="Change Password">
           <div className="flex items-center gap-2">
             <KeyRound className="h-5 w-5 text-blue-700" />
@@ -860,6 +934,27 @@ function LecturerDashboardInner() {
       </>
       ) : null}
     </DashboardShell>
+    {showOnboarding ? (
+      <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+        <div className="w-full max-w-xl rounded-2xl border border-border bg-card p-5 shadow-2xl">
+          <h3 className="text-lg font-semibold text-foreground">Complete Lecturer Onboarding</h3>
+          <p className="mt-1 text-sm text-muted-foreground">Confirm your profile details before managing exams.</p>
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <input value={me?.full_name || ""} readOnly className="rounded-md border border-border bg-muted/40 p-2 text-sm text-foreground" placeholder="Full name" />
+            <input value={me?.registration_number || ""} readOnly className="rounded-md border border-border bg-muted/40 p-2 text-sm text-foreground" placeholder="Registration number" />
+            <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email" className="rounded-md border border-border bg-background p-2 text-sm text-foreground" />
+            <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="Phone number" className="rounded-md border border-border bg-background p-2 text-sm text-foreground" />
+            <input value={department} onChange={e => setDepartment(e.target.value)} placeholder="Department / Programme" className="rounded-md border border-border bg-background p-2 text-sm text-foreground md:col-span-2" />
+          </div>
+          {onboardingMsg ? <p className="mt-3 text-sm text-red-600">{onboardingMsg}</p> : null}
+          <div className="mt-4 flex justify-end">
+            <button onClick={() => void submitOnboarding()} disabled={onboardingSaving} className="rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
+              {onboardingSaving ? "Saving..." : "Save & Continue"}
+            </button>
+          </div>
+        </div>
+      </div>
+    ) : null}
   )
 }
 

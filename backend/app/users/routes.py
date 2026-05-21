@@ -70,6 +70,7 @@ def update_profile():
     phone_number = (data.get("phone_number") or "").strip()
     department = (data.get("department") or "").strip()
     is_student = user.role == "student"
+    is_lecturer = user.role == "lecturer"
     student_profile_locked = bool(
         (user.full_name or "").strip()
         and (user.reg_number or "").strip()
@@ -126,6 +127,16 @@ def update_profile():
         if not has_image:
             return jsonify({"error": {"message": "Upload baseline image before confirming profile."}}), 400
         user.student_profile_confirmed = True
+    if is_lecturer and confirm_profile:
+        if not (user.full_name or "").strip():
+            return jsonify({"error": {"message": "Full name is required before confirming profile."}}), 400
+        if not (user.email or "").strip():
+            return jsonify({"error": {"message": "Email is required before confirming profile."}}), 400
+        if not (user.phone_number or "").strip():
+            return jsonify({"error": {"message": "Phone number is required before confirming profile."}}), 400
+        if not (user.department or "").strip():
+            return jsonify({"error": {"message": "Department is required before confirming profile."}}), 400
+        user.lecturer_profile_confirmed = True
 
     log_audit(
         action="user.profile_updated",
@@ -156,6 +167,13 @@ def update_profile():
     if is_student and confirm_profile and user.student_profile_confirmed:
         log_audit(
             action="student.profile_confirmed",
+            actor_user_id=user.user_id,
+            target_user_id=user.user_id,
+            metadata={"confirmed": True},
+        )
+    if is_lecturer and confirm_profile and user.lecturer_profile_confirmed:
+        log_audit(
+            action="lecturer.profile_confirmed",
             actor_user_id=user.user_id,
             target_user_id=user.user_id,
             metadata={"confirmed": True},

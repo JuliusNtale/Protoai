@@ -17,6 +17,7 @@ class User(db.Model):
     academic_year = db.Column(db.String(30))
     year_enrolled = db.Column(db.Integer)
     student_profile_confirmed = db.Column(db.Boolean, nullable=False, default=False)
+    lecturer_profile_confirmed = db.Column(db.Boolean, nullable=False, default=False)
     password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(20), nullable=False, default="student")
     username = db.Column(db.String(80), unique=True)
@@ -46,5 +47,6 @@ class User(db.Model):
             "academic_year": self.academic_year,
             "year_enrolled": self.year_enrolled,
             "student_profile_confirmed": self.student_profile_confirmed,
+            "lecturer_profile_confirmed": self.lecturer_profile_confirmed,
             "role": role_value,
         }
