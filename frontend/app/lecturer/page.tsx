@@ -159,6 +159,17 @@ function LecturerDashboardInner() {
     void load(rawToken)
   }, [router])
 
+  useEffect(() => {
+    if (!token || exams.length === 0) return
+    const requestedExamId = Number(searchParams.get("examId"))
+    if (!Number.isFinite(requestedExamId) || requestedExamId <= 0) return
+    if (requestedExamId === selectedExamId) return
+    const picked = exams.find((row) => row.exam_id === requestedExamId)
+    if (!picked) return
+    setSelectedExamId(requestedExamId)
+    void loadExamDetails(token, requestedExamId, picked.course_code)
+  }, [token, exams, searchParams, selectedExamId])
+
   async function load(activeToken: string) {
     setLoading(true)
     try {
@@ -257,6 +268,7 @@ function LecturerDashboardInner() {
     setNewSchedule("")
     const createdExamId = Number(payload?.exam_id || payload?.id)
     if (Number.isFinite(createdExamId) && createdExamId > 0) {
+      await load(token)
       router.push(`/lecturer?tab=questions&examId=${createdExamId}`)
       return
     }
