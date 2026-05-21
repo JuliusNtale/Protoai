@@ -72,6 +72,12 @@ type SessionResultRow = {
   risk_level: string
 }
 
+const LECTURER_DEPARTMENT_OPTIONS = [
+  "CSE - Computer Science & Engineering",
+  "ETE - Electronic & Telecommunication Engineering",
+  "IST - Information System Technology",
+]
+
 function formatDateTime(value?: string | null) {
   if (!value) return "TBD"
   const date = new Date(value)
@@ -902,7 +908,12 @@ function LecturerDashboardInner() {
             <input value={me?.registration_number || ""} readOnly className="rounded-md border border-border bg-muted/40 p-2 text-sm text-foreground" placeholder="Registration number" />
             <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email" className="rounded-md border border-border bg-background p-2 text-sm text-foreground" />
             <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="Phone number" className="rounded-md border border-border bg-background p-2 text-sm text-foreground" />
-            <input value={department} onChange={e => setDepartment(e.target.value)} placeholder="Department / Programme" className="rounded-md border border-border bg-background p-2 text-sm text-foreground md:col-span-2" />
+            <select value={department} onChange={e => setDepartment(e.target.value)} className="rounded-md border border-border bg-background p-2 text-sm text-foreground md:col-span-2">
+              <option value="">Select Department</option>
+              {LECTURER_DEPARTMENT_OPTIONS.map((option) => (
+                <option key={option} value={option}>{option}</option>
+              ))}
+            </select>
           </div>
           {profileMsg ? <p className="mt-2 text-sm text-muted-foreground">{profileMsg}</p> : null}
           <button onClick={() => void updateProfile(false)} className="mt-3 rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#142145]">Save Profile</button>
@@ -958,7 +969,12 @@ function LecturerDashboardInner() {
             <input value={me?.registration_number || ""} readOnly className="rounded-md border border-border bg-muted/40 p-2 text-sm text-foreground" placeholder="Registration number" />
             <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email" className="rounded-md border border-border bg-background p-2 text-sm text-foreground" />
             <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="Phone number" className="rounded-md border border-border bg-background p-2 text-sm text-foreground" />
-            <input value={department} onChange={e => setDepartment(e.target.value)} placeholder="Department / Programme" className="rounded-md border border-border bg-background p-2 text-sm text-foreground md:col-span-2" />
+            <select value={department} onChange={e => setDepartment(e.target.value)} className="rounded-md border border-border bg-background p-2 text-sm text-foreground md:col-span-2">
+              <option value="">Select Department</option>
+              {LECTURER_DEPARTMENT_OPTIONS.map((option) => (
+                <option key={option} value={option}>{option}</option>
+              ))}
+            </select>
           </div>
           {onboardingMsg ? <p className="mt-3 text-sm text-red-600">{onboardingMsg}</p> : null}
           <div className="mt-4 flex justify-end">
