@@ -4,7 +4,7 @@ import { useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Eye, EyeOff, ShieldCheck } from "lucide-react"
+import { Eye, EyeOff } from "lucide-react"
 import { getApiPath } from "@/lib/api-url"
 import { ThemeToggle } from "@/components/theme-toggle"
 
@@ -53,8 +53,8 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[#f6f2e9] text-foreground dark:bg-[#151921]">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_15%,rgba(126,64,26,0.14),transparent_44%),radial-gradient(circle_at_80%_85%,rgba(35,83,118,0.16),transparent_48%)]" />
+    <main className="relative min-h-screen overflow-hidden bg-[linear-gradient(165deg,#ebf2fb,#dfe9f8)] text-foreground dark:bg-[linear-gradient(165deg,#0e1526,#141d33)]">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_15%,rgba(26,45,90,0.14),transparent_44%),radial-gradient(circle_at_80%_85%,rgba(56,127,172,0.16),transparent_48%)]" />
       <div className="absolute right-4 top-4 z-20">
         <ThemeToggle />
       </div>
@@ -65,35 +65,33 @@ export default function LoginPage() {
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#7a5f3a] dark:text-[#b99f7b]">
               University of Dodoma
             </p>
-            <h1 className="mt-4 text-4xl leading-tight text-[#1f242c] dark:text-[#e8eaef]" style={{ fontFamily: "'Iowan Old Style','Palatino Linotype',serif" }}>
+            <h1 className="mt-4 text-4xl leading-tight text-[#1a2d5a] dark:text-[#e8eaef]" style={{ fontFamily: "'Iowan Old Style','Palatino Linotype',serif" }}>
               Secure Examinations,
               <br />
               Human-Centered Design
             </h1>
-            <p className="mt-4 max-w-lg text-sm leading-relaxed text-[#4f5663] dark:text-[#b2bac7]">
+            <p className="mt-4 max-w-lg text-sm leading-relaxed text-[#45536f] dark:text-[#b2bac7]">
               ProctoAI protects exam integrity through guided verification, invigilation analytics, and accountable audit trails.
             </p>
             <div className="mt-8 grid gap-3">
-              <div className="flex items-start gap-3 rounded-2xl border border-[#dfd3be] bg-[#fffdf7] px-4 py-3 dark:border-[#2c3342] dark:bg-[#1a1f2b]">
-                <ShieldCheck className="mt-0.5 h-4 w-4 text-[#7a5f3a] dark:text-[#b99f7b]" />
-                <p className="text-sm text-[#3f4653] dark:text-[#c4cad6]">Role-based access for students, lecturers, and administrators.</p>
+              <div className="rounded-2xl border border-[#c7d5ed] bg-white/75 px-4 py-3 dark:border-[#2c3342] dark:bg-[#1a1f2b]">
+                <p className="text-sm text-[#3f4f70] dark:text-[#c4cad6]">Role-based access for students, lecturers, and administrators.</p>
               </div>
-              <div className="flex items-start gap-3 rounded-2xl border border-[#dfd3be] bg-[#fffdf7] px-4 py-3 dark:border-[#2c3342] dark:bg-[#1a1f2b]">
-                <ShieldCheck className="mt-0.5 h-4 w-4 text-[#7a5f3a] dark:text-[#b99f7b]" />
-                <p className="text-sm text-[#3f4653] dark:text-[#c4cad6]">Continuous monitoring with complete session and incident traceability.</p>
+              <div className="rounded-2xl border border-[#c7d5ed] bg-white/75 px-4 py-3 dark:border-[#2c3342] dark:bg-[#1a1f2b]">
+                <p className="text-sm text-[#3f4f70] dark:text-[#c4cad6]">Continuous monitoring with complete session and incident traceability.</p>
               </div>
             </div>
           </div>
         </section>
 
         <section className="flex items-center px-6 py-10 md:px-12 lg:px-16">
-          <div className="w-full max-w-md rounded-[28px] border border-[#d8ccb6] bg-[#fffefb] p-7 shadow-[0_20px_45px_rgba(52,44,33,0.12)] dark:border-[#2e3544] dark:bg-[#181d28] dark:shadow-[0_20px_45px_rgba(0,0,0,0.45)] md:p-8">
+          <div className="w-full max-w-md rounded-[28px] border border-[#c7d5ed] bg-white/95 p-7 shadow-[0_20px_45px_rgba(15,23,42,0.14)] dark:border-[#2e3544] dark:bg-[#181d28] dark:shadow-[0_20px_45px_rgba(0,0,0,0.45)] md:p-8">
             <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl bg-white ring-1 ring-[#e5dccb] dark:bg-[#11151d] dark:ring-[#2e3544]">
+              <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl bg-white ring-1 ring-[#d4deef] dark:bg-[#11151d] dark:ring-[#2e3544]">
                 <Image src="/logo.png" alt="ProctoAI logo" width={56} height={56} className="object-cover" />
               </div>
               <div>
-                <p className="text-xs uppercase tracking-[0.18em] text-[#7a5f3a] dark:text-[#b99f7b]">ProctoAI</p>
+                <p className="text-xs uppercase tracking-[0.18em] text-[#1a2d5a] dark:text-[#b99f7b]">ProctoAI</p>
                 <h2 className="text-lg font-semibold text-[#1f242c] dark:text-[#e8eaef]">Sign in to continue</h2>
               </div>
             </div>
