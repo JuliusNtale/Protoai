@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfoNotFoundError
 
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt, get_jwt_identity, jwt_required
+from sqlalchemy.exc import IntegrityError
 
 from app.audit import log_audit
 from app.extensions import db
@@ -20,7 +21,7 @@ except ZoneInfoNotFoundError:
 
 
 def _is_admin() -> bool:
-    return (get_jwt() or {}).get("role") == "admin"
+    return (get_jwt() or {}).get("role") in {"admin", "administrator"}
 
 
 def _generate_temp_password(length=12):
@@ -240,7 +241,7 @@ def update_user_status(user_id: int):
     user = db.session.get(User, user_id)
     if not user:
         return jsonify({"error": {"message": "User not found"}}), 404
-    if user.role == "admin":
+    if user.role in {"admin", "administrator"}:
         return jsonify({"error": {"message": "Admin account status cannot be modified here"}}), 400
 
     data = request.get_json(silent=True) or {}
@@ -287,14 +288,35 @@ def delete_user(user_id: int):
         ExamSession.query.filter(ExamSession.session_id.in_(session_ids)).delete(synchronize_session=False)
     FacialImage.query.filter_by(user_id=user.user_id).delete(synchronize_session=False)
 
+    # Keep audit history while avoiding FK constraints to deleted users.
+    AuditLog.query.filter(AuditLog.actor_user_id == user.user_id).update(
+        {AuditLog.actor_user_id: None},
+        synchronize_session=False,
+    )
+    AuditLog.query.filter(AuditLog.target_user_id == user.user_id).update(
+        {AuditLog.target_user_id: None},
+        synchronize_session=False,
+    )
+
+    deleted_user_id = user.user_id
+    deleted_role = user.role
+    deleted_email = user.email
     db.session.delete(user)
     log_audit(
         action="admin.user_deleted",
         actor_user_id=actor_user_id,
-        target_user_id=user_id,
-        metadata={"deleted_role": user.role, "deleted_email": user.email},
+        target_user_id=None,
+        metadata={
+            "deleted_user_id": deleted_user_id,
+            "deleted_role": deleted_role,
+            "deleted_email": deleted_email,
+        },
     )
-    db.session.commit()
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({"error": {"message": "Cannot delete user because dependent records still exist."}}), 409
     return jsonify({"message": "User deleted"}), 200
 
 
@@ -310,7 +332,7 @@ def reset_credentials(user_id: int):
     user = db.session.get(User, user_id)
     if not user:
         return jsonify({"error": {"message": "User not found"}}), 404
-    if user.role == "admin":
+    if user.role in {"admin", "administrator"}:
         return jsonify({"error": {"message": "Admin credentials cannot be reset here"}}), 400
 
     temp_password = _generate_temp_password()
