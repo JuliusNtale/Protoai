@@ -505,6 +505,7 @@ function LecturerDashboardInner() {
   }
 
   return (
+    <>
     <DashboardShell
       appName="ProctorAI Lecturer"
       title={tabTitleMap[tab] || "Lecturer Dashboard"}
@@ -955,6 +956,7 @@ function LecturerDashboardInner() {
         </div>
       </div>
     ) : null}
+    </>
   )
 }
 
