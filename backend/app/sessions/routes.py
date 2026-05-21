@@ -39,6 +39,8 @@ def _student_profile_ready_for_verification(user: User) -> tuple[bool, str]:
     )
     if not has_image:
         return False, "Upload your profile face image before starting an exam."
+    if not bool(user.student_profile_confirmed):
+        return False, "Confirm your student profile details from dashboard onboarding before starting an exam."
     return True, ""
 
 

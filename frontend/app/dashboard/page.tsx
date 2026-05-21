@@ -19,6 +19,7 @@ type MeUser = {
   department?: string | null
   academic_year?: string | null
   year_enrolled?: number | null
+  student_profile_confirmed?: boolean
   role: string
   must_change_password: boolean
 }
@@ -173,6 +174,7 @@ function StudentDashboardInner() {
       setReports(reportsPayload.reports || [])
       const hasBaseline = await loadBaselineImage(activeToken)
       const needsOnboarding =
+        !Boolean(mePayload.user?.student_profile_confirmed) ||
         !String(mePayload.user?.full_name || "").trim() ||
         !String(mePayload.user?.registration_number || "").trim() ||
         !String(mePayload.user?.department || "").trim() ||
@@ -335,6 +337,7 @@ function StudentDashboardInner() {
           department,
           academic_year: academicYear,
           year_enrolled: Number(yearEnrolled),
+          confirm_profile: true,
         }),
       })
       const payload = await res.json().catch(() => ({}))
@@ -346,6 +349,7 @@ function StudentDashboardInner() {
         setMe(payload.user)
         localStorage.setItem("user", JSON.stringify(payload.user))
       }
+      setOnboardingMsg("Profile confirmed successfully.")
       setShowOnboarding(false)
     } finally {
       setOnboardingSaving(false)

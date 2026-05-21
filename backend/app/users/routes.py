@@ -9,7 +9,7 @@ from flask_jwt_extended import get_jwt, get_jwt_identity, jwt_required
 
 from app.audit import log_audit
 from app.extensions import db
-from app.models import AuditLog, User
+from app.models import AuditLog, FacialImage, User
 
 users_bp = Blueprint("users", __name__)
 
@@ -46,6 +46,7 @@ def update_profile():
     reg_number = (data.get("registration_number") or data.get("reg_number") or "").strip()
     academic_year = (data.get("academic_year") or "").strip()
     year_enrolled_raw = data.get("year_enrolled")
+    confirm_profile = bool(data.get("confirm_profile"))
 
     if email and "@" not in email:
         return jsonify({"error": {"message": "Invalid email format"}}), 400
@@ -113,6 +114,18 @@ def update_profile():
         and (user.academic_year or "").strip()
         and (user.year_enrolled is not None)
     )
+    if is_student and confirm_profile:
+        if not after_complete:
+            return jsonify({"error": {"message": "Complete all required onboarding fields before confirming profile."}}), 400
+        has_image = (
+            FacialImage.query.filter_by(user_id=user.user_id)
+            .order_by(FacialImage.captured_at.desc())
+            .first()
+            is not None
+        )
+        if not has_image:
+            return jsonify({"error": {"message": "Upload baseline image before confirming profile."}}), 400
+        user.student_profile_confirmed = True
 
     log_audit(
         action="user.profile_updated",
@@ -139,6 +152,13 @@ def update_profile():
                 "academic_year": user.academic_year,
                 "year_enrolled": user.year_enrolled,
             },
+        )
+    if is_student and confirm_profile and user.student_profile_confirmed:
+        log_audit(
+            action="student.profile_confirmed",
+            actor_user_id=user.user_id,
+            target_user_id=user.user_id,
+            metadata={"confirmed": True},
         )
     db.session.commit()
 
