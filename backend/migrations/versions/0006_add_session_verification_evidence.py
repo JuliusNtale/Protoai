@@ -16,6 +16,13 @@ depends_on = None
 
 
 def upgrade() -> None:
+    op.alter_column(
+        "alembic_version",
+        "version_num",
+        existing_type=sa.String(length=32),
+        type_=sa.String(length=128),
+        existing_nullable=False,
+    )
     op.add_column("exam_sessions", sa.Column("verification_score", sa.Float(), nullable=True))
     op.add_column("exam_sessions", sa.Column("verified_at", sa.DateTime(), nullable=True))
     op.add_column("exam_sessions", sa.Column("verification_method", sa.String(length=50), nullable=True))
@@ -27,4 +34,3 @@ def downgrade() -> None:
     op.drop_column("exam_sessions", "verification_method")
     op.drop_column("exam_sessions", "verified_at")
     op.drop_column("exam_sessions", "verification_score")
-
