@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
-import { BarChart3, ClipboardList, LogOut, Users } from "lucide-react"
+import { BarChart3, ClipboardList, Eye, EyeOff, LogOut, Users } from "lucide-react"
 import { getApiPath } from "@/lib/api-url"
 import { DashboardPanel, DashboardShell, MetricCard } from "@/components/dashboard-shell"
 
@@ -35,6 +35,8 @@ export default function AdminDashboardSummary() {
   const [newPassword, setNewPassword] = useState("")
   const [forcePasswordMsg, setForcePasswordMsg] = useState("")
   const [savingPassword, setSavingPassword] = useState(false)
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false)
+  const [showNewPassword, setShowNewPassword] = useState(false)
 
   useEffect(() => {
     const rawToken = localStorage.getItem("token")
@@ -206,8 +208,18 @@ export default function AdminDashboardSummary() {
             You signed in with a temporary password. Set a new password to continue.
           </p>
           <div className="mt-4 grid gap-3">
-            <input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} placeholder="Current temporary password" className="w-full rounded-md border border-border bg-background p-2 text-sm text-foreground" />
-            <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="New password" className="w-full rounded-md border border-border bg-background p-2 text-sm text-foreground" />
+            <div className="relative">
+              <input type={showCurrentPassword ? "text" : "password"} value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} placeholder="Current temporary password" className="w-full rounded-md border border-border bg-background p-2 pr-9 text-sm text-foreground" />
+              <button type="button" onClick={() => setShowCurrentPassword((v) => !v)} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                {showCurrentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+            <div className="relative">
+              <input type={showNewPassword ? "text" : "password"} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="New password" className="w-full rounded-md border border-border bg-background p-2 pr-9 text-sm text-foreground" />
+              <button type="button" onClick={() => setShowNewPassword((v) => !v)} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
           </div>
           {forcePasswordMsg ? <p className="mt-3 text-sm text-red-600">{forcePasswordMsg}</p> : null}
           <div className="mt-4 flex justify-end">
