@@ -76,6 +76,7 @@ Add these in **GitHub → Settings → Secrets and variables → Actions**:
 | `SERVER_HOST` | VPS IP address or hostname |
 | `SERVER_USER` | SSH username (e.g. `root`) |
 | `SSH_PRIVATE_KEY` | Private SSH key allowed to access the VPS |
+| `SERVER_SSH_KEY` | Optional legacy fallback if `SSH_PRIVATE_KEY` is not set |
 | `SERVER_PORT` | Optional SSH port; defaults to `22` |
 
 ### GitHub Environments required
