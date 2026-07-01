@@ -5,108 +5,87 @@ on:
     workflows: [CI]
     types: [completed]
     branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
 
 jobs:
-  # ── Job 1: Build & push :staging image, run container health check ──────────
-  deploy-staging:
-    name: Deploy Staging
+  deploy-production:
+    name: Deploy API to VPS
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4.2.2
-        with:
-          ref: ${{ github.event.workflow_run.head_sha }}
-
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v4
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Build and push backend — staging + sha tags
-        uses: docker/build-push-action@v6
-        with:
-          context: ./backend
-          push: true
-          tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/proctoring-backend:staging
-            ${{ secrets.DOCKERHUB_USERNAME }}/proctoring-backend:${{ github.event.workflow_run.head_sha }}
-
-      - name: Container health check
-        run: |
-          docker rm -f staging-health-check 2>/dev/null || true
-          docker pull ${{ secrets.DOCKERHUB_USERNAME }}/proctoring-backend:staging
-          docker run -d --name staging-health-check \
-            -p 5001:5000 \
-            -e NODE_ENV=production \
-            -e JWT_SECRET=staging-health-check-secret \
-            -e EMAIL_MODE=test \
-            ${{ secrets.DOCKERHUB_USERNAME }}/proctoring-backend:staging
-          sleep 6
-          curl -sf http://localhost:5001/health || (docker logs staging-health-check && exit 1)
-          docker stop staging-health-check
-          docker rm staging-health-check
-
-  # ── Job 2: Manual approval gate (requires environment: production) ──────────
-  approve-production:
-    name: Approve Production
-    runs-on: ubuntu-latest
-    needs: deploy-staging
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     environment: production
 
     steps:
-      - name: Production deployment approved
-        run: echo "Approval granted — proceeding to production."
-
-  # ── Job 3: Push :latest :v1 :<sha> to Docker Hub ───────────────────────────
-  deploy-production:
-    name: Deploy Production
-    runs-on: ubuntu-latest
-    needs: approve-production
-
-    steps:
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v4
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Retag staging image as production releases
+      - name: Validate deployment secrets
         env:
-          IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/proctoring-backend
-          SHA: ${{ github.event.workflow_run.head_sha }}
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
         run: |
-          docker pull $IMAGE:staging
-          docker tag $IMAGE:staging $IMAGE:latest
-          docker tag $IMAGE:staging $IMAGE:v1
-          docker tag $IMAGE:staging $IMAGE:$SHA
-          docker push $IMAGE:latest
-          docker push $IMAGE:v1
-          docker push $IMAGE:$SHA
+          test -n "$SERVER_HOST"
+          test -n "$SERVER_USER"
+          test -n "$SSH_PRIVATE_KEY"
 
-  # ── Job 4: SSH into VPS, pull latest image, restart with Docker Compose ─────
-  deploy-server:
-    name: Deploy to VPS
-    runs-on: ubuntu-latest
-    needs: deploy-production
+      - name: Resolve deployment ref
+        id: ref
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "sha=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
+          fi
 
-    steps:
-      - name: SSH and deploy
+      - name: Deploy over SSH
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SERVER_PORT || 22 }}
+          script_stop: true
           script: |
-            cd /root/ProctorAI/ai-exam-proctoring-system
-            git pull origin main
-            docker compose pull
-            pm2 delete all 2>/dev/null || true
-            docker ps -aq | xargs -r docker rm -f
-            docker compose run --rm backend alembic upgrade head
-            docker compose up -d --build
+            set -eu
+
+            APP_DIR="/opt/proctorai/ai-exam-proctoring-system"
+            COMPOSE="docker compose --env-file .env.production -f docker-compose.api-prod.yml"
+
+            cd "$APP_DIR"
+
+            test -f .env.production
+            test -f ai-service/models/facenet_best.onnx
+            test -f ai-service/models/facenet_best.onnx.data
+            test -f ai-service/models/l2cs_net.onnx
+
+            git fetch origin main
+            git checkout main
+            git pull --ff-only origin main
+            test "$(git rev-parse HEAD)" = "${{ steps.ref.outputs.sha }}"
+
+            $COMPOSE config >/tmp/proctorai-compose-rendered.yml
+            $COMPOSE up -d postgres
+            $COMPOSE build backend ai-service
+            $COMPOSE run --rm backend alembic upgrade head
+            $COMPOSE up -d backend ai-service
+
+            for container in proctorai-postgres proctorai-backend proctorai-ai-service; do
+              i=0
+              while [ "$i" -lt 30 ]; do
+                status="$(docker inspect "$container" --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}')"
+                [ "$status" = "healthy" ] && break
+                i=$((i + 1))
+                sleep 2
+              done
+              status="$(docker inspect "$container" --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}')"
+              [ "$status" = "healthy" ] || {
+                docker logs --tail 120 "$container"
+                exit 1
+              }
+            done
+
+            curl -fsS https://proctoaibackend.neuraltale.com/health >/dev/null
+            curl -fsS https://proctoaibackend.neuraltale.com/ai/health >/dev/null
+
+            docker ps --filter "name=proctorai" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"

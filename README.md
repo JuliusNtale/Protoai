@@ -14,7 +14,7 @@ An AI-powered exam proctoring platform that verifies student identity via facial
 | Layer | Technology |
 |-------|-----------|
 | Frontend | Next.js 15, React 19, TypeScript, Tailwind CSS, shadcn/ui |
-| Backend API | Node.js, Express 4, JWT, bcrypt, Sequelize |
+| Backend API | Flask, Gunicorn, JWT, SQLAlchemy/Alembic |
 | AI Service | Python Flask, ONNX Runtime, MediaPipe, OpenCV |
 | Database | PostgreSQL 15 |
 | Containerisation | Docker, Docker Compose |
@@ -61,14 +61,11 @@ cd ai-service && pip install -r requirements.txt && python -m pytest tests/ -v
 
 **CI** triggers on every push to any branch and on pull requests to `main`. It runs all tests, then builds the Docker images. The build job will not start if any test fails.
 
-**CD** triggers automatically after CI passes on `main`. It follows four sequential steps:
+**CD** deploys the API stack automatically after CI passes on `main`. It can also be started manually from GitHub Actions with `workflow_dispatch`.
 
 | Step | What happens |
 |------|-------------|
-| `deploy-staging` | Builds and pushes `:staging` + `:<sha>` to Docker Hub; runs a container health check |
-| `approve-production` | Manual approval gate (requires a reviewer in the `production` environment) |
-| `deploy-production` | Retags the staging image as `:latest`, `:v1`, and `:<sha>` on Docker Hub |
-| `deploy-server` | SSHs into the VPS and runs `docker compose pull && docker compose up -d` |
+| `deploy-production` | SSHs into the VPS, fast-forwards `/opt/proctorai/ai-exam-proctoring-system`, validates required model files, rebuilds backend/AI images, runs Alembic migrations, restarts only ProctorAI services, and checks public health endpoints |
 
 ### GitHub Secrets required
 
@@ -76,30 +73,33 @@ Add these in **GitHub → Settings → Secrets and variables → Actions**:
 
 | Secret | Value |
 |--------|-------|
-| `DOCKERHUB_USERNAME` | Your Docker Hub username |
-| `DOCKERHUB_TOKEN` | Docker Hub access token (read/write) |
-| `SERVER_HOST` | VPS IP address |
+| `SERVER_HOST` | VPS IP address or hostname |
 | `SERVER_USER` | SSH username (e.g. `root`) |
-| `SSH_PRIVATE_KEY` | The ed25519 private key printed during setup |
+| `SSH_PRIVATE_KEY` | Private SSH key allowed to access the VPS |
+| `SERVER_PORT` | Optional SSH port; defaults to `22` |
 
 ### GitHub Environments required
 
-Create these in **GitHub → Settings → Environments**:
-
-- **`staging`** — no restrictions
-- **`production`** — enable **Required reviewers**, add your own username  
-  *(repository must be public for required reviewers on free accounts)*
+Create **`production`** in **GitHub → Settings → Environments**. Add required reviewers if deployments should wait for manual approval.
 
 ### VPS setup (one-time)
 
 ```bash
-# 1. Add the public key to authorized_keys on the server
+# 1. Add the deploy public key to authorized_keys on the server
 echo "<paste deploy_key.pub content here>" >> ~/.ssh/authorized_keys
 
-# 2. Set DOCKERHUB_USERNAME so docker compose pull can resolve image names
-echo "DOCKERHUB_USERNAME=your-username" >> /var/www/ai-exam-proctoring/.env
+# 2. Clone the repository
+mkdir -p /opt/proctorai
+git clone https://github.com/victorjudysen/ai-exam-proctoring-system.git /opt/proctorai/ai-exam-proctoring-system
 
-# 3. Ensure Docker and Docker Compose are installed
+# 3. Create and fill production environment values
+cd /opt/proctorai/ai-exam-proctoring-system
+cp .env.production.example .env.production
+
+# 4. Upload AI model files to ai-service/models/
+ls -lh ai-service/models/
+
+# 5. Ensure Docker and Docker Compose are installed
 docker --version
 docker compose version
 ```
