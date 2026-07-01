@@ -25,6 +25,7 @@ services:
   backend:
     build: ./backend
     image: ${DOCKERHUB_USERNAME:-local}/proctoring-backend:${IMAGE_TAG:-latest}
+    command: ["python", "run.py"]
     ports:
       - "5000:5000"
     env_file:
@@ -54,6 +55,7 @@ services:
 
   ai-service:
     build: ./ai-service
+    command: ["python", "app.py"]
     ports:
       - "8000:8000"
     environment:

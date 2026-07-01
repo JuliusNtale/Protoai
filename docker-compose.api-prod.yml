@@ -1,0 +1,109 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: proctorai-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - proctorai_postgres_data:/var/lib/postgresql/data
+    networks:
+      - proctorai_internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"${POSTGRES_USER}\" -d \"${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  backend:
+    build: ./backend
+    container_name: proctorai-backend
+    restart: unless-stopped
+    env_file:
+      - ./.env.production
+    environment:
+      PYTHONPATH: /app
+      FLASK_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      AI_SERVICE_URL: http://proctorai-ai-service:8000
+      APP_URL: ${FRONTEND_URL:?FRONTEND_URL is required}
+    expose:
+      - "5000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - proctorai_storage_data:/app/storage
+    networks:
+      - proctorai_internal
+      - existing_proxy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health', timeout=3)\""]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  ai-service:
+    build: ./ai-service
+    container_name: proctorai-ai-service
+    restart: unless-stopped
+    env_file:
+      - ./.env.production
+    environment:
+      FLASK_ENV: production
+      BACKEND_URL: http://proctorai-backend:5000
+      AI_SERVICE_TOKEN: ${AI_SERVICE_TOKEN:?AI_SERVICE_TOKEN is required}
+      MODELS_DIR: /app/models
+      FACENET_MODEL_VERSION: ${FACENET_MODEL_VERSION:-facenet_best.onnx}
+      L2CS_MODEL_VERSION: ${L2CS_MODEL_VERSION:-l2cs_net.onnx}
+      FACE_SIMILARITY_THRESHOLD: ${FACE_SIMILARITY_THRESHOLD:-0.6}
+      GAZE_AWAY_SECONDS: ${GAZE_AWAY_SECONDS:-5}
+      HEAD_TURNED_SECONDS: ${HEAD_TURNED_SECONDS:-3}
+      HEAD_YAW_THRESHOLD: ${HEAD_YAW_THRESHOLD:-30}
+      HEAD_PITCH_THRESHOLD: ${HEAD_PITCH_THRESHOLD:-20}
+    expose:
+      - "8000"
+    volumes:
+      - ./ai-service/models:/app/models:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - proctorai_internal
+      - existing_proxy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)\""]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+networks:
+  proctorai_internal:
+    name: proctorai_internal
+  existing_proxy:
+    external: true
+    name: ${EXISTING_NGINX_NETWORK:?EXISTING_NGINX_NETWORK is required}
+
+volumes:
+  proctorai_postgres_data:
+  proctorai_storage_data:
