@@ -1,7 +1,16 @@
 # Project Memory TODO
 
-Last updated: 2026-05-11
-Source: recent implementation + pushes to `main` (`3fa9807` .. `ecab61d`)
+Last updated: 2026-07-02
+Source: recent implementation + pushes to `main` (PR #92 .. #94)
+
+## Session Checkpoint (2026-07-02)
+
+- [x] Gaze model integration: replaced non-functional `l2cs_net.onnx` (output tensor name mismatch meant it silently never worked) with `gaze_model.onnx`, a custom CNN trained on MPIIGaze-normalized eye crops. Added `detect_and_crop_eye()` (MediaPipe FaceMesh, roll-corrected) and matching preprocessing. Model path configurable via `GAZE_MODEL_VERSION`. Note: live eye-crop only corrects in-plane roll, not full MPIIGaze virtual-camera reprojection — a known accuracy gap, not yet addressed.
+- [x] Removed the forced password-change-on-first-login gate entirely (backend `_password_change_required()` checks removed from exams/sessions/users routes; bootstrap admin, `provision-credentials`, `provision-bulk`, and `reset-password` no longer set `must_change_password=True`). Simplifies E2E testing — provisioned accounts are immediately usable.
+- [x] Fresh production database: all prior users/exams/sessions truncated and a full team account set re-provisioned (1 admin via bootstrap env vars, 5 students, 5 lecturers) via `POST /api/auth/provision-bulk`.
+- [x] Lecturer Question Builder: added a "Publish Exam to Students" button (shows once ≥1 question exists) that sets exam status to `live` directly, instead of requiring a trip back to the Exams tab.
+- [x] Student baseline image upload: switched from `fetch` to `XMLHttpRequest` to show a real upload progress bar (Fetch has no upload-progress event).
+- [x] **Deployment topology clarified**: the frontend is hosted on Vercel with its own GitHub integration (auto-deploys on every push to `main`), entirely separate from `cd.yml`, which only deploys `backend` + `ai-service` to the VPS. There is no frontend container on the VPS. This wasn't documented anywhere before and caused confusion mid-session — now reflected in the root `README.md`.
 
 ## Session Checkpoint (2026-05-11)
 
@@ -59,7 +68,7 @@ Source: recent implementation + pushes to `main` (`3fa9807` .. `ecab61d`)
 ## Immediate Open Items
 
 - [ ] Run full live E2E dry run on VPS with current `main`:
-  - admin create student/lecturer -> first-login password change -> session start/verify/log/submit -> report export.
+  - admin create student/lecturer -> login (no forced password change, removed 2026-07-02) -> session start/verify/log/submit -> report export.
 - [ ] Validate `docker compose run --rm backend alembic upgrade head` behavior in production deploy logs.
 - [ ] Confirm live socket anomaly path (`anomaly_result`/`session_locked`) with real browser session evidence.
 - [ ] Remove/retire obsolete Node backend artifacts (`backend/server.js`, old `package.json` usage) once no longer needed.
