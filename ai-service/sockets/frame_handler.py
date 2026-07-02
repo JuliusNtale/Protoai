@@ -27,9 +27,28 @@ _ANOMALY_SECONDS = {
 }
 _WARNING_COOLDOWN_SECONDS = float(os.getenv('WARNING_COOLDOWN_SECONDS', '15'))
 
+# Minimum gaze-model confidence before a non-Screen reading counts as a real
+# anomaly at all. The model's confidence sits close to chance level (~0.2 for
+# 5 classes) on low-quality frames, so low-confidence readings are treated as
+# inconclusive rather than "away" — see the 2026-07-02 warning-escalation
+# investigation.
+_GAZE_CONFIDENCE_THRESHOLD = float(os.getenv('GAZE_CONFIDENCE_THRESHOLD', '0.4'))
+
+
+def _base_type(anomaly):
+    """Strip the ':direction' qualifier some anomaly keys carry internally."""
+    return anomaly.split(':', 1)[0]
+
 
 def _confirmed_anomalies(session_id, current_anomalies):
-    """Return anomalies that have persisted long enough to count as warnings."""
+    """Return anomalies that have persisted long enough to count as warnings.
+
+    Anomaly keys may be direction-qualified (e.g. 'gaze_away:Right') so that
+    the required persistence must be the SAME specific direction the whole
+    time — flip-flopping between different wrong directions (a signature of
+    model noise, not real gaze deviation) resets the timer instead of
+    accumulating toward a warning.
+    """
     now = time.monotonic()
     current = set(current_anomalies)
 
@@ -46,7 +65,7 @@ def _confirmed_anomalies(session_id, current_anomalies):
                 anomaly,
                 {'started_at': now, 'last_logged_at': 0.0},
             )
-            required_seconds = _ANOMALY_SECONDS.get(anomaly, 3.0)
+            required_seconds = _ANOMALY_SECONDS.get(_base_type(anomaly), 3.0)
             persisted = now - state['started_at']
             cooled_down = now - state['last_logged_at']
             if persisted >= required_seconds and cooled_down >= _WARNING_COOLDOWN_SECONDS:
@@ -106,8 +125,8 @@ def register_handlers(socketio: SocketIO):
         anomalies = []
         if gaze is None or face_count[0] == 0:
             anomalies.append('face_absent')
-        elif gaze.get('direction') != 'Screen':
-            anomalies.append('gaze_away')
+        elif gaze.get('direction') != 'Screen' and gaze.get('confidence', 0.0) >= _GAZE_CONFIDENCE_THRESHOLD:
+            anomalies.append(f"gaze_away:{gaze['direction']}")
 
         if pose is not None and pose.get('alert'):
             anomalies.append('head_turned')
@@ -123,13 +142,14 @@ def register_handlers(socketio: SocketIO):
         # Forward confirmed anomalies to Derick's backend and track the returned warning_count
         headers = {'X-Internal-Token': _AI_SERVICE_TOKEN} if _AI_SERVICE_TOKEN else None
         for anomaly in confirmed_anomalies:
+            event_type = _base_type(anomaly)
             try:
                 resp = requests.post(
                     f"{_BACKEND_URL}/api/sessions/log",
                     headers=headers,
                     json={
                         'session_id': session_id,
-                        'event_type': anomaly,
+                        'event_type': event_type,
                         'event_data': {
                             'gaze_direction': gaze.get('direction') if gaze else None,
                             'yaw':   pose.get('yaw')   if pose else None,
@@ -143,7 +163,7 @@ def register_handlers(socketio: SocketIO):
                 else:
                     print(
                         f"[frame_handler] backend rejected anomaly log "
-                        f"session={session_id} event={anomaly} status={resp.status_code}"
+                        f"session={session_id} event={event_type} status={resp.status_code}"
                     )
             except requests.exceptions.RequestException:
                 pass  # Backend unreachable — don't crash the WebSocket handler
@@ -155,8 +175,8 @@ def register_handlers(socketio: SocketIO):
 
         emit('anomaly_result', {
             'session_id':     session_id,
-            'anomalies':      anomalies,
-            'confirmed_anomalies': confirmed_anomalies,
+            'anomalies':      [_base_type(a) for a in anomalies],
+            'confirmed_anomalies': [_base_type(a) for a in confirmed_anomalies],
             'warning_count':  warning_count,
             'gaze_direction': gaze_direction,
         })

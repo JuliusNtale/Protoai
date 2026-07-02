@@ -1,6 +1,6 @@
 import numpy as np
 from services.preprocessing import preprocess_for_gaze_model
-from services.face_detector import detect_and_crop_eye
+from services.gaze_normalization import normalize_eye_patch
 from services.model_loader import get_gaze_model
 
 # Model class order per trained_model_exports/checkpoints/README_HANDOFF.md:
@@ -22,7 +22,7 @@ def estimate_gaze(img_bgr: np.ndarray):
     """
     gaze_model = get_gaze_model()
 
-    eye_crop, _ = detect_and_crop_eye(img_bgr)
+    eye_crop = normalize_eye_patch(img_bgr)
     if eye_crop is None:
         return None
 

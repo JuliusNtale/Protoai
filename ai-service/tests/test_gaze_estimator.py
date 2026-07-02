@@ -20,14 +20,14 @@ class _FakeGazeSession:
 
 
 def test_estimate_gaze_no_face_returns_none(monkeypatch):
-    monkeypatch.setattr(gaze_estimator, 'detect_and_crop_eye', lambda img: (None, 0.0))
+    monkeypatch.setattr(gaze_estimator, 'normalize_eye_patch', lambda img: None)
     result = gaze_estimator.estimate_gaze(np.zeros((10, 10, 3), dtype=np.uint8))
     assert result is None
 
 
 def test_estimate_gaze_model_unavailable_falls_back(monkeypatch):
     eye = np.zeros((36, 60, 3), dtype=np.uint8)
-    monkeypatch.setattr(gaze_estimator, 'detect_and_crop_eye', lambda img: (eye, 1.0))
+    monkeypatch.setattr(gaze_estimator, 'normalize_eye_patch', lambda img: eye)
     monkeypatch.setattr(gaze_estimator, 'get_gaze_model', lambda: None)
 
     result = gaze_estimator.estimate_gaze(np.zeros((10, 10, 3), dtype=np.uint8))
@@ -47,7 +47,7 @@ def test_estimate_gaze_maps_class_index_to_direction(monkeypatch, class_idx, exp
     logits = [-5.0] * 5
     logits[class_idx] = 5.0
 
-    monkeypatch.setattr(gaze_estimator, 'detect_and_crop_eye', lambda img: (eye, 1.0))
+    monkeypatch.setattr(gaze_estimator, 'normalize_eye_patch', lambda img: eye)
     monkeypatch.setattr(gaze_estimator, 'get_gaze_model', lambda: _FakeGazeSession(logits))
 
     result = gaze_estimator.estimate_gaze(np.zeros((10, 10, 3), dtype=np.uint8))
