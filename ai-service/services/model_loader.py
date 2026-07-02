@@ -2,9 +2,9 @@ import onnxruntime as ort
 import os
 
 _facenet_session = None
-_l2cs_session = None
+_gaze_session = None
 _facenet_path_loaded = None
-_l2cs_path_loaded = None
+_gaze_path_loaded = None
 
 
 def _resolve_candidate_paths(models_dir: str, primary_name: str, fallbacks: list[str]) -> list[str]:
@@ -13,21 +13,21 @@ def _resolve_candidate_paths(models_dir: str, primary_name: str, fallbacks: list
 
 
 def load_models():
-    global _facenet_session, _l2cs_session, _facenet_path_loaded, _l2cs_path_loaded
+    global _facenet_session, _gaze_session, _facenet_path_loaded, _gaze_path_loaded
 
     models_dir = os.getenv('MODELS_DIR', './models')
     facenet_name = os.getenv('FACENET_MODEL_VERSION', 'facenet_best.onnx')
-    l2cs_name = os.getenv('L2CS_MODEL_VERSION', 'l2cs_net.onnx')
+    gaze_name = os.getenv('GAZE_MODEL_VERSION', 'gaze_model.onnx')
 
     facenet_candidates = _resolve_candidate_paths(
         models_dir,
         facenet_name,
         ['facenet_best.onnx', 'facenet.onnx', 'facenet512.onnx'],
     )
-    l2cs_candidates = _resolve_candidate_paths(
+    gaze_candidates = _resolve_candidate_paths(
         models_dir,
-        l2cs_name,
-        ['l2cs_net.onnx'],
+        gaze_name,
+        ['gaze_model.onnx'],
     )
 
     _facenet_session = None
@@ -41,16 +41,16 @@ def load_models():
     if _facenet_session is None:
         print(f"[model_loader] WARNING: FaceNet not found. Checked: {facenet_candidates}")
 
-    _l2cs_session = None
-    _l2cs_path_loaded = None
-    for l2cs_path in l2cs_candidates:
-        if os.path.exists(l2cs_path):
-            _l2cs_session = ort.InferenceSession(l2cs_path)
-            _l2cs_path_loaded = l2cs_path
-            print(f"[model_loader] L2CS-Net loaded from {l2cs_path}")
+    _gaze_session = None
+    _gaze_path_loaded = None
+    for gaze_path in gaze_candidates:
+        if os.path.exists(gaze_path):
+            _gaze_session = ort.InferenceSession(gaze_path)
+            _gaze_path_loaded = gaze_path
+            print(f"[model_loader] Gaze model loaded from {gaze_path}")
             break
-    if _l2cs_session is None:
-        print(f"[model_loader] WARNING: L2CS-Net not found. Checked: {l2cs_candidates}")
+    if _gaze_session is None:
+        print(f"[model_loader] WARNING: Gaze model not found. Checked: {gaze_candidates}")
 
 
 def get_facenet():
@@ -59,14 +59,14 @@ def get_facenet():
     return _facenet_session
 
 
-def get_l2cs():
-    if _l2cs_session is None:
+def get_gaze_model():
+    if _gaze_session is None:
         load_models()
-    return _l2cs_session
+    return _gaze_session
 
 
 def get_loaded_model_paths():
     return {
         'facenet': _facenet_path_loaded,
-        'l2cs': _l2cs_path_loaded,
+        'gaze': _gaze_path_loaded,
     }

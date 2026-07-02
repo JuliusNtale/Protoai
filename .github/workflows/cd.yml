@@ -56,7 +56,7 @@ jobs:
             test -f .env.production
             test -f ai-service/models/facenet_best.onnx
             test -f ai-service/models/facenet_best.onnx.data
-            test -f ai-service/models/l2cs_net.onnx
+            test -f ai-service/models/gaze_model.onnx
 
             git fetch origin main
             git checkout main

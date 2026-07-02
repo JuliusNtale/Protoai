@@ -38,7 +38,7 @@ Browser (Next.js 15 / React 19)
     └─── WebSocket (socket.io) ────────► Flask AI Service (port 8000)
                                          │
                                          ├── FaceNet (ONNX) ── identity verify
-                                         ├── L2CS-Net (ONNX) ─ gaze estimation
+                                         ├── Gaze CNN (ONNX) ── gaze estimation
                                          └── MediaPipe ──────── head pose
                                          
 Database: PostgreSQL (7 tables)
@@ -168,7 +168,7 @@ docker-compose up          # starts frontend, backend, ai-service, postgres
 
 - **Warning threshold = 3**: Gaze away >5s, head turned >3s, tab switch, face absent — each fires a warning. At 3, auto-submit + email.
 - **Facial recognition pipeline**: MTCNN detect → FaceNet embed → cosine similarity → threshold 0.6
-- **Gaze model**: L2CS-Net fine-tuned to 5 classes: Screen, Left, Right, Up, Down
+- **Gaze model**: `gaze_model.onnx` — custom lightweight CNN (~101K params) trained on MPIIGaze normalized eye crops (Kaggle `4quant/eye-gaze`), 5-class output: Center (reported as "Screen"), Down, Left, Right, Up. Input is a single 36x60 grayscale eye crop (`eye_image`), not a full face — see `ai-service/services/face_detector.py::detect_and_crop_eye`. Test accuracy 78.54% (macro F1 0.781); full details in `trained_model_exports/checkpoints/README_HANDOFF.md`. The live eye-crop only corrects in-plane roll — it does not perform the full MPIIGaze virtual-camera reprojection the model was trained on, so real-world accuracy needs validation against live footage. Replaces the earlier `l2cs_net.onnx` placeholder, which was never functional in production (its actual output tensor name didn't match what the code requested).
 - **Head pose**: MediaPipe Face Mesh + OpenCV solvePnP (no training needed, just calibration)
 - **Frontend stack**: Next.js 15, React 19, TypeScript, Tailwind CSS, shadcn/ui, Recharts
 - **Backend stack**: Python Flask, PostgreSQL, SQLAlchemy, JWT, bcrypt, Nodemailer equiv (smtplib)

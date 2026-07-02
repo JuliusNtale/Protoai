@@ -29,16 +29,14 @@ def preprocess_for_facenet(face_bgr: np.ndarray) -> np.ndarray:
     return np.transpose(face_normalized, (2, 0, 1))[np.newaxis, :]  # HWC → NCHW
 
 
-def preprocess_for_l2cs(face_bgr: np.ndarray) -> np.ndarray:
+def preprocess_for_gaze_model(eye_bgr: np.ndarray) -> np.ndarray:
     """
-    Resize to 224x224, convert BGR→RGB, apply ImageNet mean/std normalization.
-    Returns float32 array of shape (1, 3, 224, 224).
-    Matches torchvision normalization used during Beckham's training.
+    Resize to 60x36, convert to grayscale, normalize to [-1, 1].
+    Returns float32 array of shape (1, 1, 36, 60).
+    Matches gaze_model.onnx spec: (pixel/255.0 - 0.5) / 0.5.
     """
-    face_rgb = cv2.cvtColor(face_bgr, cv2.COLOR_BGR2RGB)
-    face_resized = cv2.resize(face_rgb, (224, 224))
-    face_float = face_resized.astype(np.float32) / 255.0
-    mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
-    std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
-    face_normalized = (face_float - mean) / std
-    return np.transpose(face_normalized, (2, 0, 1))[np.newaxis, :]  # HWC → NCHW
+    eye_gray = cv2.cvtColor(eye_bgr, cv2.COLOR_BGR2GRAY)
+    eye_resized = cv2.resize(eye_gray, (60, 36))
+    eye_float = eye_resized.astype(np.float32) / 255.0
+    eye_normalized = (eye_float - 0.5) / 0.5
+    return eye_normalized[np.newaxis, np.newaxis, :, :]  # HW → NCHW
