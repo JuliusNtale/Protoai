@@ -121,7 +121,7 @@ def verify_identity():
             return jsonify({"error": f"Unable to load registered face baseline: {baseline_error}"}), 422
         stored = baseline_embedding
 
-    confidence = cosine_similarity(embedding, stored)
+    confidence = max(0.0, min(1.0, cosine_similarity(embedding, stored)))
     match = confidence >= _THRESHOLD
 
     backend_persisted = None
