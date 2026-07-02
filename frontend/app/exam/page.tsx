@@ -69,6 +69,8 @@ export default function ExamPage() {
   const socketRef = useRef<Socket | null>(null)
   const tabViolationInFlightRef = useRef(false)
   const lastTabViolationAtRef = useRef(0)
+  const examStartedAtRef = useRef(Date.now())
+  const warningsRef = useRef(0)
   const [current, setCurrent] = useState(0)
   const [answers, setAnswers] = useState<Record<number, number>>({})
   const [flagged, setFlagged] = useState<Set<number>>(new Set())
@@ -329,6 +331,7 @@ export default function ExamPage() {
 
   const applyWarning = useCallback((incomingCount: number) => {
     const next = Math.max(incomingCount, 0)
+    warningsRef.current = next
     setWarnings(next)
     setTabSwitches(next)
     setWarningModal(next >= maxWarnings ? "final" : "warning")
@@ -362,6 +365,7 @@ export default function ExamPage() {
 
   async function logTabSwitchViolation(reason: "visibility_hidden" | "window_blur") {
     if (!sessionId || sessionLocked) return
+    if (Date.now() - examStartedAtRef.current < 8000) return
     if (tabViolationInFlightRef.current) return
     const now = Date.now()
     if (now - lastTabViolationAtRef.current < 1500) return
@@ -465,7 +469,9 @@ export default function ExamPage() {
         socket.on("anomaly_result", (event: AnomalyResultEvent) => {
           if (!event || Number(event.session_id) !== sessionId) return
           const count = Number(event.warning_count || 0)
-          applyWarning(count)
+          if (count > warningsRef.current) {
+            applyWarning(count)
+          }
           if (Array.isArray(event.anomalies) && event.anomalies.length > 0) {
             setTabSwitches(count)
           }
@@ -514,6 +520,7 @@ export default function ExamPage() {
       }
     }
     const onWindowBlur = () => {
+      if (document.visibilityState === "visible") return
       void logTabSwitchViolation("window_blur")
     }
 
