@@ -7,6 +7,8 @@ An AI-powered exam proctoring platform that verifies student identity via facial
 [![CI](https://github.com/victorjudysen/ai-exam-proctoring-system/actions/workflows/ci.yml/badge.svg)](https://github.com/victorjudysen/ai-exam-proctoring-system/actions/workflows/ci.yml)
 [![CD](https://github.com/victorjudysen/ai-exam-proctoring-system/actions/workflows/cd.yml/badge.svg)](https://github.com/victorjudysen/ai-exam-proctoring-system/actions/workflows/cd.yml)
 
+**Production:** [proctoai.neuraltale.com](https://proctoai.neuraltale.com) (frontend, hosted on Vercel) · [proctoaibackend.neuraltale.com](https://proctoaibackend.neuraltale.com) (backend + AI service, VPS)
+
 ---
 
 ## Tech Stack
@@ -48,12 +50,14 @@ docker compose up
 npm install
 npm test
 
-# Backend unit tests
-cd backend && npm ci && npm test
+# Backend unit tests (Flask + pytest)
+cd backend && pip install -r requirements.txt && python -m pytest tests/ -v
 
 # AI service tests
 cd ai-service && pip install -r requirements.txt && python -m pytest tests/ -v
 ```
+
+Note: model-loading tests in `ai-service/tests/` (e.g. gaze model file existence/inference) skip automatically when `*.onnx` files aren't present — those binaries are gitignored and only exist where manually placed (a dev machine or the VPS), never in CI.
 
 ---
 
@@ -61,11 +65,13 @@ cd ai-service && pip install -r requirements.txt && python -m pytest tests/ -v
 
 **CI** triggers on every push to any branch and on pull requests to `main`. It runs all tests, then builds the Docker images. The build job will not start if any test fails.
 
-**CD** deploys the API stack automatically after CI passes on `main`. It can also be started manually from GitHub Actions with `workflow_dispatch`.
+**CD** (`cd.yml`) deploys the **backend + AI service only** — it does not touch the frontend. It runs automatically after CI passes on `main`, and can also be started manually from GitHub Actions with `workflow_dispatch`.
 
 | Step | What happens |
 |------|-------------|
-| `deploy-production` | SSHs into the VPS, fast-forwards `/opt/proctorai/ai-exam-proctoring-system`, validates required model files, rebuilds backend/AI images, runs Alembic migrations, restarts only ProctorAI services, and checks public health endpoints |
+| `deploy-production` | SSHs into the VPS, fast-forwards `/opt/proctorai/ai-exam-proctoring-system`, validates required model files (`facenet_best.onnx`, `gaze_model.onnx`), rebuilds backend/AI images via `docker-compose.api-prod.yml`, runs Alembic migrations, restarts only ProctorAI services, and checks public health endpoints |
+
+**The frontend deploys separately and automatically via Vercel's own GitHub integration** — every push to `main` triggers a Vercel production deployment of `frontend/`, independent of `cd.yml` and the VPS entirely. There is no frontend container on the VPS; check deployment status via GitHub → the commit's checks, or `gh api repos/<owner>/<repo>/deployments`.
 
 ### GitHub Secrets required
 
@@ -97,7 +103,8 @@ git clone https://github.com/victorjudysen/ai-exam-proctoring-system.git /opt/pr
 cd /opt/proctorai/ai-exam-proctoring-system
 cp .env.production.example .env.production
 
-# 4. Upload AI model files to ai-service/models/
+# 4. Upload AI model files to ai-service/models/ (gitignored, not shipped by git pull/CD — copy manually via scp/rsync)
+#    Required: facenet_best.onnx, facenet_best.onnx.data, gaze_model.onnx
 ls -lh ai-service/models/
 
 # 5. Ensure Docker and Docker Compose are installed
@@ -112,7 +119,7 @@ docker compose version
 ```
 ai-exam-proctoring-system/
 ├── frontend/          Next.js app
-├── backend/           Express REST API
+├── backend/           Flask REST API
 ├── ai-service/        Flask AI endpoints (WebSocket + model inference)
 ├── tests/             Root-level integration tests (Jest + Supertest)
 ├── docs/              API spec, test cases, SRS

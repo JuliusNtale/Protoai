@@ -173,6 +173,8 @@ docker-compose up          # starts frontend, backend, ai-service, postgres
 - **Frontend stack**: Next.js 15, React 19, TypeScript, Tailwind CSS, shadcn/ui, Recharts
 - **Backend stack**: Python Flask, PostgreSQL, SQLAlchemy, JWT, bcrypt, Nodemailer equiv (smtplib)
 - **AI service**: Python Flask + ONNX Runtime + MediaPipe + OpenCV + Socket.io
+- **Deployment split**: the frontend (`frontend/`) is hosted on **Vercel**, which auto-deploys on every push to `main` via its own GitHub integration — this is completely separate from `.github/workflows/cd.yml`, which only deploys `backend` + `ai-service` to the VPS. There is no frontend container on the VPS. Don't assume merging a frontend-only PR needs a manual VPS deploy step — it doesn't.
+- **Password policy**: there is no forced password-change-on-first-login anymore (removed 2026-07-02) — provisioned/reset accounts are immediately usable with their temporary password. `must_change_password` still exists as a DB column but nothing sets it `True` or enforces it.
 
 ---
 
