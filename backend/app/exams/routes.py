@@ -9,11 +9,6 @@ from app.models import BehavioralLog, Exam, ExamSession, Question, Report, Sessi
 exams_bp = Blueprint("exams", __name__)
 
 
-def _password_change_required(user_id: int) -> bool:
-    user = db.session.get(User, user_id)
-    return bool(user and user.must_change_password)
-
-
 def _lecturer_profile_confirmed(user_id: int) -> bool:
     user = db.session.get(User, user_id)
     return bool(user and user.role == "lecturer" and user.lecturer_profile_confirmed)
@@ -78,8 +73,6 @@ def create_exam():
     user_id = int(get_jwt_identity())
     if role not in {"lecturer", "admin"}:
         return jsonify({"error": {"message": "Forbidden"}}), 403
-    if _password_change_required(user_id):
-        return jsonify({"error": {"message": "Password change required before exam management"}}), 403
     if role == "lecturer" and not _lecturer_profile_confirmed(user_id):
         return jsonify({"error": {"message": "Complete and confirm your lecturer profile before managing exams."}}), 403
 
@@ -120,8 +113,6 @@ def update_exam_status(exam_id):
     user_id = int(get_jwt_identity())
     if role not in {"lecturer", "admin"}:
         return jsonify({"error": {"message": "Forbidden"}}), 403
-    if _password_change_required(user_id):
-        return jsonify({"error": {"message": "Password change required before exam management"}}), 403
     if role == "lecturer" and not _lecturer_profile_confirmed(user_id):
         return jsonify({"error": {"message": "Complete and confirm your lecturer profile before managing exams."}}), 403
 
@@ -151,8 +142,6 @@ def update_exam(exam_id):
     user_id = int(get_jwt_identity())
     if role not in {"lecturer", "admin"}:
         return jsonify({"error": {"message": "Forbidden"}}), 403
-    if _password_change_required(user_id):
-        return jsonify({"error": {"message": "Password change required before exam management"}}), 403
     if role == "lecturer" and not _lecturer_profile_confirmed(user_id):
         return jsonify({"error": {"message": "Complete and confirm your lecturer profile before managing exams."}}), 403
 
@@ -194,8 +183,6 @@ def delete_exam(exam_id):
     user_id = int(get_jwt_identity())
     if role not in {"lecturer", "admin"}:
         return jsonify({"error": {"message": "Forbidden"}}), 403
-    if _password_change_required(user_id):
-        return jsonify({"error": {"message": "Password change required before exam management"}}), 403
     if role == "lecturer" and not _lecturer_profile_confirmed(user_id):
         return jsonify({"error": {"message": "Complete and confirm your lecturer profile before managing exams."}}), 403
 
@@ -270,8 +257,6 @@ def create_question(exam_id):
     user_id = int(get_jwt_identity())
     if role not in {"lecturer", "admin"}:
         return jsonify({"error": {"message": "Forbidden"}}), 403
-    if _password_change_required(user_id):
-        return jsonify({"error": {"message": "Password change required before exam management"}}), 403
     if role == "lecturer" and not _lecturer_profile_confirmed(user_id):
         return jsonify({"error": {"message": "Complete and confirm your lecturer profile before managing exams."}}), 403
 
@@ -317,8 +302,6 @@ def delete_question(exam_id, question_id):
     user_id = int(get_jwt_identity())
     if role not in {"lecturer", "admin"}:
         return jsonify({"error": {"message": "Forbidden"}}), 403
-    if _password_change_required(user_id):
-        return jsonify({"error": {"message": "Password change required before exam management"}}), 403
     if role == "lecturer" and not _lecturer_profile_confirmed(user_id):
         return jsonify({"error": {"message": "Complete and confirm your lecturer profile before managing exams."}}), 403
 
@@ -343,8 +326,6 @@ def update_question(exam_id, question_id):
     user_id = int(get_jwt_identity())
     if role not in {"lecturer", "admin"}:
         return jsonify({"error": {"message": "Forbidden"}}), 403
-    if _password_change_required(user_id):
-        return jsonify({"error": {"message": "Password change required before exam management"}}), 403
     if role == "lecturer" and not _lecturer_profile_confirmed(user_id):
         return jsonify({"error": {"message": "Complete and confirm your lecturer profile before managing exams."}}), 403
 

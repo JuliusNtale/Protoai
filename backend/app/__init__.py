@@ -81,7 +81,6 @@ def create_app() -> Flask:
                 username=login_id,
                 role="admin",
                 credential_source="admin_provisioned",
-                must_change_password=True,
                 is_active=True,
             )
             admin.set_password(password)

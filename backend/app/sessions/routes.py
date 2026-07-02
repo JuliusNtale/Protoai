@@ -13,11 +13,6 @@ sessions_bp = Blueprint("sessions", __name__)
 VALID_EVENTS = {"gaze_away", "head_turned", "face_absent", "tab_switch", "multiple_faces"}
 
 
-def _password_change_required(user_id: int) -> bool:
-    user = db.session.get(User, user_id)
-    return bool(user and user.must_change_password)
-
-
 def _student_profile_ready_for_verification(user: User) -> tuple[bool, str]:
     if not user:
         return False, "User not found"
@@ -70,8 +65,6 @@ def start_session():
     ready, message = _student_profile_ready_for_verification(student)
     if not ready:
         return jsonify({"error": {"message": message}}), 409
-    if _password_change_required(student_id):
-        return jsonify({"error": {"message": "Password change required before exam start"}}), 403
     existing = ExamSession.query.filter_by(student_id=student_id, exam_id=exam.exam_id).first()
     if existing:
         if existing.session_status in {"active", "pending"} and not existing.submitted_at:

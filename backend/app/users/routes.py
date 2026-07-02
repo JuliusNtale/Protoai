@@ -29,11 +29,6 @@ def _generate_temp_password(length=12):
     return "".join(random.choice(alphabet) for _ in range(length))
 
 
-def _password_change_required(user_id: int) -> bool:
-    user = db.session.get(User, user_id)
-    return bool(user and user.must_change_password)
-
-
 def _delete_exam_cascade(exam_id: int) -> None:
     session_ids = [
         row[0]
@@ -204,8 +199,6 @@ def update_profile():
 def list_users():
     if not _is_admin():
         return jsonify({"error": {"message": "Forbidden"}}), 403
-    if _password_change_required(int(get_jwt_identity())):
-        return jsonify({"error": {"message": "Password change required before admin actions"}}), 403
 
     role = (request.args.get("role") or "").strip().lower()
     query = (request.args.get("query") or "").strip().lower()
@@ -235,8 +228,6 @@ def update_user_status(user_id: int):
     if not _is_admin():
         return jsonify({"error": {"message": "Forbidden"}}), 403
     actor_user_id = int(get_jwt_identity())
-    if _password_change_required(actor_user_id):
-        return jsonify({"error": {"message": "Password change required before admin actions"}}), 403
 
     user = db.session.get(User, user_id)
     if not user:
@@ -266,8 +257,6 @@ def delete_user(user_id: int):
     if not _is_admin():
         return jsonify({"error": {"message": "Forbidden"}}), 403
     actor_user_id = int(get_jwt_identity())
-    if _password_change_required(actor_user_id):
-        return jsonify({"error": {"message": "Password change required before admin actions"}}), 403
     if actor_user_id == user_id:
         return jsonify({"error": {"message": "You cannot delete your own account"}}), 400
 
@@ -326,8 +315,6 @@ def reset_credentials(user_id: int):
     if not _is_admin():
         return jsonify({"error": {"message": "Forbidden"}}), 403
     actor_user_id = int(get_jwt_identity())
-    if _password_change_required(actor_user_id):
-        return jsonify({"error": {"message": "Password change required before admin actions"}}), 403
 
     user = db.session.get(User, user_id)
     if not user:
@@ -337,7 +324,6 @@ def reset_credentials(user_id: int):
 
     temp_password = _generate_temp_password()
     user.set_password(temp_password)
-    user.must_change_password = True
     log_audit(
         action="admin.user_credentials_reset",
         actor_user_id=actor_user_id,
@@ -361,8 +347,6 @@ def reset_credentials(user_id: int):
 def list_audit_logs():
     if not _is_admin():
         return jsonify({"error": {"message": "Forbidden"}}), 403
-    if _password_change_required(int(get_jwt_identity())):
-        return jsonify({"error": {"message": "Password change required before admin actions"}}), 403
 
     action_filter = (request.args.get("action") or "").strip().lower()
     query_text = (request.args.get("query") or "").strip().lower()
