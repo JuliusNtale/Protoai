@@ -122,7 +122,7 @@ Base URL: `http://localhost:8000`
 
 ```
 GET  /health
-Resp: 200 { status: "ok", models_loaded: { facenet: true, l2cs: true } }
+Resp: 200 { status: "ok", models_loaded: { facenet: true, gaze: true } }
 
 POST /verify-identity
 Body:  { user_id: int, image_base64: string }  ← image is 640x480 JPEG base64
@@ -223,6 +223,8 @@ Create `ai-service/.env`:
 BACKEND_URL=http://localhost:5000
 MODELS_DIR=./models
 FACE_SIMILARITY_THRESHOLD=0.6
+FACENET_MODEL_VERSION=facenet_best.onnx
+GAZE_MODEL_VERSION=gaze_model.onnx
 GAZE_AWAY_SECONDS=5
 HEAD_TURNED_SECONDS=3
 HEAD_YAW_THRESHOLD=30

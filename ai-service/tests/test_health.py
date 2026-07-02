@@ -21,11 +21,11 @@ def test_health_returns_ok(client):
     assert data['status'] == 'ok'
     assert 'models_loaded' in data
     assert 'facenet' in data['models_loaded']
-    assert 'l2cs' in data['models_loaded']
+    assert 'gaze' in data['models_loaded']
 
 
 def test_health_models_loaded_is_bool(client):
     resp = client.get('/health')
     data = resp.get_json()
     assert isinstance(data['models_loaded']['facenet'], bool)
-    assert isinstance(data['models_loaded']['l2cs'], bool)
+    assert isinstance(data['models_loaded']['gaze'], bool)
