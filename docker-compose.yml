@@ -35,6 +35,7 @@ services:
       DATABASE_URL: postgresql://proctoring_user:proctoring_pass@postgres:5432/proctoring_db
       JWT_SECRET: change-this-in-production-256-bit-secret
       JWT_EXPIRY_HOURS: "8"
+      AI_SERVICE_TOKEN: ${AI_SERVICE_TOKEN:-dev-internal-secret-change-in-prod}
       SMTP_HOST: smtp.gmail.com
       SMTP_PORT: "587"
       SMTP_USER: ${SMTP_USER:-}
@@ -60,6 +61,7 @@ services:
       - "8000:8000"
     environment:
       BACKEND_URL: http://backend:5000
+      AI_SERVICE_TOKEN: ${AI_SERVICE_TOKEN:-dev-internal-secret-change-in-prod}
       MODELS_DIR: ./models
       FACE_SIMILARITY_THRESHOLD: "0.6"
       GAZE_AWAY_SECONDS: "5"

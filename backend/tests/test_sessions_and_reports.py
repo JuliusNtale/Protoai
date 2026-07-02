@@ -2,7 +2,7 @@ from datetime import datetime
 from pathlib import Path
 
 from app.extensions import db
-from app.models import Exam, FacialImage, User
+from app.models import BehavioralLog, Exam, ExamSession, FacialImage, User
 
 
 def _register_and_login(client, reg, role="student"):
@@ -93,6 +93,77 @@ def test_start_session_returns_409_if_existing(client, app, tmp_path):
     )
     assert second.status_code == 409
     assert second.get_json()["session_id"]
+
+
+def test_ai_service_can_log_monitoring_anomaly_with_internal_token(client, app):
+    with app.app_context():
+        student = User(
+            full_name="Monitoring Student",
+            reg_number="T22-03-31001",
+            email="monitoring.student@example.test",
+            username="T22-03-31001",
+            role="student",
+            is_active=True,
+        )
+        lecturer = User(
+            full_name="Monitoring Lecturer",
+            reg_number="L22-03-41001",
+            email="monitoring.lecturer@example.test",
+            username="L22-03-41001",
+            role="lecturer",
+            is_active=True,
+        )
+        student.set_password("Password123")
+        lecturer.set_password("Password123")
+        db.session.add_all([student, lecturer])
+        db.session.commit()
+
+        exam = Exam(
+            title="Monitoring Contract",
+            course_code="CS401",
+            lecturer_id=lecturer.user_id,
+            duration_min=60,
+            scheduled_at=datetime.utcnow(),
+            status="active",
+        )
+        db.session.add(exam)
+        db.session.commit()
+
+        session = ExamSession(
+            student_id=student.user_id,
+            exam_id=exam.exam_id,
+            started_at=datetime.utcnow(),
+            session_status="active",
+            identity_verified=True,
+            warning_count=0,
+        )
+        db.session.add(session)
+        db.session.commit()
+        session_id = session.session_id
+
+    unauthenticated = client.post(
+        "/api/sessions/log",
+        json={"session_id": session_id, "event_type": "gaze_away"},
+    )
+    assert unauthenticated.status_code == 401
+
+    logged = client.post(
+        "/api/sessions/log",
+        json={
+            "session_id": session_id,
+            "event_type": "gaze_away",
+            "event_data": {"gaze_direction": "Left", "source": "ai-service"},
+        },
+        headers={"X-Internal-Token": "test-internal-token"},
+    )
+    assert logged.status_code == 200
+    assert logged.get_json()["warning_count"] == 1
+
+    with app.app_context():
+        stored_session = db.session.get(ExamSession, session_id)
+        stored_log = BehavioralLog.query.filter_by(session_id=session_id, event_type="gaze_away").one()
+        assert stored_session.warning_count == 1
+        assert stored_log.event_data["source"] == "ai-service"
 
 
 def test_reports_access_control_and_csv_export(client, app, tmp_path):

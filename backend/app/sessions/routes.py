@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 import os
 
 from flask import Blueprint, jsonify, request
-from flask_jwt_extended import get_jwt, get_jwt_identity, jwt_required
+from flask_jwt_extended import get_jwt, get_jwt_identity, jwt_required, verify_jwt_in_request
 
 from app.audit import log_audit
 from app.extensions import db
@@ -190,7 +190,6 @@ def verify_session_identity():
 
 
 @sessions_bp.post("/log")
-@jwt_required()
 def log_event():
     data = request.get_json(silent=True) or {}
     session_id = data.get("session_id")
@@ -204,8 +203,17 @@ def log_event():
     if not session:
         return jsonify({"error": {"message": "Session not found"}}), 404
 
-    if session.student_id != int(get_jwt_identity()):
-        return jsonify({"error": {"message": "Forbidden"}}), 403
+    expected_internal_token = os.getenv("AI_SERVICE_TOKEN", "").strip()
+    provided_internal_token = (request.headers.get("X-Internal-Token") or "").strip()
+    internal_request = bool(expected_internal_token and provided_internal_token == expected_internal_token)
+
+    if not internal_request:
+        try:
+            verify_jwt_in_request()
+        except Exception:
+            return jsonify({"error": {"message": "Missing or invalid authorization"}}), 401
+        if session.student_id != int(get_jwt_identity()):
+            return jsonify({"error": {"message": "Forbidden"}}), 403
 
     db.session.add(
         BehavioralLog(

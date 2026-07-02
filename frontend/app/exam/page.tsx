@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Flag, ChevronLeft, ChevronRight, AlertTriangle, X, User } from "lucide-react"
+import { io, type Socket } from "socket.io-client"
 import { cn } from "@/lib/utils"
 import { useBrowserLockdown } from "@/hooks/use-browser-lockdown"
 import { SystemStatusIndicators } from "@/components/system-status-indicators"
@@ -10,18 +11,6 @@ import { useNetworkStatus } from "@/hooks/use-network-status"
 import { Calculator } from "@/components/calculator"
 import { getApiPath } from "@/lib/api-url"
 import { ThemeToggle } from "@/components/theme-toggle"
-
-type SocketLike = {
-  on: (event: string, callback: (...args: any[]) => void) => void
-  emit: (event: string, payload: unknown) => void
-  disconnect: () => void
-}
-
-declare global {
-  interface Window {
-    io?: (url: string, options?: Record<string, unknown>) => SocketLike
-  }
-}
 
 type LiveQuestion = {
   id: number
@@ -35,6 +24,16 @@ type LiveQuestion = {
 const COLS = 4
 
 type WarningLevel = "warning" | "final"
+
+type AnomalyResultEvent = {
+  session_id?: number | string
+  warning_count?: number | string
+  anomalies?: unknown
+}
+
+type SessionLockedEvent = {
+  session_id?: number | string
+}
 
 // Proctoring stat that animates
 function useProctoringStats() {
@@ -67,7 +66,7 @@ export default function ExamPage() {
   const examStreamRef = useRef<MediaStream | null>(null)
   const answersRef = useRef<Record<number, number>>({})
   const frameCanvasRef = useRef<HTMLCanvasElement>(null)
-  const socketRef = useRef<SocketLike | null>(null)
+  const socketRef = useRef<Socket | null>(null)
   const tabViolationInFlightRef = useRef(false)
   const lastTabViolationAtRef = useRef(0)
   const [current, setCurrent] = useState(0)
@@ -402,26 +401,6 @@ export default function ExamPage() {
     }
   }
 
-  async function ensureSocketClientLoaded() {
-    if (window.io) return
-    await new Promise<void>((resolve, reject) => {
-      const existing = document.querySelector('script[data-socket-io-client="true"]') as HTMLScriptElement | null
-      if (existing) {
-        existing.addEventListener("load", () => resolve(), { once: true })
-        existing.addEventListener("error", () => reject(new Error("Failed to load Socket.IO client")), { once: true })
-        return
-      }
-
-      const script = document.createElement("script")
-      script.src = "https://cdn.socket.io/4.7.5/socket.io.min.js"
-      script.async = true
-      script.dataset.socketIoClient = "true"
-      script.addEventListener("load", () => resolve(), { once: true })
-      script.addEventListener("error", () => reject(new Error("Failed to load Socket.IO client")), { once: true })
-      document.head.appendChild(script)
-    })
-  }
-
   function handleAnswer(optIdx: number) {
     setAnswers(a => ({ ...a, [current]: optIdx }))
   }
@@ -470,21 +449,20 @@ export default function ExamPage() {
 
     let cancelled = false
     let interval: ReturnType<typeof setInterval> | null = null
-    let socket: SocketLike | null = null
+    let socket: Socket | null = null
 
     void (async () => {
       try {
-        await ensureSocketClientLoaded()
-        if (cancelled || !window.io) return
+        if (cancelled) return
 
         const wsUrl = process.env.NEXT_PUBLIC_WS_URL || "http://localhost:8000"
-        socket = window.io(wsUrl, { transports: ["websocket", "polling"] })
+        socket = io(wsUrl, { transports: ["websocket", "polling"] })
         socketRef.current = socket
 
         socket.on("connect", () => setSocketConnected(true))
         socket.on("disconnect", () => setSocketConnected(false))
 
-        socket.on("anomaly_result", (event) => {
+        socket.on("anomaly_result", (event: AnomalyResultEvent) => {
           if (!event || Number(event.session_id) !== sessionId) return
           const count = Number(event.warning_count || 0)
           applyWarning(count)
@@ -493,7 +471,7 @@ export default function ExamPage() {
           }
         })
 
-        socket.on("session_locked", async (event) => {
+        socket.on("session_locked", async (event: SessionLockedEvent) => {
           if (!event || Number(event.session_id) !== sessionId) return
           setSessionLocked(true)
           applyWarning(maxWarnings)

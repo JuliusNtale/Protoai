@@ -10,6 +10,7 @@ from services.head_pose import estimate_head_pose
 from services.face_detector import count_faces
 
 _BACKEND_URL = os.getenv('BACKEND_URL', 'http://localhost:5000')
+_AI_SERVICE_TOKEN = os.getenv('AI_SERVICE_TOKEN', '').strip()
 
 # Per-session warning counts cached in memory.
 # Derick's DB is the authoritative store; this is a fast local cache.
@@ -71,10 +72,12 @@ def register_handlers(socketio: SocketIO):
             warning_count = _warning_counts.get(session_id, 0)
 
         # Forward each anomaly to Derick's backend and track the returned warning_count
+        headers = {'X-Internal-Token': _AI_SERVICE_TOKEN} if _AI_SERVICE_TOKEN else None
         for anomaly in anomalies:
             try:
                 resp = requests.post(
                     f"{_BACKEND_URL}/api/sessions/log",
+                    headers=headers,
                     json={
                         'session_id': session_id,
                         'event_type': anomaly,
@@ -88,6 +91,11 @@ def register_handlers(socketio: SocketIO):
                 )
                 if resp.ok:
                     warning_count = resp.json().get('warning_count', warning_count)
+                else:
+                    print(
+                        f"[frame_handler] backend rejected anomaly log "
+                        f"session={session_id} event={anomaly} status={resp.status_code}"
+                    )
             except requests.exceptions.RequestException:
                 pass  # Backend unreachable — don't crash the WebSocket handler
 
