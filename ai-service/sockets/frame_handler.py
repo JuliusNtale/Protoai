@@ -94,6 +94,14 @@ def register_handlers(socketio: SocketIO):
         gaze = gaze_result[0]
         pose = pose_result[0]
 
+        print(
+            f"[gaze_debug] session={session_id} "
+            f"direction={gaze.get('direction') if gaze else None} "
+            f"confidence={gaze.get('confidence') if gaze else None} "
+            f"model_available={gaze.get('model_available') if gaze else None} "
+            f"face_count={face_count[0]}"
+        )
+
         anomalies = []
         if gaze is None or face_count[0] == 0:
             anomalies.append('face_absent')
