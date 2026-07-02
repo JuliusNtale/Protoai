@@ -105,6 +105,7 @@ function StudentDashboardInner() {
   const [academicYear, setAcademicYear] = useState("")
   const [yearEnrolled, setYearEnrolled] = useState("")
   const [uploadingImage, setUploadingImage] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null)
   const [currentPassword, setCurrentPassword] = useState("")
   const [newPassword, setNewPassword] = useState("")
   const [showCurrentPassword, setShowCurrentPassword] = useState(false)
@@ -278,24 +279,44 @@ function StudentDashboardInner() {
   async function uploadBaselineImage(file: File | null) {
     if (!file) return
     setUploadingImage(true)
+    setUploadProgress(0)
     setProfileMsg("")
     try {
       const body = new FormData()
       body.append("image", file)
-      const res = await fetch(getApiPath("/images/me"), {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body,
+
+      const result = await new Promise<{ ok: boolean; payload: any }>((resolve, reject) => {
+        const xhr = new XMLHttpRequest()
+        xhr.open("POST", getApiPath("/images/me"))
+        xhr.setRequestHeader("Authorization", `Bearer ${token}`)
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) setUploadProgress(Math.round((e.loaded / e.total) * 100))
+        }
+        xhr.onload = () => {
+          let payload: any = {}
+          try {
+            payload = JSON.parse(xhr.responseText)
+          } catch {
+            payload = {}
+          }
+          resolve({ ok: xhr.status >= 200 && xhr.status < 300, payload })
+        }
+        xhr.onerror = () => reject(new Error("Network error during upload"))
+        xhr.send(body)
       })
-      const payload = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        setProfileMsg(payload?.error?.message || "Could not upload image.")
+
+      if (!result.ok) {
+        setProfileMsg(result.payload?.error?.message || "Could not upload image.")
         return
       }
+      setUploadProgress(100)
       setProfileMsg("Baseline face image uploaded successfully.")
       await loadBaselineImage(token)
+    } catch {
+      setProfileMsg("Could not upload image.")
     } finally {
       setUploadingImage(false)
+      setTimeout(() => setUploadProgress(null), 1000)
     }
   }
 
@@ -608,6 +629,17 @@ function StudentDashboardInner() {
                   {uploadingImage ? "Uploading..." : baselineImageUrl ? "Replace Image" : "Upload Image"}
                   <input type="file" accept="image/jpeg,image/png" className="hidden" onChange={(e) => void uploadBaselineImage(e.target.files?.[0] ?? null)} />
                 </label>
+                {uploadProgress !== null ? (
+                  <div className="w-48">
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                      <div
+                        className="h-full rounded-full bg-[#1a2d5a] transition-all duration-150"
+                        style={{ width: `${uploadProgress}%` }}
+                      />
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">{uploadProgress}%</p>
+                  </div>
+                ) : null}
               </div>
             </div>
           </DashboardPanel>
@@ -656,9 +688,20 @@ function StudentDashboardInner() {
             <input value={yearEnrolled} onChange={e => setYearEnrolled(e.target.value)} placeholder="Year enrolled (e.g. 2024)" className="rounded-md border border-border bg-background p-2 text-sm text-foreground" />
             <div className="md:col-span-2">
               <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm font-medium text-foreground">
-                Upload Baseline Photo
+                {uploadingImage ? "Uploading..." : "Upload Baseline Photo"}
                 <input type="file" accept="image/jpeg,image/png" className="hidden" onChange={(e) => void uploadBaselineImage(e.target.files?.[0] ?? null)} />
               </label>
+              {uploadProgress !== null ? (
+                <div className="mt-2 w-48">
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full rounded-full bg-[#1a2d5a] transition-all duration-150"
+                      style={{ width: `${uploadProgress}%` }}
+                    />
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">{uploadProgress}%</p>
+                </div>
+              ) : null}
               <p className="mt-1 text-xs text-muted-foreground">
                 Baseline status: {baselineImageUrl ? "Uploaded" : "Not uploaded"}
               </p>
