@@ -33,6 +33,22 @@ def test_load_missing_embedding_returns_none(tmp_path, monkeypatch):
     assert result is None
 
 
+def test_embeddings_dir_env_overrides_models_dir(tmp_path, monkeypatch):
+    models_dir = tmp_path / "models"
+    embeddings_dir = tmp_path / "data" / "embeddings"
+    monkeypatch.setenv('MODELS_DIR', str(models_dir))
+    monkeypatch.setenv('EMBEDDINGS_DIR', str(embeddings_dir))
+
+    import services.embedding_store as es
+    es._EMBEDDINGS_DIR = None
+
+    vec = np.random.randn(512).astype(np.float32)
+    es.save_embedding(7, vec)
+
+    assert (embeddings_dir / "user_7.pkl").exists()
+    assert not (models_dir / "embeddings" / "user_7.pkl").exists()
+
+
 def test_cosine_similarity_same_vector():
     from services.embedding_store import cosine_similarity
     v = np.array([1.0, 0.0, 0.0])

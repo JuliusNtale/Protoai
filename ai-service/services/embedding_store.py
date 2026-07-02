@@ -8,8 +8,12 @@ _EMBEDDINGS_DIR = None
 def _get_embeddings_dir() -> str:
     global _EMBEDDINGS_DIR
     if _EMBEDDINGS_DIR is None:
-        models_dir = os.getenv('MODELS_DIR', './models')
-        _EMBEDDINGS_DIR = os.path.join(models_dir, 'embeddings')
+        embeddings_dir = os.getenv('EMBEDDINGS_DIR')
+        if embeddings_dir:
+            _EMBEDDINGS_DIR = embeddings_dir
+        else:
+            models_dir = os.getenv('MODELS_DIR', './models')
+            _EMBEDDINGS_DIR = os.path.join(models_dir, 'embeddings')
         os.makedirs(_EMBEDDINGS_DIR, exist_ok=True)
     return _EMBEDDINGS_DIR
 

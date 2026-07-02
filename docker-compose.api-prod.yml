@@ -68,6 +68,7 @@ services:
       BACKEND_URL: http://proctorai-backend:5000
       AI_SERVICE_TOKEN: ${AI_SERVICE_TOKEN:?AI_SERVICE_TOKEN is required}
       MODELS_DIR: /app/models
+      EMBEDDINGS_DIR: /app/data/embeddings
       FACENET_MODEL_VERSION: ${FACENET_MODEL_VERSION:-facenet_best.onnx}
       L2CS_MODEL_VERSION: ${L2CS_MODEL_VERSION:-l2cs_net.onnx}
       FACE_SIMILARITY_THRESHOLD: ${FACE_SIMILARITY_THRESHOLD:-0.6}
@@ -79,6 +80,7 @@ services:
       - "8000"
     volumes:
       - ./ai-service/models:/app/models:ro
+      - proctorai_ai_data:/app/data
     depends_on:
       backend:
         condition: service_healthy
@@ -107,3 +109,4 @@ networks:
 volumes:
   proctorai_postgres_data:
   proctorai_storage_data:
+  proctorai_ai_data:
