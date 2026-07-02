@@ -34,6 +34,15 @@ _WARNING_COOLDOWN_SECONDS = float(os.getenv('WARNING_COOLDOWN_SECONDS', '15'))
 # investigation.
 _GAZE_CONFIDENCE_THRESHOLD = float(os.getenv('GAZE_CONFIDENCE_THRESHOLD', '0.4'))
 
+# Directions that count as "looking away" for warning purposes. The model's
+# own "Center" class (per trained_model_exports/checkpoints/label_config.json:
+# pitch_center=-8.93, yaw_scale=7.21, center_thresh=0.85) is a narrow ~±6°
+# yaw / ~±4° pitch cone — much narrower than the angle spanned by reading
+# across a normal-sized monitor. Left/Right is expected, normal screen-reading
+# behavior and is NOT treated as away; only Down/Up (looking away from the
+# screen plane entirely, e.g. at a phone or notes) escalates.
+_AWAY_DIRECTIONS = {'Down', 'Up'}
+
 
 def _base_type(anomaly):
     """Strip the ':direction' qualifier some anomaly keys carry internally."""
@@ -125,7 +134,7 @@ def register_handlers(socketio: SocketIO):
         anomalies = []
         if gaze is None or face_count[0] == 0:
             anomalies.append('face_absent')
-        elif gaze.get('direction') != 'Screen' and gaze.get('confidence', 0.0) >= _GAZE_CONFIDENCE_THRESHOLD:
+        elif gaze.get('direction') in _AWAY_DIRECTIONS and gaze.get('confidence', 0.0) >= _GAZE_CONFIDENCE_THRESHOLD:
             anomalies.append(f"gaze_away:{gaze['direction']}")
 
         if pose is not None and pose.get('alert'):
