@@ -7,6 +7,7 @@ import { LogOut, UserPlus, Users } from "lucide-react"
 import { getApiPath } from "@/lib/api-url"
 import { appendGeneratedCredential } from "@/lib/generated-credentials"
 import { DashboardPanel, DashboardShell, MetricCard } from "@/components/dashboard-shell"
+import { StatusBadge } from "@/components/status-badge"
 
 type ManagedUser = {
   user_id: number
@@ -16,12 +17,6 @@ type ManagedUser = {
   email: string
   role: string
   is_active: boolean
-}
-
-function statusBadge(active: boolean) {
-  return active
-    ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-900/50"
-    : "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700"
 }
 
 export default function AdminUsersPage() {
@@ -343,7 +338,7 @@ export default function AdminUsersPage() {
                   <td className="px-4 py-3 align-middle">{user.role}</td>
                   <td className="px-4 py-3 align-middle font-mono">{user.username || user.registration_number}</td>
                   <td className="px-4 py-3 align-middle">{user.email}</td>
-                  <td className="px-4 py-3 align-middle"><span className={`rounded-full border px-2 py-1 text-xs font-medium ${statusBadge(user.is_active)}`}>{user.is_active ? "active" : "inactive"}</span></td>
+                  <td className="px-4 py-3 align-middle"><StatusBadge value={user.is_active ? "active" : "inactive"} /></td>
                   <td className="px-4 py-3 align-middle">
                     {user.role === "student" ? (
                       <div className="flex items-center gap-2">

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { ClipboardList, LogOut } from "lucide-react"
 import { getApiPath } from "@/lib/api-url"
 import { DashboardPanel, DashboardShell } from "@/components/dashboard-shell"
+import { StatusBadge } from "@/components/status-badge"
 
 type ExamRow = {
   exam_id: number
@@ -22,14 +23,6 @@ function formatDateTime(value?: string | null) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return "TBD"
   return date.toLocaleString()
-}
-
-function badgeTone(value: string) {
-  const normalized = value.toLowerCase()
-  if (normalized === "completed" || normalized === "live") return "bg-emerald-50 text-emerald-700 border-emerald-200"
-  if (normalized === "scheduled") return "bg-amber-50 text-amber-700 border-amber-200"
-  if (normalized === "draft") return "bg-slate-50 text-slate-700 border-slate-200"
-  return "bg-red-50 text-red-700 border-red-200"
 }
 
 export default function AdminExamsPage() {
@@ -208,7 +201,7 @@ export default function AdminExamsPage() {
                     <td>{exam.course_code}</td>
                     <td>{exam.lecturer_name || `Lecturer #${exam.lecturer_id ?? "-"}`}</td>
                     <td>{formatDateTime(exam.scheduled_at)}</td>
-                    <td><span className={`rounded-full border px-2 py-1 text-xs font-medium ${badgeTone(exam.status)}`}>{exam.status}</span></td>
+                    <td><StatusBadge value={exam.status} /></td>
                     <td className="pr-3">
                       <div className="flex gap-2">
                         <button

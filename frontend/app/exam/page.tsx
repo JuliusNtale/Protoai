@@ -2,12 +2,10 @@
 
 import { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
-import { Flag, ChevronLeft, ChevronRight, AlertTriangle, X, User } from "lucide-react"
+import { Flag, ChevronLeft, ChevronRight, AlertTriangle, X } from "lucide-react"
 import { io, type Socket } from "socket.io-client"
 import { cn } from "@/lib/utils"
 import { useBrowserLockdown } from "@/hooks/use-browser-lockdown"
-import { SystemStatusIndicators } from "@/components/system-status-indicators"
-import { useNetworkStatus } from "@/hooks/use-network-status"
 import { Calculator } from "@/components/calculator"
 import { getApiPath } from "@/lib/api-url"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -33,30 +31,6 @@ type AnomalyResultEvent = {
 
 type SessionLockedEvent = {
   session_id?: number | string
-}
-
-// Proctoring stat that animates
-function useProctoringStats() {
-  const [gazeDirection, setGazeDirection] = useState("On Screen")
-  const [headPosition, setHeadPosition] = useState("Centred")
-  const [tabSwitches, setTabSwitches] = useState(0)
-  const [faceVisibility, setFaceVisibility] = useState<"Visible" | "Partially Hidden" | "Hidden">("Visible")
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const r = Math.random()
-      if (r < 0.1) {
-        setGazeDirection("Away")
-        setFaceVisibility("Partially Hidden")
-      } else {
-        setGazeDirection("On Screen")
-        setFaceVisibility("Visible")
-      }
-    }, 8000)
-    return () => clearInterval(interval)
-  }, [])
-
-  return { gazeDirection, headPosition, tabSwitches, setTabSwitches, faceVisibility }
 }
 
 export default function ExamPage() {
@@ -97,9 +71,7 @@ export default function ExamPage() {
   const [socketConnected, setSocketConnected] = useState(false)
   const [sessionLocked, setSessionLocked] = useState(false)
   const maxWarnings = 3
-  const stats = useProctoringStats()
-  const setTabSwitches = stats.setTabSwitches
-  const networkStatus = useNetworkStatus()
+  const [, setTabSwitches] = useState(0)
   const { devtoolsLikelyOpen } = useBrowserLockdown({
     onBlockedAction: message => setSecurityAlert(message),
   })
@@ -540,53 +512,41 @@ export default function ExamPage() {
     return "unattempted"
   }
 
-  const faceVisibilityColor =
-    stats.faceVisibility === "Visible"
-      ? "text-green-500"
-      : stats.faceVisibility === "Partially Hidden"
-      ? "text-orange-400"
-      : "text-red-500"
-  const cameraStatus = examCameraReady
-    ? { label: "Ready", detail: "Camera is connected", tone: "good" as const, pulse: true }
-    : examCameraError
-    ? { label: "Blocked", detail: examCameraError, tone: "error" as const }
-    : { label: "Checking", detail: "Preparing camera access", tone: "neutral" as const }
-
   return (
-    <div className="flex min-h-[100dvh] flex-col overflow-x-hidden bg-[#f4f5f7] text-gray-800 dark:bg-slate-950 dark:text-slate-100" style={{ fontFamily: "var(--font-sans, system-ui, sans-serif)" }}>
+    <div className="flex min-h-[100dvh] flex-col overflow-x-hidden bg-white text-slate-900 dark:bg-slate-950 dark:text-slate-100" style={{ fontFamily: "var(--font-sans, system-ui, sans-serif)" }}>
 
       {/* ── Top bar ── */}
-      <header className="shrink-0 border-b border-gray-200 bg-[#1a2d5a] px-3 py-2 text-white sm:px-4 sm:py-1.5">
+      <header className="shrink-0 border-b border-slate-200 bg-white px-4 py-3 text-slate-900 dark:border-slate-800 dark:bg-slate-950 dark:text-white">
         {/* Left: title */}
-        <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
-            <span className="block truncate text-sm font-semibold leading-tight text-white">{examTitle}</span>
-            <span className="mt-0.5 block text-[10px] text-blue-200/70">Duration: {examDurationLabel} &nbsp;&middot;&nbsp; {examDateLabel}</span>
+            <span className="block truncate text-sm font-semibold leading-tight">{examTitle}</span>
+            <span className="mt-0.5 block text-xs text-slate-500">Duration: {examDurationLabel} &nbsp;&middot;&nbsp; {examDateLabel}</span>
           </div>
 
           <div className="order-3 flex w-full flex-col items-start sm:order-none sm:w-auto sm:items-center">
             <span className={cn(
-              "font-mono text-xl font-bold tracking-widest leading-none transition-colors sm:text-2xl",
-              timerDanger ? "text-red-400" : "text-white"
+              "font-mono text-2xl font-semibold tracking-[0.18em] leading-none transition-colors",
+              timerDanger ? "text-red-500" : "text-slate-950 dark:text-white"
             )}>
               {formatTime(timeLeft)}
             </span>
-            <span className="mt-0.5 text-[9px] uppercase tracking-widest text-blue-200/60">Time Remaining</span>
+            <span className="mt-1 text-[10px] uppercase tracking-[0.18em] text-slate-400">Time Remaining</span>
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3">
-            <ThemeToggle className="border-white/25 bg-white/10 text-white hover:bg-white/20" />
+            <ThemeToggle />
             <Calculator allowed={true} />
             <button
               type="button"
-              className="hidden items-center gap-1.5 rounded border border-green-400/40 bg-green-500/20 px-2.5 py-1 text-[11px] font-medium text-green-300 sm:flex"
+              className="hidden items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300 sm:flex"
             >
-              <span className={cn("h-1.5 w-1.5 rounded-full", socketConnected ? "animate-pulse bg-green-400" : "bg-yellow-300")} />
-              {socketConnected ? "Monitoring Active" : "Connecting Monitor"}
+              <span className={cn("h-1.5 w-1.5 rounded-full", socketConnected ? "bg-emerald-500" : "bg-amber-400")} />
+              {socketConnected ? "Monitoring" : "Connecting"}
             </button>
             <button
               onClick={openSubmitConfirm}
-              className="rounded bg-red-500 px-3 py-1.5 text-xs font-bold tracking-wide text-white uppercase transition-colors hover:bg-red-600 sm:px-4"
+              className="rounded-md bg-red-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-red-600 sm:px-4"
             >
               Submit
             </button>
@@ -594,18 +554,11 @@ export default function ExamPage() {
         </div>
       </header>
 
-      <div className="border-b border-gray-200 bg-white px-3 py-2 sm:px-4">
-        <SystemStatusIndicators
-          camera={cameraStatus}
-          network={networkStatus}
-        />
-      </div>
-
       <div className="flex flex-1 overflow-hidden">
 
         {/* ── Left sidebar: question grid ── */}
-        <aside className="hidden w-44 shrink-0 flex-col gap-4 overflow-y-auto border-r border-gray-200 bg-white p-3 md:flex">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Questions</p>
+        <aside className="hidden w-44 shrink-0 flex-col gap-4 overflow-y-auto border-r border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950 md:flex">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Questions</p>
 
           {/* Grid */}
           <div
@@ -619,11 +572,11 @@ export default function ExamPage() {
                   key={i}
                   onClick={() => setCurrent(i)}
                   className={cn(
-                    "flex h-8 w-8 items-center justify-center rounded text-xs font-semibold transition-all",
-                    status === "current" && "bg-[#1a2d5a] text-white shadow",
-                    status === "answered" && "bg-emerald-100 text-emerald-700 border border-emerald-300",
-                    status === "flagged" && "bg-orange-100 text-orange-600 border border-orange-300",
-                    status === "unattempted" && "bg-gray-100 text-gray-500 hover:bg-gray-200",
+                    "flex h-8 w-8 items-center justify-center rounded-md border text-xs font-semibold transition-all",
+                    status === "current" && "border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-950",
+                    status === "answered" && "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300",
+                    status === "flagged" && "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300",
+                    status === "unattempted" && "border-slate-200 bg-white text-slate-500 hover:bg-slate-100 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400",
                   )}
                 >
                   {i + 1}
@@ -633,16 +586,16 @@ export default function ExamPage() {
           </div>
 
           {/* Legend */}
-          <div className="mt-auto flex flex-col gap-1.5 border-t border-gray-100 pt-3">
+          <div className="mt-auto flex flex-col gap-1.5 border-t border-slate-200 pt-3 dark:border-slate-800">
             {[
-              { cls: "bg-emerald-100 border border-emerald-300", label: "Answered" },
-              { cls: "bg-[#1a2d5a]", label: "Current" },
-              { cls: "bg-orange-100 border border-orange-300", label: "Flagged for Review" },
-              { cls: "bg-gray-100 border border-gray-300", label: "Not Attempted" },
+              { cls: "bg-emerald-100 border border-emerald-200", label: "Answered" },
+              { cls: "bg-slate-900", label: "Current" },
+              { cls: "bg-amber-100 border border-amber-200", label: "Flagged" },
+              { cls: "bg-white border border-slate-200", label: "Not Attempted" },
             ].map(l => (
               <div key={l.label} className="flex items-center gap-2">
-                <div className={cn("h-3 w-3 shrink-0 rounded-sm", l.cls)} />
-                <span className="text-[10px] text-gray-500 leading-none">{l.label}</span>
+                <div className={cn("h-2.5 w-2.5 shrink-0 rounded-sm", l.cls)} />
+                <span className="text-[10px] leading-none text-slate-500">{l.label}</span>
               </div>
             ))}
           </div>
@@ -650,17 +603,19 @@ export default function ExamPage() {
 
         {/* ── Main question area ── */}
         <main className="flex flex-1 flex-col overflow-hidden">
-          <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-8 sm:py-6">
+          <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-8 sm:py-8">
             <div className="mb-4 grid grid-cols-2 gap-2 xl:hidden">
-              <div className="rounded-lg border border-gray-200 bg-white px-3 py-2">
-                <p className="text-[10px] uppercase tracking-wider text-gray-400">Warnings</p>
-                <p className={cn("text-sm font-bold", warnings > 0 ? "text-orange-500" : "text-gray-700")}>
+              <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-800 dark:bg-slate-900">
+                <p className="text-[10px] uppercase tracking-wider text-slate-400">Warnings</p>
+                <p className={cn("text-sm font-semibold", warnings > 0 ? "text-amber-600" : "text-slate-700 dark:text-slate-200")}>
                   {warnings} / {maxWarnings}
                 </p>
               </div>
-              <div className="rounded-lg border border-gray-200 bg-white px-3 py-2">
-                <p className="text-[10px] uppercase tracking-wider text-gray-400">Face Visibility</p>
-                <p className={cn("text-sm font-semibold", faceVisibilityColor)}>{stats.faceVisibility}</p>
+              <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-800 dark:bg-slate-900">
+                <p className="text-[10px] uppercase tracking-wider text-slate-400">Camera</p>
+                <p className={cn("text-sm font-semibold", examCameraReady ? "text-emerald-600" : "text-amber-600")}>
+                  {examCameraReady ? "Ready" : "Starting"}
+                </p>
               </div>
             </div>
 
@@ -672,14 +627,14 @@ export default function ExamPage() {
             <>
             {/* Question meta row */}
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-              <span className="text-sm font-semibold text-[#1a2d5a]">
+              <span className="text-sm font-semibold text-slate-600 dark:text-slate-300">
                 Question {String(current + 1).padStart(2, "0")}
               </span>
               <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                <span className="rounded border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700">
+                <span className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-xs font-medium text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
                   {q.questionType.replace("_", " ")}
                 </span>
-                <span className="text-xs font-semibold text-gray-500">{q.marks} Marks</span>
+                <span className="text-xs font-medium text-slate-500">{q.marks} Marks</span>
               </div>
             </div>
 
@@ -692,11 +647,11 @@ export default function ExamPage() {
                       key={`mobile-bubble-${i}`}
                       onClick={() => setCurrent(i)}
                       className={cn(
-                        "flex h-8 w-8 shrink-0 items-center justify-center rounded text-xs font-semibold transition-all",
-                        status === "current" && "bg-[#1a2d5a] text-white shadow",
-                        status === "answered" && "border border-emerald-300 bg-emerald-100 text-emerald-700",
-                        status === "flagged" && "border border-orange-300 bg-orange-100 text-orange-600",
-                        status === "unattempted" && "bg-gray-100 text-gray-500"
+                        "flex h-8 w-8 shrink-0 items-center justify-center rounded-md border text-xs font-semibold transition-all",
+                        status === "current" && "border-slate-900 bg-slate-900 text-white",
+                        status === "answered" && "border-emerald-200 bg-emerald-50 text-emerald-700",
+                        status === "flagged" && "border-amber-200 bg-amber-50 text-amber-700",
+                        status === "unattempted" && "border-slate-200 bg-slate-50 text-slate-500"
                       )}
                     >
                       {i + 1}
@@ -707,13 +662,9 @@ export default function ExamPage() {
             </div>
 
             {/* Question text */}
-            <p className="mb-4 text-sm font-medium text-gray-800 leading-relaxed max-w-2xl">
+            <p className="mb-6 max-w-2xl text-base font-medium leading-7 text-slate-900 dark:text-slate-100">
               {q.text}
             </p>
-
-            <div className="mb-6">
-              <ExplainQuestion questionText={q.text} />
-            </div>
 
             {/* Options */}
             <div className="flex flex-col gap-2 max-w-2xl">
@@ -725,30 +676,30 @@ export default function ExamPage() {
                     key={i}
                     onClick={() => handleAnswer(i)}
                     className={cn(
-                      "group flex w-full items-center gap-4 rounded border px-4 py-3 text-left text-sm transition-all",
+                      "group flex w-full items-center gap-4 rounded-md border px-4 py-3 text-left text-sm transition-all",
                       selected
-                        ? "border-blue-500 bg-blue-50 shadow-sm"
-                        : "border-gray-200 bg-white hover:border-blue-300 hover:bg-blue-50/40"
+                        ? "border-slate-900 bg-slate-50 shadow-sm dark:border-white dark:bg-slate-900"
+                        : "border-slate-200 bg-white hover:border-slate-400 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-950 dark:hover:border-slate-600"
                     )}
                   >
                     {/* Radio */}
                     <span className={cn(
                       "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-all",
-                      selected ? "border-blue-500 bg-blue-500" : "border-gray-300 group-hover:border-blue-400"
+                      selected ? "border-slate-900 bg-slate-900 dark:border-white dark:bg-white" : "border-slate-300 group-hover:border-slate-500 dark:border-slate-700"
                     )}>
-                      {selected && <span className="h-2 w-2 rounded-full bg-white" />}
+                      {selected && <span className="h-2 w-2 rounded-full bg-white dark:bg-slate-950" />}
                     </span>
                     {/* Letter */}
                     <span className={cn(
                       "w-5 shrink-0 font-semibold text-xs",
-                      selected ? "text-blue-700" : "text-gray-400"
+                      selected ? "text-slate-900 dark:text-white" : "text-slate-400"
                     )}>
                       {letter}.
                     </span>
                     {/* Text */}
                     <span className={cn(
                       "leading-relaxed",
-                      selected ? "text-blue-900 font-medium" : "text-gray-700"
+                      selected ? "font-medium text-slate-950 dark:text-white" : "text-slate-700 dark:text-slate-300"
                     )}>
                       {opt}
                     </span>
@@ -761,12 +712,12 @@ export default function ExamPage() {
           </div>
 
           {/* ── Bottom navigation ── */}
-          <div className="shrink-0 border-t border-gray-200 bg-white px-3 py-3 sm:px-8">
+          <div className="shrink-0 border-t border-slate-200 bg-white px-3 py-3 dark:border-slate-800 dark:bg-slate-950 sm:px-8">
             <div className="flex flex-wrap items-center justify-between gap-2 max-w-2xl">
               <button
                 onClick={() => setCurrent(c => Math.max(0, c - 1))}
                 disabled={current === 0 || questions.length === 0}
-                className="flex flex-1 items-center justify-center gap-1.5 rounded border border-gray-300 bg-white px-4 py-2 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50 disabled:opacity-40 sm:flex-none"
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-slate-300 bg-white px-4 py-2 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-40 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-slate-900 sm:flex-none"
               >
                 <ChevronLeft className="h-3.5 w-3.5" />
                 Previous
@@ -776,10 +727,10 @@ export default function ExamPage() {
                 onClick={toggleFlag}
                 disabled={questions.length === 0}
                 className={cn(
-                  "flex flex-1 items-center justify-center gap-1.5 rounded border px-4 py-2 text-xs font-medium transition-colors sm:flex-none",
+                  "flex flex-1 items-center justify-center gap-1.5 rounded-md border px-4 py-2 text-xs font-medium transition-colors sm:flex-none",
                   flagged.has(current)
-                    ? "border-orange-300 bg-orange-50 text-orange-600"
-                    : "border-gray-300 bg-white text-gray-600 hover:border-orange-300 hover:text-orange-500"
+                    ? "border-amber-300 bg-amber-50 text-amber-700"
+                    : "border-slate-300 bg-white text-slate-600 hover:border-amber-300 hover:text-amber-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300"
                 )}
               >
                 <Flag className="h-3.5 w-3.5" />
@@ -789,7 +740,7 @@ export default function ExamPage() {
               {isLast ? (
                 <button
                   onClick={openSubmitConfirm}
-                  className="flex flex-1 items-center justify-center gap-1.5 rounded bg-[#1a2d5a] px-5 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#243d73] sm:flex-none"
+                  className="flex flex-1 items-center justify-center gap-1.5 rounded-md bg-slate-900 px-5 py-2 text-xs font-semibold text-white transition-colors hover:bg-slate-700 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200 sm:flex-none"
                 >
                   Submit Exam
                 </button>
@@ -797,7 +748,7 @@ export default function ExamPage() {
                 <button
                   onClick={() => setCurrent(c => Math.min(questions.length - 1, c + 1))}
                   disabled={questions.length === 0}
-                  className="flex flex-1 items-center justify-center gap-1.5 rounded bg-[#1a2d5a] px-5 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#243d73] sm:flex-none"
+                  className="flex flex-1 items-center justify-center gap-1.5 rounded-md bg-slate-900 px-5 py-2 text-xs font-semibold text-white transition-colors hover:bg-slate-700 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200 sm:flex-none"
                 >
                   Next Question
                   <ChevronRight className="h-3.5 w-3.5" />
@@ -808,18 +759,14 @@ export default function ExamPage() {
         </main>
 
         {/* ── Right sidebar: Live Monitor ── */}
-        <aside className="hidden w-48 shrink-0 flex-col border-l border-gray-200 bg-white lg:flex">
-          <div className="border-b border-gray-100 px-4 py-2.5">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Live Monitor</p>
+        <aside className="hidden w-52 shrink-0 flex-col border-l border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950 lg:flex">
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Monitor</p>
+            <span className={cn("h-2 w-2 rounded-full", socketConnected ? "bg-emerald-500" : "bg-amber-400")} />
           </div>
 
           {/* Webcam feed */}
-          <div className="relative mx-4 mt-3 overflow-hidden rounded-lg bg-[#1a1a2e] aspect-video flex items-center justify-center">
-            {/* Live badge */}
-            <div className="absolute left-1.5 top-1.5 flex items-center gap-1 rounded bg-black/60 px-1.5 py-0.5">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-500" />
-              <span className="text-[8px] font-semibold uppercase text-white">Live</span>
-            </div>
+          <div className="relative mt-3 flex aspect-video items-center justify-center overflow-hidden rounded-md bg-slate-900">
             {examCameraReady ? (
               <video
                 ref={examMonitorVideoRef}
@@ -841,24 +788,16 @@ export default function ExamPage() {
             <button
               type="button"
               onClick={() => void startExamCamera()}
-              className="mx-4 mt-2 rounded-md border border-gray-300 px-2.5 py-1 text-[10px] font-medium text-gray-600 hover:bg-gray-50"
+              className="mt-2 rounded-md border border-slate-300 px-2.5 py-1 text-[10px] font-medium text-slate-600 hover:bg-white dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-900"
             >
               Retry Camera
             </button>
           ) : null}
 
-          {/* Stats */}
-          <div className="flex flex-col gap-0 mt-2 px-4 divide-y divide-gray-100">
-            <StatRow label="Gaze Direction" value={stats.gazeDirection} valueColor={stats.gazeDirection === "On Screen" ? "text-green-600" : "text-red-500"} />
-            <StatRow label="Head Position" value={stats.headPosition} valueColor="text-gray-800" />
-            <StatRow label="Tab Switches" value={`${stats.tabSwitches} Events`} valueColor={stats.tabSwitches > 0 ? "text-red-500" : "text-gray-800"} />
-            <StatRow label="Face Visibility" value={stats.faceVisibility} valueColor={faceVisibilityColor} />
-          </div>
-
           {/* Warning count */}
-          <div className="mx-4 mt-4 rounded border border-gray-200 bg-gray-50 px-3 py-2 text-center">
-            <p className="text-[10px] text-gray-400 uppercase tracking-wide">Warnings</p>
-            <p className={cn("text-lg font-bold", warnings > 0 ? "text-orange-500" : "text-gray-700")}>
+          <div className="mt-4 rounded-md border border-slate-200 bg-white px-3 py-3 text-center dark:border-slate-800 dark:bg-slate-900">
+            <p className="text-[10px] uppercase tracking-[0.16em] text-slate-400">Warnings</p>
+            <p className={cn("mt-1 text-xl font-semibold", warnings > 0 ? "text-amber-600" : "text-slate-800 dark:text-slate-100")}>
               {warnings} <span className="text-xs font-medium text-gray-400">/ {maxWarnings}</span>
             </p>
           </div>
@@ -1018,61 +957,6 @@ export default function ExamPage() {
           </div>
         </div>
       )}
-    </div>
-  )
-}
-
-function StatRow({ label, value, valueColor }: { label: string; value: string; valueColor: string }) {
-  return (
-    <div className="flex flex-col gap-0.5 py-2.5">
-      <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{label}</span>
-      <span className={cn("text-xs font-semibold", valueColor)}>{value}</span>
-    </div>
-  )
-}
-
-function ExplainQuestion({ questionText }: { questionText: string }) {
-  const [open, setOpen] = useState(false)
-
-  function buildHint(text: string) {
-    const lower = text.toLowerCase()
-
-    if (lower.includes("time complexity")) {
-      return "Compare the growth rates in the answer choices and match them to the algorithm's typical average-case performance."
-    }
-
-    if (lower.includes("protocol") || lower.includes("http") || lower.includes("tcp") || lower.includes("udp")) {
-      return "Focus on the primary responsibility of each protocol and eliminate choices that describe a different network layer behavior."
-    }
-
-    if (lower.includes("sql") || lower.includes("normal form") || lower.includes("database")) {
-      return "Identify the database concept being asked, then remove choices that are related but belong to another database topic."
-    }
-
-    if (lower.includes("operating system") || lower.includes("kernel") || lower.includes("deadlock")) {
-      return "Think about the operating system role or process state described, then match it to the formal definition."
-    }
-
-    return "Pick out the key concept in the question, remove obviously unrelated options first, then compare the remaining choices against the exact definition."
-  }
-
-  return (
-    <div className="max-w-2xl rounded-xl border border-blue-100 bg-blue-50/80 px-4 py-3">
-      <button
-        type="button"
-        onClick={() => setOpen(prev => !prev)}
-        className="flex items-center gap-2 text-left text-xs font-semibold uppercase tracking-[0.18em] text-blue-700"
-      >
-        <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-[11px] text-white">
-          ?
-        </span>
-        {open ? "Hide question guide" : "Show question guide"}
-      </button>
-      {open ? (
-        <p className="mt-3 text-sm leading-relaxed text-blue-900">
-          {buildHint(questionText)}
-        </p>
-      ) : null}
     </div>
   )
 }

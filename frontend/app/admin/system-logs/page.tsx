@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { LogOut } from "lucide-react"
 import { getApiPath } from "@/lib/api-url"
 import { DashboardPanel, DashboardShell } from "@/components/dashboard-shell"
+import { StatusBadge } from "@/components/status-badge"
 
 type AuditLogRow = {
   audit_id: number
@@ -344,9 +345,9 @@ export default function AdminLogsPage() {
                   <td>{row.student_name}</td>
                   <td>{row.registration_number}</td>
                   <td>{row.exam_title}</td>
-                  <td>{row.session_status}</td>
+                  <td><StatusBadge value={row.session_status} /></td>
                   <td>{row.warning_count}</td>
-                  <td>{row.risk_level}</td>
+                  <td><StatusBadge value={row.risk_level} /></td>
                 </tr>
               ))}
               {filteredSessions.length === 0 && (

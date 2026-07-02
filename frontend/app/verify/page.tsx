@@ -4,10 +4,9 @@ import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { SystemStatusIndicators } from "@/components/system-status-indicators"
 import { useBrowserLockdown } from "@/hooks/use-browser-lockdown"
 import { useNetworkStatus } from "@/hooks/use-network-status"
-import { CheckCircle2, Circle, Loader2 } from "lucide-react"
+import { CheckCircle2, Loader2 } from "lucide-react"
 import { ThemeToggle } from "@/components/theme-toggle"
 
 // ─── phase machine ────────────────────────────────────────────────────────────
@@ -269,8 +268,8 @@ export default function VerifyPage() {
     if (currentPhase === "idle") return true
     // Face detection should verify stable face presence without over-strict pose gating.
     if (currentPhase === "scanning") return true
-    if (currentPhase === "move_up") return pitch <= -15
-    if (currentPhase === "move_down") return pitch >= 15
+    if (currentPhase === "move_up") return pitch >= 15
+    if (currentPhase === "move_down") return pitch <= -15
     // Yaw sign is inverted relative to user-facing prompt direction in our current feed.
     // Swap left/right checks so instruction text matches real movement.
     if (currentPhase === "move_left") return yaw >= 18
@@ -353,8 +352,8 @@ export default function VerifyPage() {
           setPhaseError("Face not detected. Position your face inside the frame.")
         } else if (!satisfied) {
           if (phase === "scanning") setPhaseError("Hold your face still and centered.")
-          if (phase === "move_up") setPhaseError("Tilt your head up to continue.")
-          if (phase === "move_down") setPhaseError("Tilt your head down to continue.")
+          if (phase === "move_up") setPhaseError("Tilt your head upward to continue.")
+          if (phase === "move_down") setPhaseError("Tilt your head downward to continue.")
           if (phase === "move_left") setPhaseError("Tilt your head left to continue.")
           if (phase === "move_right") setPhaseError("Tilt your head right to continue.")
         } else {
@@ -549,46 +548,46 @@ export default function VerifyPage() {
       </div>
 
       {/* ── Left step sidebar ── */}
-      <aside className="hidden lg:flex flex-col justify-between w-72 xl:w-80 shrink-0 border-r border-white/5 px-8 py-10">
+      <aside className="hidden w-80 shrink-0 flex-col justify-between border-r border-white/10 bg-zinc-950/80 px-8 py-10 lg:flex">
         <div className="flex flex-col gap-2">
-          <p className="text-[10px] font-semibold tracking-widest text-zinc-500 uppercase mb-1">Proctoai</p>
-          <h2 className="text-lg font-semibold text-white leading-snug">Identity Verification</h2>
-          <p className="text-xs text-zinc-500 leading-relaxed mt-1">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-zinc-500">ProctoAI</p>
+          <h2 className="text-xl font-semibold leading-snug tracking-tight text-white">Identity Verification</h2>
+          <p className="mt-1 max-w-60 text-sm leading-relaxed text-zinc-500">
             Follow the on-screen instructions to verify your identity before accessing your exam.
           </p>
         </div>
 
         {/* Step list */}
-        <ol className="flex flex-col gap-0 mt-8 flex-1">
+        <ol className="mt-10 flex flex-1 flex-col gap-1">
           {STEPS.map((step, i) => {
             const isCompleted = completedStepPhases.includes(step.phase)
             const isActive = step.phase === phase
             const isPending = !isCompleted && !isActive
 
             return (
-              <li key={step.phase} className="flex gap-3">
+              <li key={step.phase} className="flex gap-4">
                 {/* Connector line + icon */}
                 <div className="flex flex-col items-center">
                   <div className={cn(
-                    "flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-all duration-500",
-                    isCompleted && "bg-emerald-500/20",
-                    isActive && "bg-white/10",
-                    isPending && "bg-white/5",
-                    isDone && "bg-emerald-500/20",
+                    "flex h-8 w-8 shrink-0 items-center justify-center rounded-md border text-[11px] font-semibold transition-all duration-300",
+                    isCompleted && "border-emerald-400/25 bg-emerald-400/10 text-emerald-300",
+                    isActive && "border-white/30 bg-white/10 text-white",
+                    isPending && "border-white/10 bg-white/[0.03] text-zinc-600",
+                    isDone && "border-emerald-400/25 bg-emerald-400/10 text-emerald-300",
                   )}>
                     {isDone || isCompleted ? (
-                      <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                      <CheckCircle2 className="h-4 w-4" />
                     ) : isActive ? (
-                      <Loader2 className="h-4 w-4 text-white animate-spin" />
+                      <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
-                      <Circle className="h-4 w-4 text-zinc-700" />
+                      <span>{i + 1}</span>
                     )}
                   </div>
                   {i < STEPS.length - 1 && (
                     <div className={cn(
-                      "w-px flex-1 my-1 transition-colors duration-500",
-                      isCompleted || isDone ? "bg-emerald-500/30" : "bg-white/8",
-                    )} style={{ minHeight: 28 }} />
+                      "my-1 w-px flex-1 transition-colors duration-300",
+                      isCompleted || isDone ? "bg-emerald-400/25" : "bg-white/10",
+                    )} style={{ minHeight: 30 }} />
                   )}
                 </div>
 
@@ -596,7 +595,7 @@ export default function VerifyPage() {
                 <div className="pb-7">
                   <p className={cn(
                     "text-sm font-medium transition-colors duration-300",
-                    isDone || isCompleted ? "text-emerald-300" : isActive ? "text-white" : "text-zinc-600",
+                    isDone || isCompleted ? "text-emerald-300" : isActive ? "text-white" : "text-zinc-500",
                   )}>
                     {step.label}
                   </p>
@@ -610,14 +609,14 @@ export default function VerifyPage() {
         </ol>
 
         {/* Overall progress bar */}
-        <div className="flex flex-col gap-2 mt-4">
-          <div className="flex justify-between text-[10px] text-zinc-600">
+        <div className="mt-4 flex flex-col gap-2">
+          <div className="flex justify-between text-[11px] text-zinc-500">
             <span>Progress</span>
             <span>{isDone ? 100 : Math.round((completedStepPhases.filter(p => p !== "idle").length / STEPS.length) * 100)}%</span>
           </div>
-          <div className="h-1 w-full rounded-full bg-white/5 overflow-hidden">
+          <div className="h-1 w-full overflow-hidden rounded-full bg-white/10">
             <div
-              className="h-full rounded-full bg-emerald-500 transition-all duration-700"
+              className="h-full rounded-full bg-emerald-400 transition-all duration-700"
               style={{
                 width: isDone
                   ? "100%"
@@ -636,12 +635,22 @@ export default function VerifyPage() {
         <p className="text-xs font-medium tracking-widest text-zinc-500 uppercase">Proctoai</p>
       </div>
 
-      <SystemStatusIndicators
-        camera={cameraStatus}
-        network={networkStatus}
-        theme="dark"
-        className="mb-6 w-full max-w-3xl justify-center"
-      />
+      <div className="mb-6 flex w-full max-w-3xl flex-wrap items-center justify-center gap-x-5 gap-y-2 text-[11px] text-zinc-500">
+        <span className="inline-flex items-center gap-2">
+          <span className={cn("h-1.5 w-1.5 rounded-full", cameraReady ? "bg-emerald-400" : "bg-zinc-600")} />
+          Camera {cameraStatus.label.toLowerCase()}
+        </span>
+        <span className="hidden h-3 w-px bg-white/10 sm:block" />
+        <span className="inline-flex items-center gap-2">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+          Network {networkStatus.label.toLowerCase()}
+        </span>
+        <span className="hidden h-3 w-px bg-white/10 sm:block" />
+        <span className="inline-flex items-center gap-2">
+          <span className={cn("h-1.5 w-1.5 rounded-full", isFullscreen ? "bg-emerald-400" : "bg-amber-400")} />
+          Fullscreen {isFullscreen ? "active" : "required"}
+        </span>
+      </div>
 
       {/* Center — face + ring */}
       <div className="flex flex-1 flex-col items-center justify-center gap-8">
@@ -801,13 +810,8 @@ export default function VerifyPage() {
               ) : phaseError ? (
                 <p className="text-xs text-amber-300">{phaseError}</p>
               ) : null}
-              {telemetry ? (
-                <p className="text-[11px] text-zinc-500">
-                  yaw {telemetry.yaw.toFixed(1)} | pitch {telemetry.pitch.toFixed(1)} | {telemetry.anomalies.join(", ") || "no_anomalies"}
-                </p>
-              ) : null}
-              <p className={`text-[11px] ${lightingStatus === "good" ? "text-emerald-300" : "text-amber-300"}`}>
-                Lighting: {lightingStatus === "good" ? "Good" : lightingStatus === "high" ? "Too Bright" : lightingStatus === "low" ? "Too Dark" : "Low Contrast"}
+              <p className={`text-[11px] ${lightingStatus === "good" ? "text-zinc-500" : "text-amber-300"}`}>
+                {lightingStatus === "good" ? "Lighting looks good" : lightingStatus === "high" ? "Lighting is too bright" : lightingStatus === "low" ? "Lighting is too dark" : "Lighting needs more contrast"}
               </p>
               {lightingHint ? <p className="text-[11px] text-amber-300">{lightingHint}</p> : null}
             </>

@@ -6,6 +6,7 @@ import { BookOpen, Eye, EyeOff, KeyRound, LogOut, Plus, Users } from "lucide-rea
 import Link from "next/link"
 import { getApiPath } from "@/lib/api-url"
 import { DashboardPanel, DashboardShell, MetricCard } from "@/components/dashboard-shell"
+import { StatusBadge } from "@/components/status-badge"
 
 type MeUser = {
   user_id: number
@@ -83,14 +84,6 @@ function formatDateTime(value?: string | null) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return "TBD"
   return date.toLocaleString()
-}
-
-function badgeTone(value: string) {
-  const normalized = value.toLowerCase()
-  if (normalized === "completed" || normalized === "live" || normalized === "low") return "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-900/50"
-  if (normalized === "scheduled" || normalized === "medium") return "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-900/50"
-  if (normalized === "high" || normalized === "locked") return "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/30 dark:text-red-300 dark:border-red-900/50"
-  return "bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700"
 }
 
 function LecturerDashboardInner() {
@@ -659,7 +652,7 @@ function LecturerDashboardInner() {
                     <td className="py-2 pl-3 font-medium">{exam.title}</td>
                     <td>{exam.course_code}</td>
                     <td>{formatDateTime(exam.scheduled_at)}</td>
-                    <td><span className={`rounded-full border px-2 py-1 text-xs font-medium ${badgeTone(exam.status)}`}>{exam.status}</span></td>
+                    <td><StatusBadge value={exam.status} /></td>
                     <td>
                       <select
                         className="rounded-md border border-border bg-background p-1 text-xs text-foreground focus:border-[#1a2d5a] focus:outline-none"
@@ -858,7 +851,7 @@ function LecturerDashboardInner() {
                     <td className="py-2">{s.full_name}</td>
                     <td>{s.registration_number}</td>
                     <td>{s.email}</td>
-                    <td>{s.session_status}</td>
+                    <td><StatusBadge value={s.session_status} /></td>
                     <td>{s.score ?? "-"}</td>
                     <td>{s.warning_count}</td>
                   </tr>
@@ -922,10 +915,10 @@ function LecturerDashboardInner() {
                     <td>{row.registration_number}</td>
                     <td>{row.course_code}</td>
                     <td>{row.exam_title}</td>
-                    <td>{row.session_status}</td>
+                    <td><StatusBadge value={row.session_status} /></td>
                     <td>{row.score ?? "-"}</td>
                     <td>{row.warning_count}</td>
-                    <td>{row.risk_level}</td>
+                    <td><StatusBadge value={row.risk_level} /></td>
                   </tr>
                 ))}
                 {filteredSessionResults.length === 0 && <tr><td colSpan={8} className="py-3 text-slate-600">No session results for selected scope.</td></tr>}

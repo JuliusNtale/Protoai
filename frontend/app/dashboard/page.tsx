@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { BookOpenCheck, ClipboardList, Eye, EyeOff, FileText, LogOut, UserCircle2 } from "lucide-react"
 import { getApiPath } from "@/lib/api-url"
 import { DashboardPanel, DashboardShell, MetricCard } from "@/components/dashboard-shell"
+import { StatusBadge } from "@/components/status-badge"
 
 type StudentTab = "dashboard" | "exams" | "sessions" | "reports" | "profile"
 
@@ -71,14 +72,6 @@ const DEGREE_PROGRAM_OPTIONS = [
   "Diploma in Educational Technology (Dip. ET)",
   "Diploma in Information and Communication Technology (Dip. ICT)",
 ]
-
-function badgeTone(value: string) {
-  const normalized = value.toLowerCase()
-  if (normalized === "completed" || normalized === "live") return "bg-emerald-50 text-emerald-700 border-emerald-200"
-  if (normalized === "scheduled" || normalized === "medium") return "bg-amber-50 text-amber-700 border-amber-200"
-  if (normalized === "high" || normalized === "locked") return "bg-red-50 text-red-700 border-red-200"
-  return "bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700"
-}
 
 function formatDateTime(value?: string | null) {
   if (!value) return "TBD"
@@ -506,7 +499,7 @@ function StudentDashboardInner() {
                     <td className="py-2 pl-3 font-medium">{exam.title}</td>
                     <td>{exam.course_code}</td>
                     <td>{formatDateTime(exam.scheduled_at)}</td>
-                    <td><span className={`rounded-full border px-2 py-1 text-xs font-medium ${badgeTone(exam.status)}`}>{exam.status}</span></td>
+                    <td><StatusBadge value={exam.status} /></td>
                     <td className="pr-3">
                       {(() => {
                         const session = sessionByExamId.get(exam.exam_id)
@@ -545,7 +538,7 @@ function StudentDashboardInner() {
                   <tr key={s.session_id} className="border-b last:border-b-0">
                     <td className="py-2 pl-3">{s.exam_title}</td>
                     <td>{s.course_code}</td>
-                    <td><span className={`rounded-full border px-2 py-1 text-xs font-medium ${badgeTone(s.session_status)}`}>{s.session_status}</span></td>
+                    <td><StatusBadge value={s.session_status} /></td>
                     <td>{s.score ?? "-"}</td>
                     <td>{s.warning_count}</td>
                   </tr>
@@ -576,8 +569,8 @@ function StudentDashboardInner() {
                   <tr key={r.session_id} className="border-b last:border-b-0">
                     <td className="py-2 pl-3">{r.exam_title}</td>
                     <td>{r.course_code}</td>
-                    <td><span className={`rounded-full border px-2 py-1 text-xs font-medium ${badgeTone(r.session_status)}`}>{r.session_status}</span></td>
-                    <td><span className={`rounded-full border px-2 py-1 text-xs font-medium ${badgeTone(r.risk_level)}`}>{r.risk_level}</span></td>
+                    <td><StatusBadge value={r.session_status} /></td>
+                    <td><StatusBadge value={r.risk_level} /></td>
                     <td>{r.total_anomalies}</td>
                     <td>{r.warning_count}</td>
                   </tr>
