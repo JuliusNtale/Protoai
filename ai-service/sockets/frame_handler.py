@@ -99,7 +99,8 @@ def register_handlers(socketio: SocketIO):
             f"direction={gaze.get('direction') if gaze else None} "
             f"confidence={gaze.get('confidence') if gaze else None} "
             f"model_available={gaze.get('model_available') if gaze else None} "
-            f"face_count={face_count[0]}"
+            f"face_count={face_count[0]}",
+            flush=True,
         )
 
         anomalies = []
