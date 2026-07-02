@@ -249,7 +249,6 @@ def reset_password():
 
     temp_password = _generate_temp_password()
     user.set_password(temp_password)
-    user.must_change_password = True
     db.session.commit()
 
     try:
@@ -349,7 +348,6 @@ def provision_credentials():
         role=target_role,
         username=username or None,
         credential_source="admin_provisioned",
-        must_change_password=True,
     )
     user.set_password(temp_password)
     db.session.add(user)
@@ -454,7 +452,6 @@ def provision_bulk_credentials():
             role=target_role,
             username=username or None,
             credential_source="admin_provisioned",
-            must_change_password=True,
         )
         user.set_password(temp_password)
         db.session.add(user)

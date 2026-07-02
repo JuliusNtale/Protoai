@@ -90,7 +90,7 @@ def test_admin_provisions_instructor_credentials(client):
     body = provision.get_json()
     assert body["temporary_password"]
     assert body["login_id"] == "lecturer.jane"
-    assert body["user"]["must_change_password"] is True
+    assert body["user"]["must_change_password"] is False
 
     lecturer_login = client.post(
         "/api/auth/login",
