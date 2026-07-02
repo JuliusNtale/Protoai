@@ -766,9 +766,32 @@ function LecturerDashboardInner() {
             {questionType === "mcq" && <input value={optionD} onChange={e => setOptionD(e.target.value)} placeholder="Option D" className="rounded-md border border-border bg-background p-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100" />}
             <input value={correctAnswer} onChange={e => setCorrectAnswer(e.target.value)} placeholder="Correct answer (e.g. A or TRUE)" className="rounded-md border border-border bg-background p-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100 md:col-span-2" />
           </div>
-          <button onClick={createQuestion} disabled={!selectedExamId} className="mt-3 rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#142145] disabled:opacity-60">
-            Add Question
-          </button>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <button onClick={createQuestion} disabled={!selectedExamId} className="rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#142145] disabled:opacity-60">
+              Add Question
+            </button>
+            {selectedExam && selectedExam.status !== "live" && selectedExam.status !== "completed" && (
+              <button
+                onClick={async () => {
+                  const ok = window.confirm(
+                    `Publish "${selectedExam.title}" to students now? They will be able to start the exam immediately.`
+                  )
+                  if (!ok) return
+                  await updateExamStatus(selectedExam.exam_id, "live")
+                }}
+                disabled={questions.length === 0}
+                title={questions.length === 0 ? "Add at least one question before publishing" : undefined}
+                className="rounded-md border border-green-600 bg-green-50 px-4 py-2 text-sm font-semibold text-green-700 transition hover:bg-green-100 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Publish Exam to Students
+              </button>
+            )}
+            {selectedExam && selectedExam.status === "live" && (
+              <span className="rounded-full border border-green-600 bg-green-50 px-3 py-1 text-xs font-medium text-green-700">
+                Published — live for students
+              </span>
+            )}
+          </div>
 
           <div className="mt-4 overflow-x-auto">
             <table className="w-full text-sm">
