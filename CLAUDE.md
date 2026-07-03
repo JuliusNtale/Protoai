@@ -47,6 +47,8 @@ Storage:  /storage/faces/ (server-only, never in git)
 
 **Important architecture note:** The backend was built in Python Flask (not Node.js as originally planned). This is the accepted approach. Derick owns the backend Flask app (port 5000). Kweka owns the AI service Flask app (port 8000). They are two separate Python services.
 
+**Dead code warning — legacy Node/Express backend:** `backend/` still contains a full, earlier Node/Express implementation (`server.js`, `routes/*.js`, `models/` Sequelize models, `middleware/`, `.sequelizerc` + `.js` migrations under `migrations/`). **None of it runs anywhere** — `backend/Dockerfile` builds a Python image and its `CMD` is `gunicorn ... run:app`, and `docker-compose.yml`'s `backend` service runs `python run.py`. The live backend is entirely under `backend/app/` (Flask blueprints) plus Alembic (`backend/migrations/env.py` + `migrations/versions/`). Do not add features to `server.js`/`routes/*.js`/Sequelize `models/` — they are unused leftovers. The **root-level Jest suite** (`tests/api.test.js`, run via `npm test` at repo root) also only exercises this legacy Express app (it mocks `backend/models`, `backend/config/mailer`, `backend/utils/logger` — all Node paths) — it does **not** test the real Flask backend and passing it proves nothing about production behavior. Real backend tests are `backend/tests/*.py` (pytest).
+
 ---
 
 ## Repository Structure
@@ -55,32 +57,27 @@ Storage:  /storage/faces/ (server-only, never in git)
 ai-exam-proctoring-system/
 ├── CLAUDE.md               ← YOU ARE HERE — read before every session
 ├── .claude/                ← Detailed context for Claude Code sessions
-│   ├── project-state.md    ← Current build status per feature
+│   ├── project-state.md    ← Feature-by-feature status (dated April 2026 — often stale, cross-check against code/git log)
 │   ├── architecture.md     ← API contracts and data flow
 │   ├── database-schema.md  ← All 7 tables with columns
 │   └── prompting-guide.md  ← How to write good Claude prompts
-├── frontend/               ← Next.js app (Julius) — ~80% complete
-├── backend/                ← Python Flask REST API (Derick) — ~15% complete
-├── ai-service/             ← Python Flask AI endpoints (Kweka) — 0% started
-├── ml-training/            ← Colab notebooks + scripts (Beckham) — 0% started
+├── frontend/               ← Next.js app (Julius) — deployed to Vercel
+├── backend/                ← Live Flask REST API in app/ (Derick); server.js/routes/*.js/models/ are unused legacy Node code — see warning above
+├── ai-service/             ← Flask + Socket.io AI endpoints (Kweka) — models, gaze/head-pose/identity logic
+├── tests/                  ← Root-level Jest suite — tests the legacy Node backend only, not app/
 ├── docs/                   ← SRS, API spec, test cases (Abdul)
-├── docker-compose.yml      ← Starts all services (Kweka)
+├── docker-compose.yml      ← Local dev stack: postgres, backend, ai-service, frontend
+├── docker-compose.api-prod.yml ← Production compose used by CD on the VPS (backend + ai-service only)
 └── .gitignore              ← Blocks .env, *.pt, *.onnx, storage/faces/
 ```
 
+Note: `ml-training/` and `NEXT_STEPS.md` are referenced in older docs but do not currently exist in the repo.
+
 ---
 
-## Current Build Status (April 2026)
+## Current Status
 
-| Layer | Status | What's Done | What's Missing |
-|-------|--------|-------------|----------------|
-| Frontend | 80% | All 8 pages built with UI and mock data | Real API calls, Socket.io frame loop, warning overlay wired to real events |
-| Backend API | 15% | Flask scaffold, auth stub, exam stub | JWT auth, DB migrations, all endpoints, email alerts, report gen |
-| AI Service | 0% | Nothing | Full Flask service, model integration, WebSocket server |
-| ML Models | 0% | Nothing | Dataset download, training scripts, ONNX exports |
-| Database | 0% | Nothing | PostgreSQL schema, migrations |
-| DevOps | 0% | Nothing | Docker Compose, GitHub Actions CI |
-| Documentation | 0% | Original plan PDF | SRS, API docs, test cases, final report |
+The system is built out end-to-end and running in production (see `README.md` for live URLs): frontend on Vercel, backend + AI service on a VPS via `docker-compose.api-prod.yml`, deployed through `.github/workflows/cd.yml`. `.claude/project-state.md`'s per-feature checklist is dated April 2026 and describes an early scaffold stage that no longer matches reality — treat it as historical, not current, and prefer reading the actual code or `git log` for up-to-date status.
 
 ---
 
@@ -134,8 +131,8 @@ git push origin feat/your-branch-name
 ### Frontend (Julius)
 ```bash
 cd frontend
-npm install        # or: pnpm install
-npm run dev        # runs on http://localhost:3000
+pnpm install        # pnpm-lock.yaml is the checked-in lockfile
+npm run dev          # runs on http://localhost:3000
 ```
 
 ### Backend (Derick)
@@ -145,7 +142,7 @@ python -m venv venv
 source venv/bin/activate   # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 cp .env.example .env       # fill in your values
-python app.py              # runs on http://localhost:5000
+python run.py               # runs on http://localhost:5000 (legacy Node entry point is server.js — not used)
 ```
 
 ### AI Service (Kweka)
@@ -157,10 +154,51 @@ pip install -r requirements.txt
 python app.py              # runs on http://localhost:8000
 ```
 
-### All at once (Docker — Kweka sets this up)
+### All at once (Docker)
 ```bash
 docker-compose up          # starts frontend, backend, ai-service, postgres
 ```
+
+---
+
+## Development Commands
+
+### Frontend (`frontend/`)
+```bash
+npm run build     # production build (next build)
+npm run lint       # eslint . --ext .js,.jsx,.ts,.tsx
+```
+No frontend test suite is configured — verify UI changes by running `npm run dev` and exercising the feature in a browser.
+
+### Backend (`backend/`) — pytest against the real Flask app
+```bash
+cd backend
+python -m pytest tests/ -v
+python -m pytest tests/test_auth.py -v                              # one file
+python -m pytest tests/test_sessions_and_reports.py::test_name -v   # one test
+```
+`tests/conftest.py` points `DATABASE_URL` at an in-memory SQLite DB and sets `AI_SERVICE_TOKEN=test-internal-token`, so tests run with no Postgres/env setup required.
+
+Alembic migrations:
+```bash
+cd backend
+flask db upgrade                                   # apply
+flask db migrate -m "description"                  # generate new revision (after editing app/models/)
+```
+
+### AI service (`ai-service/`)
+```bash
+cd ai-service
+python -m pytest tests/ -v
+```
+Model-loading tests skip automatically when `*.onnx` files aren't present locally (they're gitignored — only present on a dev machine that manually placed them, or the VPS).
+
+### Root-level Jest (`tests/`)
+```bash
+npm install
+npm test          # jest --forceExit --runInBand
+```
+Exercises the legacy Node/Express backend only (see the dead-code warning above) — do not treat this as a signal about `backend/app/` behavior.
 
 ---
 
@@ -182,11 +220,20 @@ docker-compose up          # starts frontend, backend, ai-service, postgres
 
 ---
 
+## Code Layout Within Each Service
+
+**Backend (`backend/app/`)** — `create_app()` in `app/__init__.py` wires everything: registers one blueprint per domain (`auth`, `users`, `exams`, `sessions`, `reports`, `images`, `search`), each under `/api/<domain>` and living in its own package (`app/<domain>/routes.py`); `app/models/` holds the SQLAlchemy models (one file per table); `app/extensions.py` holds the shared `db`/`jwt`/`migrate` instances used across blueprints; `app/config.py` reads all env vars. `app/__init__.py` also auto-provisions a bootstrap admin user on first request if none exists (`BOOTSTRAP_ADMIN_*` env vars) and logs every request as structured JSON. Server-to-server calls from the AI service authenticate via an `X-Internal-Token` header checked against `AI_SERVICE_TOKEN` (see `app/sessions/routes.py`) — follow that pattern for any new internal-only endpoint rather than trusting client-supplied IDs.
+
+**AI service (`ai-service/`)** — `routes/` holds thin synchronous HTTP endpoints (`health.py`, `verify.py` for one-time identity checks, `monitor.py`); the real-time per-frame pipeline lives in `sockets/frame_handler.py` (Socket.io handlers — anomaly persistence/debounce state, calibration gating, warning counting, identity re-check scheduling all happen here); `services/` holds the model/CV logic consumed by both routes and sockets (`model_loader.py` loads ONNX models once at startup, `face_detector.py`, `gaze_estimator.py` + `gaze_normalization.py`, `head_pose.py`, `identity_verifier.py`, `embedding_store.py`, `preprocessing.py`).
+
+**Frontend (`frontend/`)** — `lib/api-url.ts::getApiPath()` resolves the backend base URL (env var `NEXT_PUBLIC_API_URL`, falling back to `<host>:5000` in local dev); `middleware.ts` gates `/dashboard`, `/lecturer`, `/admin`, `/exam`, `/verify` by decoding the `auth_token` cookie's JWT payload client-side (no signature check — the backend still enforces auth on every API call) and redirecting to `/unauthorized` on role mismatch.
+
+---
+
 ## Where to Find More Context
 
-- `.claude/project-state.md` — detailed feature-by-feature status
+- `.claude/project-state.md` — feature-by-feature status (dated April 2026, stale — see "Current Status" above)
 - `.claude/architecture.md` — complete API endpoint contracts
 - `.claude/database-schema.md` — all 7 database tables with columns
 - `.claude/prompting-guide.md` — how to write effective prompts for this project
 - `docs/Original-Development-Plan-&-Roles.pdf` — full original spec
-- `NEXT_STEPS.md` — per-member development plan with step-by-step instructions
