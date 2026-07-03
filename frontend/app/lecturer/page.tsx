@@ -205,6 +205,7 @@ function LecturerDashboardInner() {
   const [assignError, setAssignError] = useState("")
   const [sessionResults, setSessionResults] = useState<SessionResultRow[]>([])
   const [exporting, setExporting] = useState(false)
+  const [exportingAll, setExportingAll] = useState(false)
   const [viewingReport, setViewingReport] = useState<ReportDetail | null>(null)
   const [loadingReportId, setLoadingReportId] = useState<number | null>(null)
   const [reportError, setReportError] = useState("")
@@ -609,6 +610,29 @@ function LecturerDashboardInner() {
     }
   }
 
+  async function exportAllReports() {
+    setExportingAll(true)
+    try {
+      const res = await fetch(getApiPath("/reports/export"), {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}))
+        setError(payload?.error?.message || "Failed to export reports.")
+        return
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `all_exam_reports_${new Date().toISOString().slice(0, 10)}.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+    } finally {
+      setExportingAll(false)
+    }
+  }
+
   async function openReport(sessionId: number) {
     setReportError("")
     setLoadingReportId(sessionId)
@@ -942,15 +966,6 @@ function LecturerDashboardInner() {
               </tbody>
             </table>
           </div>
-          <div className="mt-3">
-            <button
-              onClick={exportSelectedExamReport}
-              disabled={!selectedExamId || exporting}
-              className="rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#142145] disabled:opacity-60"
-            >
-              {exporting ? "Exporting..." : "Export Selected Exam CSV"}
-            </button>
-          </div>
         </DashboardPanel>
           </>
         )}
@@ -1186,6 +1201,22 @@ function LecturerDashboardInner() {
           </p>
           {renderExamPicker("results")}
           {reportError ? <p className="mt-2 text-sm text-red-600">{reportError}</p> : null}
+          <div className="mt-3 flex gap-2">
+            <button
+              onClick={exportSelectedExamReport}
+              disabled={!selectedExamId || exporting}
+              className="rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#142145] disabled:opacity-60"
+            >
+              {exporting ? "Exporting..." : "Export Selected Exam CSV"}
+            </button>
+            <button
+              onClick={exportAllReports}
+              disabled={exportingAll}
+              className="rounded-md border border-[#1a2d5a] px-4 py-2 text-sm font-semibold text-[#1a2d5a] transition hover:bg-[#1a2d5a]/5 disabled:opacity-60"
+            >
+              {exportingAll ? "Exporting..." : "Export All Sessions CSV"}
+            </button>
+          </div>
           <div className="mt-4 overflow-x-auto">
             <table className="w-full text-sm">
               <thead>

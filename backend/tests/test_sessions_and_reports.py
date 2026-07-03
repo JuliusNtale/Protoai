@@ -455,3 +455,26 @@ def test_reports_access_control_and_csv_export(client, app, tmp_path):
     )
     assert export_ok.status_code == 200
     assert "text/csv" in export_ok.headers.get("Content-Type", "")
+
+    export_all = client.get(
+        "/api/reports/export",
+        headers={"Authorization": f"Bearer {lecturer_token}"},
+    )
+    assert export_all.status_code == 200
+    assert "text/csv" in export_all.headers.get("Content-Type", "")
+    export_all_body = export_all.get_data(as_text=True)
+    assert str(session_id) in export_all_body
+    assert "CS204" in export_all_body
+
+    export_all_other_lecturer = client.get(
+        "/api/reports/export",
+        headers={"Authorization": f"Bearer {other_lecturer_token}"},
+    )
+    assert export_all_other_lecturer.status_code == 200
+    assert str(session_id) not in export_all_other_lecturer.get_data(as_text=True)
+
+    export_all_forbidden = client.get(
+        "/api/reports/export",
+        headers={"Authorization": f"Bearer {student_token}"},
+    )
+    assert export_all_forbidden.status_code == 403

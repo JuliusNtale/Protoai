@@ -164,6 +164,67 @@ def my_reports():
     return jsonify({"reports": payload}), 200
 
 
+@reports_bp.get("/export")
+@jwt_required()
+def export_all_reports():
+    claims = get_jwt()
+    user_role = claims.get("role")
+    user_id = int(get_jwt_identity())
+    if user_role not in {"admin", "lecturer"}:
+        return jsonify({"error": {"message": "Forbidden"}}), 403
+
+    query = (
+        db.session.query(ExamSession, Exam, User)
+        .join(Exam, Exam.exam_id == ExamSession.exam_id)
+        .join(User, User.user_id == ExamSession.student_id)
+    )
+    if user_role == "lecturer":
+        query = query.filter(Exam.lecturer_id == user_id)
+    rows = query.order_by(Exam.exam_id, ExamSession.session_id).all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(
+        [
+            "exam_id",
+            "exam_title",
+            "course_code",
+            "session_id",
+            "student_name",
+            "reg_number",
+            "score",
+            "warning_count",
+            "risk_level",
+            "status",
+        ]
+    )
+
+    for session_row, exam_row, user_row in rows:
+        _, _, risk_level, _ = _build_report_snapshot(session_row)
+        writer.writerow(
+            [
+                exam_row.exam_id,
+                exam_row.title,
+                exam_row.course_code,
+                session_row.session_id,
+                user_row.full_name,
+                user_row.reg_number,
+                float(session_row.score or 0),
+                session_row.warning_count,
+                risk_level,
+                session_row.session_status,
+            ]
+        )
+
+    csv_data = output.getvalue()
+    output.close()
+    return Response(
+        csv_data,
+        mimetype="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="all_exam_reports.csv"'},
+    )
+
+
 @reports_bp.get("/export/<int:exam_id>")
 @jwt_required()
 def export_exam_reports(exam_id):
