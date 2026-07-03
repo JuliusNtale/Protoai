@@ -6,11 +6,23 @@ from flask_jwt_extended import get_jwt, get_jwt_identity, jwt_required, verify_j
 
 from app.audit import log_audit
 from app.extensions import db
-from app.models import BehavioralLog, Exam, ExamSession, Question, SessionAnswer, User
+from app.models import BehavioralLog, Exam, ExamSession, ExamStudentAssignment, Question, SessionAnswer, User
 from app.models import FacialImage
 
 sessions_bp = Blueprint("sessions", __name__)
 VALID_EVENTS = {"gaze_away", "head_turned", "face_absent", "tab_switch", "multiple_faces", "identity_mismatch"}
+
+
+def _student_can_access_exam(exam: Exam, student: User) -> bool:
+    if not exam.programs:
+        return True
+    student_department = (student.department or "").strip()
+    if any(program.name == student_department for program in exam.programs):
+        return True
+    return (
+        ExamStudentAssignment.query.filter_by(exam_id=exam.exam_id, student_id=student.user_id).first()
+        is not None
+    )
 
 
 def _student_profile_ready_for_verification(user: User) -> tuple[bool, str]:
@@ -65,6 +77,8 @@ def start_session():
     ready, message = _student_profile_ready_for_verification(student)
     if not ready:
         return jsonify({"error": {"message": message}}), 409
+    if not _student_can_access_exam(exam, student):
+        return jsonify({"error": {"message": "You are not assigned to this exam."}}), 403
     existing = ExamSession.query.filter_by(student_id=student_id, exam_id=exam.exam_id).first()
     if existing:
         if existing.session_status in {"active", "pending"} and not existing.submitted_at:
