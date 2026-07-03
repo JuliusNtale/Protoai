@@ -165,6 +165,16 @@ export default function ExamPage() {
     }
   }
 
+  // The visible monitor <video> only mounts once examCameraReady flips to
+  // true, which happens AFTER attachExamStreamToVideos already ran (that
+  // call reads the ref synchronously, before React commits the new DOM
+  // node) — so its srcObject never got set on the first attempt. Re-attach
+  // once the element actually exists.
+  useEffect(() => {
+    if (!examCameraReady || !examStreamRef.current) return
+    void attachExamStreamToVideos(examStreamRef.current)
+  }, [examCameraReady])
+
   useEffect(() => {
     const rawSessionId = localStorage.getItem("session_id")
     const verifiedSessionId = localStorage.getItem("verified_session_id")

@@ -268,8 +268,11 @@ export default function VerifyPage() {
     if (currentPhase === "idle") return true
     // Face detection should verify stable face presence without over-strict pose gating.
     if (currentPhase === "scanning") return true
-    if (currentPhase === "move_up") return pitch >= 15
-    if (currentPhase === "move_down") return pitch <= -15
+    // Pitch sign flipped after the 2026-07-03 head_pose.py Euler-angle-ambiguity
+    // fix (see AI service CLAUDE.md) — a real downward tilt now reports
+    // positive pitch, not negative, so these checks are swapped from before.
+    if (currentPhase === "move_up") return pitch <= -15
+    if (currentPhase === "move_down") return pitch >= 15
     // Yaw sign is inverted relative to user-facing prompt direction in our current feed.
     // Swap left/right checks so instruction text matches real movement.
     if (currentPhase === "move_left") return yaw >= 18
@@ -656,8 +659,8 @@ export default function VerifyPage() {
       <div className="flex flex-1 flex-col items-center justify-center gap-8">
 
         {/* SVG face ring */}
-        <div className="relative" style={{ width: 360, height: 360 }}>
-          <svg width="360" height="360" viewBox="0 0 280 280" fill="none">
+        <div className="relative" style={{ width: 400, height: 400 }}>
+          <svg width="400" height="400" viewBox="0 0 280 280" fill="none">
             {/* Background dim ring */}
             <path
               d={fullRingPath}
@@ -715,8 +718,8 @@ export default function VerifyPage() {
             <div
               className="relative overflow-hidden"
               style={{
-                width: 220,
-                height: 280,
+                width: 245,
+                height: 312,
                 borderRadius: "50%",
                 background: "rgba(255,255,255,0.04)",
               }}
@@ -771,10 +774,10 @@ export default function VerifyPage() {
               style={{ animation: "arrowPulse 0.7s ease-in-out infinite alternate" }}
             >
               <span
-                className="text-4xl font-thin text-white/30 select-none"
+                className="text-6xl font-bold text-white/80 select-none drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]"
                 style={{
-                  marginTop: phase === "move_up" ? -90 : phase === "move_down" ? 90 : 0,
-                  marginLeft: phase === "move_left" ? -90 : phase === "move_right" ? 90 : 0,
+                  marginTop: phase === "move_up" ? -100 : phase === "move_down" ? 100 : 0,
+                  marginLeft: phase === "move_left" ? -100 : phase === "move_right" ? 100 : 0,
                 }}
               >
                 {arrowMap[phase]}
@@ -851,8 +854,8 @@ export default function VerifyPage() {
           100% { top: 10%; opacity: 0.8; }
         }
         @keyframes arrowPulse {
-          from { opacity: 0.2; }
-          to   { opacity: 0.55; }
+          from { opacity: 0.55; }
+          to   { opacity: 1; }
         }
       `}</style>
       </main>
