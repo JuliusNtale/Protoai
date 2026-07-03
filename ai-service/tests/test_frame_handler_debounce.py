@@ -61,19 +61,18 @@ def test_low_confidence_reading_is_not_flagged_as_anomaly():
     assert _is_away('Down', 0.1) is False
 
 
-def test_left_right_are_not_treated_as_away():
-    """The model's 'Center' class is a narrow ~6 degree yaw cone (per
-    label_config.json), much narrower than the angle spanned by reading
-    across a normal screen. Left/Right is normal reading behavior, not a
-    gaze-away anomaly, even at high confidence."""
-    assert _is_away('Left', 0.9) is False
-    assert _is_away('Right', 0.9) is False
-
-
-def test_down_up_are_treated_as_away_above_confidence_floor():
+def test_all_four_directions_are_treated_as_away_above_confidence_floor():
+    """Policy decision 2026-07-03: all four non-Screen directions escalate
+    (previously Left/Right were excluded as a false-positive risk against
+    normal screen-reading eye movement - see _AWAY_DIRECTIONS's docstring).
+    The confidence floor and same-direction persistence requirement are what
+    now guard against noisy/momentary readings instead."""
     assert _is_away('Down', 0.9) is True
     assert _is_away('Up', 0.9) is True
+    assert _is_away('Left', 0.9) is True
+    assert _is_away('Right', 0.9) is True
     assert _is_away('Down', 0.1) is False
+    assert _is_away('Left', 0.1) is False
 
 
 def test_calibration_window_never_alerts_regardless_of_raw_pose():
