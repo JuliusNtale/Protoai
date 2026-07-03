@@ -15,7 +15,7 @@ function toneFor(value: string) {
   if (["scheduled", "medium", "pending"].includes(normalized)) {
     return "text-amber-600 dark:text-amber-400"
   }
-  if (["high", "locked", "inactive", "blocked"].includes(normalized)) {
+  if (["high", "locked", "terminated", "inactive", "blocked"].includes(normalized)) {
     return "text-red-600 dark:text-red-400"
   }
   return "text-slate-600 dark:text-slate-400"
