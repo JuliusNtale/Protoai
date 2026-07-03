@@ -199,6 +199,13 @@ def register_handlers(socketio: SocketIO):
 
         confirmed_anomalies = _confirmed_anomalies(session_id, anomalies)
 
+        print(
+            f"[anomaly_debug] session={session_id} "
+            f"face_count={face_count[0]} gaze_is_none={gaze is None} "
+            f"raw_anomalies={anomalies} confirmed={confirmed_anomalies}",
+            flush=True,
+        )
+
         # Forward confirmed anomalies to Derick's backend and track the returned warning_count
         headers = {'X-Internal-Token': _AI_SERVICE_TOKEN} if _AI_SERVICE_TOKEN else None
         for anomaly in confirmed_anomalies:
