@@ -104,6 +104,9 @@ def get_report(session_id):
                     "multiple_faces_count": report.multiple_faces_count,
                     "total_anomalies": report.total_anomalies,
                     "risk_level": report.risk_level,
+                    "score": float(session_row.score) if session_row.score is not None else None,
+                    "warning_count": session_row.warning_count or 0,
+                    "session_status": session_row.session_status,
                     "logs": [
                         {
                             "log_id": log.log_id,

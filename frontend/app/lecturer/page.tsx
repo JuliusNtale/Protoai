@@ -91,6 +91,9 @@ type ReportDetail = {
   multiple_faces_count: number
   total_anomalies: number
   risk_level: string
+  score?: number | null
+  warning_count?: number
+  session_status?: string
   logs: ReportLogEntry[]
 }
 
@@ -539,6 +542,36 @@ function LecturerDashboardInner() {
     }
   }
 
+  async function selectExam(nextExamId: number, targetTab: string) {
+    if (!Number.isFinite(nextExamId) || nextExamId <= 0) return
+    const picked = exams.find((row) => row.exam_id === nextExamId)
+    setSelectedExamId(nextExamId)
+    await loadExamDetails(token, nextExamId, picked?.course_code)
+    router.push(`/lecturer?tab=${targetTab}&examId=${nextExamId}`)
+  }
+
+  function renderExamPicker(targetTab: string) {
+    return (
+      <div className="mb-4">
+        <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Select Exam
+        </label>
+        <select
+          value={selectedExamId ?? ""}
+          onChange={(e) => void selectExam(Number(e.target.value), targetTab)}
+          className="w-full max-w-md rounded-md border border-border bg-background p-2 text-sm text-foreground focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100"
+        >
+          {exams.length === 0 ? <option value="">No exams available</option> : null}
+          {exams.map((exam) => (
+            <option key={exam.exam_id} value={exam.exam_id}>
+              {exam.title} - {exam.course_code} ({exam.status})
+            </option>
+          ))}
+        </select>
+      </div>
+    )
+  }
+
   async function changePassword() {
     setPasswordMsg("")
     setForcePasswordMsg("")
@@ -808,32 +841,7 @@ function LecturerDashboardInner() {
 
         {tab === "questions" && (
         <DashboardPanel title={`Question Builder ${selectedExam ? `- ${selectedExam.title}` : ""}`}>
-          <div className="mb-4 grid gap-3 md:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Select Exam
-              </label>
-              <select
-                value={selectedExamId ?? ""}
-                onChange={async (e) => {
-                  const nextExamId = Number(e.target.value)
-                  if (!Number.isFinite(nextExamId) || nextExamId <= 0) return
-                  const picked = exams.find((row) => row.exam_id === nextExamId)
-                  setSelectedExamId(nextExamId)
-                  await loadExamDetails(token, nextExamId, picked?.course_code)
-                  router.push(`/lecturer?tab=questions&examId=${nextExamId}`)
-                }}
-                className="w-full rounded-md border border-border bg-background p-2 text-sm text-foreground focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100"
-              >
-                {exams.length === 0 ? <option value="">No exams available</option> : null}
-                {exams.map((exam) => (
-                  <option key={exam.exam_id} value={exam.exam_id}>
-                    {exam.title} - {exam.course_code} ({exam.status})
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
+          {renderExamPicker("questions")}
           <div className="mt-4 grid gap-3 md:grid-cols-2">
             <select value={questionType} onChange={e => setQuestionType(e.target.value as "mcq" | "true_false")} className="rounded-md border border-border bg-background p-2 text-sm text-foreground focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100">
               <option value="mcq">mcq</option>
@@ -917,6 +925,7 @@ function LecturerDashboardInner() {
         {tab === "students" && (
           <>
         <DashboardPanel title={`Enrolled Students ${selectedExam ? `- ${selectedExam.title}` : ""}`}>
+          {renderExamPicker("students")}
           <div className="flex items-center gap-2">
             <Users className="h-5 w-5 text-blue-700" />
             <h2 className="text-base font-semibold">Enrolled Students {selectedExam ? `- ${selectedExam.title}` : ""}</h2>
@@ -981,10 +990,11 @@ function LecturerDashboardInner() {
         )}
 
         {tab === "results" && (
-        <DashboardPanel title="Sessions">
+        <DashboardPanel title={`Sessions ${selectedExam ? `- ${selectedExam.title}` : ""}`}>
           <p className="mt-1 text-xs text-muted-foreground">
             One row per exam attempt. Click &quot;View Report&quot; on a completed session for a detailed breakdown of what happened during AI monitoring.
           </p>
+          {renderExamPicker("results")}
           {reportError ? <p className="mt-2 text-sm text-red-600">{reportError}</p> : null}
           <div className="mt-4 overflow-x-auto">
             <table className="w-full text-sm">
@@ -1202,6 +1212,21 @@ function LecturerDashboardInner() {
           <div className="mt-4 flex flex-wrap items-center gap-2">
             <StatusBadge value={viewingReport.risk_level} />
             <span className="text-xs text-muted-foreground">{viewingReport.total_anomalies} total anomalies logged</span>
+          </div>
+
+          <div className="mt-3 grid grid-cols-3 gap-2">
+            <div className="rounded-md border border-border bg-background p-3 text-center">
+              <p className="text-xl font-semibold text-foreground">{viewingReport.score ?? "-"}</p>
+              <p className="text-xs text-muted-foreground">Score</p>
+            </div>
+            <div className="rounded-md border border-border bg-background p-3 text-center">
+              <p className="text-xl font-semibold text-foreground">{viewingReport.warning_count ?? 0}</p>
+              <p className="text-xs text-muted-foreground">Warnings</p>
+            </div>
+            <div className="rounded-md border border-border bg-background p-3 text-center">
+              <StatusBadge value={viewingReport.session_status || "-"} />
+              <p className="mt-1 text-xs text-muted-foreground">Status</p>
+            </div>
           </div>
 
           <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
