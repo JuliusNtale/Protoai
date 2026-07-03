@@ -130,6 +130,14 @@ def register_handlers(socketio: SocketIO):
             f"face_count={face_count[0]}",
             flush=True,
         )
+        print(
+            f"[pose_debug] session={session_id} "
+            f"yaw={pose.get('yaw') if pose else None} "
+            f"pitch={pose.get('pitch') if pose else None} "
+            f"roll={pose.get('roll') if pose else None} "
+            f"alert={pose.get('alert') if pose else None}",
+            flush=True,
+        )
 
         anomalies = []
         if gaze is None or face_count[0] == 0:
