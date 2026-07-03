@@ -69,8 +69,8 @@ const SECTIONS = [
       "Keep your face centred in the camera frame at all times.",
       "Do not switch browser tabs or open other applications.",
       "Do not allow another person to appear in the camera frame.",
-      "Looking away from the screen for more than 10 seconds triggers a warning.",
-      "Three violations may result in automatic exam termination.",
+      "Your behaviour, including gaze and tab activity, is recorded throughout the exam for review.",
+      "You will complete the exam in full — nothing you do during proctoring will auto-submit it early.",
     ],
   },
 ]

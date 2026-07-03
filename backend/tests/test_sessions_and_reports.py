@@ -166,7 +166,7 @@ def test_ai_service_can_log_monitoring_anomaly_with_internal_token(client, app):
         assert stored_log.event_data["source"] == "ai-service"
 
 
-def test_identity_mismatch_forces_immediate_lock_regardless_of_warning_count(client, app):
+def test_identity_mismatch_logs_and_flips_identity_verified_without_locking_session(client, app):
     with app.app_context():
         student = User(
             full_name="Swap Student",
@@ -212,10 +212,11 @@ def test_identity_mismatch_forces_immediate_lock_regardless_of_warning_count(cli
         db.session.commit()
         session_id = session.session_id
 
-    # A single confirmed mid-exam identity mismatch must lock the session
-    # immediately - this is not a graduated 1-2-3 warning like gaze/head
-    # anomalies, since it represents confirmed identity fraud rather than a
-    # momentary distraction.
+    # A confirmed mid-exam identity mismatch is logged like any other
+    # anomaly for lecturer/admin review - it does not lock or auto-submit
+    # the in-progress session, so the student can keep working. It still
+    # flips identity_verified back to False so a *reload* back into the
+    # exam is blocked by the /status guard.
     logged = client.post(
         "/api/sessions/log",
         json={
@@ -227,15 +228,13 @@ def test_identity_mismatch_forces_immediate_lock_regardless_of_warning_count(cli
     )
     assert logged.status_code == 200
     payload = logged.get_json()
-    assert payload["auto_submitted"] is True
-    assert payload["reason"] == "identity_mismatch"
+    assert payload["warning_count"] == 1
+    assert "auto_submitted" not in payload
 
     with app.app_context():
         stored_session = db.session.get(ExamSession, session_id)
-        assert stored_session.session_status == "locked"
-        assert stored_session.submitted_at is not None
-        # identity_verified must flip back to False so the /status guard the
-        # /exam page relies on also blocks any attempt to reload back in.
+        assert stored_session.session_status == "active"
+        assert stored_session.submitted_at is None
         assert stored_session.identity_verified is False
 
 
@@ -406,6 +405,169 @@ def test_session_status_reflects_current_identity_verified_state(client, app, tm
     assert missing.status_code == 404
 
 
+def test_authorize_viewer_and_terminate_session(client, app, tmp_path):
+    lecturer_token = _register_and_login(client, "L22-03-70001", role="lecturer")
+    other_lecturer_token = _register_and_login(client, "L22-03-70002", role="lecturer")
+    student_token = _register_and_login(client, "T22-03-70003")
+    _complete_student_verification_prerequisites(app, "T22-03-70003", tmp_path)
+    _complete_lecturer_verification_prerequisites(app, "L22-03-70001")
+
+    with app.app_context():
+        lecturer = User.query.filter_by(reg_number="L22-03-70001").first()
+        exam = Exam(
+            title="Operating Systems",
+            course_code="CS305",
+            lecturer_id=lecturer.user_id,
+            duration_min=60,
+            scheduled_at=datetime.utcnow(),
+            status="active",
+        )
+        db.session.add(exam)
+        db.session.commit()
+        exam_id = exam.exam_id
+
+    start = client.post(
+        "/api/sessions/start",
+        json={"exam_id": exam_id},
+        headers={"Authorization": f"Bearer {student_token}"},
+    )
+    start_json = start.get_json() or {}
+    assert start.status_code == 201, start_json
+    session_id = start_json["session_id"]
+
+    # Only the owning lecturer (or an admin) may subscribe to this session's
+    # live alert stream - a different lecturer must be rejected.
+    own_authorize = client.get(
+        f"/api/sessions/{session_id}/authorize-viewer",
+        headers={"Authorization": f"Bearer {lecturer_token}"},
+    )
+    assert own_authorize.status_code == 200
+
+    other_authorize = client.get(
+        f"/api/sessions/{session_id}/authorize-viewer",
+        headers={"Authorization": f"Bearer {other_lecturer_token}"},
+    )
+    assert other_authorize.status_code == 403
+
+    student_authorize = client.get(
+        f"/api/sessions/{session_id}/authorize-viewer",
+        headers={"Authorization": f"Bearer {student_token}"},
+    )
+    assert student_authorize.status_code == 403
+
+    # A different lecturer cannot terminate a session they don't own.
+    forbidden_terminate = client.post(
+        f"/api/sessions/{session_id}/terminate",
+        json={"reason": "Not your call"},
+        headers={"Authorization": f"Bearer {other_lecturer_token}"},
+    )
+    assert forbidden_terminate.status_code == 403
+
+    terminate = client.post(
+        f"/api/sessions/{session_id}/terminate",
+        json={"reason": "Repeated identity mismatch during exam"},
+        headers={"Authorization": f"Bearer {lecturer_token}"},
+    )
+    assert terminate.status_code == 200
+    assert terminate.get_json()["session_status"] == "terminated"
+
+    with app.app_context():
+        stored_session = db.session.get(ExamSession, session_id)
+        assert stored_session.session_status == "terminated"
+        assert stored_session.termination_reason == "Repeated identity mismatch during exam"
+        assert stored_session.submitted_at is not None
+        termination_log = BehavioralLog.query.filter_by(
+            session_id=session_id, event_type="session_terminated"
+        ).one()
+        assert termination_log.event_data["reason"] == "Repeated identity mismatch during exam"
+
+    # A terminated session can no longer be submitted by the student.
+    blocked_submit = client.post(
+        f"/api/sessions/{session_id}/submit",
+        json={"answers": {}},
+        headers={"Authorization": f"Bearer {student_token}"},
+    )
+    assert blocked_submit.status_code == 409
+
+    # Terminating an already-ended session is rejected.
+    already_terminated = client.post(
+        f"/api/sessions/{session_id}/terminate",
+        json={"reason": "Again"},
+        headers={"Authorization": f"Bearer {lecturer_token}"},
+    )
+    assert already_terminated.status_code == 409
+
+
+def test_review_behavioral_log_records_lecturer_decision(client, app, tmp_path):
+    lecturer_token = _register_and_login(client, "L22-03-71001", role="lecturer")
+    other_lecturer_token = _register_and_login(client, "L22-03-71002", role="lecturer")
+    student_token = _register_and_login(client, "T22-03-71003")
+    _complete_student_verification_prerequisites(app, "T22-03-71003", tmp_path)
+    _complete_lecturer_verification_prerequisites(app, "L22-03-71001")
+
+    with app.app_context():
+        lecturer = User.query.filter_by(reg_number="L22-03-71001").first()
+        exam = Exam(
+            title="Compilers",
+            course_code="CS406",
+            lecturer_id=lecturer.user_id,
+            duration_min=60,
+            scheduled_at=datetime.utcnow(),
+            status="active",
+        )
+        db.session.add(exam)
+        db.session.commit()
+        exam_id = exam.exam_id
+
+    start = client.post(
+        "/api/sessions/start",
+        json={"exam_id": exam_id},
+        headers={"Authorization": f"Bearer {student_token}"},
+    )
+    session_id = start.get_json()["session_id"]
+
+    logged = client.post(
+        "/api/sessions/log",
+        json={"session_id": session_id, "event_type": "gaze_away"},
+        headers={"X-Internal-Token": "test-internal-token"},
+    )
+    assert logged.status_code == 200
+    log_id = logged.get_json()["log_id"]
+
+    forbidden = client.patch(
+        f"/api/reports/logs/{log_id}/review",
+        json={"is_suspicious": True},
+        headers={"Authorization": f"Bearer {other_lecturer_token}"},
+    )
+    assert forbidden.status_code == 403
+
+    missing_field = client.patch(
+        f"/api/reports/logs/{log_id}/review",
+        json={},
+        headers={"Authorization": f"Bearer {lecturer_token}"},
+    )
+    assert missing_field.status_code == 400
+
+    reviewed = client.patch(
+        f"/api/reports/logs/{log_id}/review",
+        json={"is_suspicious": True},
+        headers={"Authorization": f"Bearer {lecturer_token}"},
+    )
+    assert reviewed.status_code == 200
+    reviewed_json = reviewed.get_json()
+    assert reviewed_json["is_suspicious"] is True
+    assert reviewed_json["reviewed_at"]
+
+    report = client.get(
+        f"/api/reports/{session_id}",
+        headers={"Authorization": f"Bearer {lecturer_token}"},
+    )
+    assert report.status_code == 200
+    report_log = next(log for log in report.get_json()["report"]["logs"] if log["log_id"] == log_id)
+    assert report_log["is_suspicious"] is True
+    assert report_log["reviewed_by"] is not None
+
+
 def test_reports_access_control_and_csv_export(client, app, tmp_path):
     lecturer_token = _register_and_login(client, "L22-03-50001", role="lecturer")
     other_lecturer_token = _register_and_login(client, "L22-03-50002", role="lecturer")
@@ -455,3 +617,26 @@ def test_reports_access_control_and_csv_export(client, app, tmp_path):
     )
     assert export_ok.status_code == 200
     assert "text/csv" in export_ok.headers.get("Content-Type", "")
+
+    export_all = client.get(
+        "/api/reports/export",
+        headers={"Authorization": f"Bearer {lecturer_token}"},
+    )
+    assert export_all.status_code == 200
+    assert "text/csv" in export_all.headers.get("Content-Type", "")
+    export_all_body = export_all.get_data(as_text=True)
+    assert str(session_id) in export_all_body
+    assert "CS204" in export_all_body
+
+    export_all_other_lecturer = client.get(
+        "/api/reports/export",
+        headers={"Authorization": f"Bearer {other_lecturer_token}"},
+    )
+    assert export_all_other_lecturer.status_code == 200
+    assert str(session_id) not in export_all_other_lecturer.get_data(as_text=True)
+
+    export_all_forbidden = client.get(
+        "/api/reports/export",
+        headers={"Authorization": f"Bearer {student_token}"},
+    )
+    assert export_all_forbidden.status_code == 403

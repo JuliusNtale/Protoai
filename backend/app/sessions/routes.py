@@ -1,16 +1,43 @@
 from datetime import datetime, timezone
 import os
 
+import requests
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt, get_jwt_identity, jwt_required, verify_jwt_in_request
 
 from app.audit import log_audit
+from app.auth.guards import roles_required
 from app.extensions import db
 from app.models import BehavioralLog, Exam, ExamSession, ExamStudentAssignment, Question, SessionAnswer, User
 from app.models import FacialImage
 
 sessions_bp = Blueprint("sessions", __name__)
 VALID_EVENTS = {"gaze_away", "head_turned", "face_absent", "tab_switch", "multiple_faces", "identity_mismatch"}
+_AI_SERVICE_URL = os.getenv("AI_SERVICE_URL", "http://localhost:8000")
+
+
+def _can_view_session(role: str, user_id: int, exam: Exam) -> bool:
+    if role == "admin":
+        return True
+    return role == "lecturer" and exam.lecturer_id == user_id
+
+
+def _notify_ai_service(session_id: int, event: str, payload: dict) -> None:
+    """Best-effort push of a socket event through the AI service's Socket.IO
+    server, which is the only process holding the student's live websocket
+    connection. Never let a slow/unreachable AI service block or fail the
+    HTTP request that triggered this - see sockets/frame_handler equivalent
+    calls in the other direction for the same fire-and-forget pattern."""
+    expected_token = os.getenv("AI_SERVICE_TOKEN", "").strip()
+    try:
+        requests.post(
+            f"{_AI_SERVICE_URL}/internal/broadcast",
+            headers={"X-Internal-Token": expected_token} if expected_token else None,
+            json={"session_id": session_id, "event": event, "payload": payload},
+            timeout=3,
+        )
+    except requests.exceptions.RequestException:
+        pass
 
 
 def _student_can_access_exam(exam: Exam, student: User) -> bool:
@@ -283,35 +310,118 @@ def log_event():
         if session.student_id != int(get_jwt_identity()):
             return jsonify({"error": {"message": "Forbidden"}}), 403
 
+    log_entry = BehavioralLog(
+        session_id=session.session_id,
+        event_type=event_type,
+        event_data=event_data if isinstance(event_data, dict) else {},
+    )
+    db.session.add(log_entry)
+    session.warning_count = (session.warning_count or 0) + 1
+
+    # Anomalies (including identity mismatches) are recorded for
+    # lecturer/admin post-exam review only - the exam is never auto-submitted
+    # or locked mid-session because of them; the student always completes it.
+    # A confirmed mid-exam identity mismatch still flips identity_verified
+    # back to False so the /status guard blocks a *reload* back into the
+    # exam under the wrong identity, without interrupting the current
+    # in-progress session.
+    if event_type == "identity_mismatch":
+        session.identity_verified = False
+
+    db.session.commit()
+
+    # Push a live alert to any lecturer currently viewing this exam's
+    # sessions & reports tab, so suspicious activity surfaces immediately
+    # instead of only on the next manual refresh/report open.
+    _notify_ai_service(
+        session.session_id,
+        "lecturer_alert",
+        {
+            "session_id": session.session_id,
+            "log_id": log_entry.log_id,
+            "event_type": event_type,
+            "warning_count": session.warning_count,
+            "logged_at": log_entry.logged_at.isoformat() if log_entry.logged_at else None,
+        },
+    )
+
+    return jsonify({"warning_count": session.warning_count, "log_id": log_entry.log_id}), 200
+
+
+@sessions_bp.get("/<int:session_id>/authorize-viewer")
+@jwt_required()
+def authorize_session_viewer(session_id):
+    """
+    Lets the AI service check, on behalf of a lecturer's browser socket,
+    whether that lecturer/admin is allowed to subscribe to a given session's
+    live alert stream - without the socket layer itself having to hold any
+    DB access or duplicate the lecturer-owns-exam authorization rule already
+    enforced on GET /api/reports/<session_id>.
+    """
+    claims = get_jwt()
+    role = claims.get("role")
+    user_id = int(get_jwt_identity())
+    if role not in {"admin", "lecturer"}:
+        return jsonify({"error": {"message": "Forbidden"}}), 403
+
+    session = db.session.get(ExamSession, session_id)
+    if not session:
+        return jsonify({"error": {"message": "Session not found"}}), 404
+    exam = db.session.get(Exam, session.exam_id)
+    if not exam or not _can_view_session(role, user_id, exam):
+        return jsonify({"error": {"message": "Forbidden"}}), 403
+
+    return jsonify({"session_id": session.session_id}), 200
+
+
+@sessions_bp.post("/<int:session_id>/terminate")
+@roles_required("lecturer", "admin")
+def terminate_session(session_id):
+    claims = get_jwt()
+    role = claims.get("role")
+    user_id = int(get_jwt_identity())
+
+    session = db.session.get(ExamSession, session_id)
+    if not session:
+        return jsonify({"error": {"message": "Session not found"}}), 404
+    exam = db.session.get(Exam, session.exam_id)
+    if not exam or not _can_view_session(role, user_id, exam):
+        return jsonify({"error": {"message": "Forbidden"}}), 403
+
+    if session.session_status in {"completed", "terminated"}:
+        return jsonify({"error": {"message": "Session has already ended"}}), 409
+
+    data = request.get_json(silent=True) or {}
+    reason = str(data.get("reason") or "Suspicious activity detected during your exam.")[:255]
+
+    session.session_status = "terminated"
+    session.termination_reason = reason
+    session.terminated_by = user_id
+    if not session.submitted_at:
+        session.submitted_at = datetime.utcnow()
+
     db.session.add(
         BehavioralLog(
             session_id=session.session_id,
-            event_type=event_type,
-            event_data=event_data if isinstance(event_data, dict) else {},
+            event_type="session_terminated",
+            event_data={"reason": reason, "terminated_by": user_id},
         )
     )
-    session.warning_count = (session.warning_count or 0) + 1
-
-    # A confirmed mid-exam face mismatch is treated as immediate identity
-    # fraud, not a graduated 1-2-3 warning - it locks the session on its own
-    # regardless of warning_count, and flips identity_verified back to False
-    # so the /status-based exam-access guard also blocks any attempt to
-    # reload back into the exam.
-    force_lock = event_type == "identity_mismatch"
-    if force_lock:
-        session.identity_verified = False
-
-    response = {"warning_count": session.warning_count}
-    if force_lock or session.warning_count >= 3:
-        session.session_status = "locked"
-        if not session.submitted_at:
-            session.submitted_at = datetime.utcnow()
-        response["auto_submitted"] = True
-        if force_lock:
-            response["reason"] = "identity_mismatch"
-
+    log_audit(
+        action="session.terminated",
+        actor_user_id=user_id,
+        target_user_id=session.student_id,
+        metadata={"session_id": session.session_id, "reason": reason},
+    )
     db.session.commit()
-    return jsonify(response), 200
+
+    _notify_ai_service(
+        session.session_id,
+        "session_terminated",
+        {"session_id": session.session_id, "reason": reason},
+    )
+
+    return jsonify({"session_id": session.session_id, "session_status": session.session_status}), 200
 
 
 @sessions_bp.post("/<int:session_id>/submit")
@@ -322,6 +432,8 @@ def submit_session(session_id):
         return jsonify({"error": {"message": "Session not found"}}), 404
     if session.student_id != int(get_jwt_identity()):
         return jsonify({"error": {"message": "Forbidden"}}), 403
+    if session.session_status == "terminated":
+        return jsonify({"error": {"message": "This session was terminated and can no longer be submitted."}}), 409
 
     data = request.get_json(silent=True) or {}
     raw_answers = data.get("answers") or {}
