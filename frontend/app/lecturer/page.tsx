@@ -222,6 +222,7 @@ function LecturerDashboardInner() {
   const [sessionResults, setSessionResults] = useState<SessionResultRow[]>([])
   const [exporting, setExporting] = useState(false)
   const [exportingAll, setExportingAll] = useState(false)
+  const [selectedSessionIds, setSelectedSessionIds] = useState<Set<number>>(new Set())
   const [viewingReport, setViewingReport] = useState<ReportDetail | null>(null)
   const [loadingReportId, setLoadingReportId] = useState<number | null>(null)
   const [reportError, setReportError] = useState("")
@@ -788,6 +789,63 @@ function LecturerDashboardInner() {
     } finally {
       setExportingAll(false)
     }
+  }
+
+  function toggleSessionSelected(sessionId: number) {
+    setSelectedSessionIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(sessionId)) {
+        next.delete(sessionId)
+      } else {
+        next.add(sessionId)
+      }
+      return next
+    })
+  }
+
+  function toggleSelectAllSessions(rows: SessionResultRow[]) {
+    setSelectedSessionIds((prev) => {
+      const allSelected = rows.length > 0 && rows.every((row) => prev.has(row.session_id))
+      if (allSelected) return new Set()
+      return new Set(rows.map((row) => row.session_id))
+    })
+  }
+
+  function exportSelectedSessionsCsv(rows: SessionResultRow[]) {
+    const selectedRows = rows.filter((row) => selectedSessionIds.has(row.session_id))
+    if (selectedRows.length === 0) return
+    const header = [
+      "session_id",
+      "student_name",
+      "reg_number",
+      "course_code",
+      "exam_title",
+      "status",
+      "score",
+      "warning_count",
+      "risk_level",
+    ]
+    const csvRows = selectedRows.map((row) => [
+      row.session_id,
+      row.student_name,
+      row.registration_number,
+      row.course_code,
+      row.exam_title,
+      row.session_status,
+      row.score ?? "",
+      row.warning_count,
+      row.risk_level,
+    ])
+    const csv = [header, ...csvRows]
+      .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))
+      .join("\n")
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `selected_sessions_${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   async function openReport(sessionId: number) {
@@ -1434,11 +1492,26 @@ function LecturerDashboardInner() {
             >
               {exportingAll ? "Exporting..." : "Export All Sessions CSV"}
             </button>
+            <button
+              onClick={() => exportSelectedSessionsCsv(filteredSessionResults)}
+              disabled={selectedSessionIds.size === 0}
+              className="rounded-md border border-[#1a2d5a] px-4 py-2 text-sm font-semibold text-[#1a2d5a] transition hover:bg-[#1a2d5a]/5 disabled:opacity-60"
+            >
+              Export Selected Sessions CSV{selectedSessionIds.size > 0 ? ` (${selectedSessionIds.size})` : ""}
+            </button>
           </div>
           <div className="mt-4 overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-left">
+                  <th className="py-2 pr-2">
+                    <input
+                      type="checkbox"
+                      checked={filteredSessionResults.length > 0 && filteredSessionResults.every((row) => selectedSessionIds.has(row.session_id))}
+                      onChange={() => toggleSelectAllSessions(filteredSessionResults)}
+                      aria-label="Select all sessions"
+                    />
+                  </th>
                   <th className="py-2">Student</th>
                   <th>Reg Number</th>
                   <th>Course</th>
@@ -1454,6 +1527,14 @@ function LecturerDashboardInner() {
               <tbody>
                 {filteredSessionResults.map((row) => (
                   <tr key={row.session_id} className="border-b">
+                    <td className="py-2 pr-2">
+                      <input
+                        type="checkbox"
+                        checked={selectedSessionIds.has(row.session_id)}
+                        onChange={() => toggleSessionSelected(row.session_id)}
+                        aria-label={`Select session for ${row.student_name}`}
+                      />
+                    </td>
                     <td className="py-2">{row.student_name}</td>
                     <td>{row.registration_number}</td>
                     <td>{row.course_code}</td>
@@ -1486,7 +1567,7 @@ function LecturerDashboardInner() {
                     </td>
                   </tr>
                 ))}
-                {filteredSessionResults.length === 0 && <tr><td colSpan={10} className="py-3 text-slate-600">No session results for selected scope.</td></tr>}
+                {filteredSessionResults.length === 0 && <tr><td colSpan={11} className="py-3 text-slate-600">No session results for selected scope.</td></tr>}
               </tbody>
             </table>
           </div>
