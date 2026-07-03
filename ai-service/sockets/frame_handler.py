@@ -32,10 +32,10 @@ _lock = threading.Lock()
 _HEAD_POSE_CALIBRATION_FRAMES = int(os.getenv('HEAD_POSE_CALIBRATION_FRAMES', '5'))
 
 _ANOMALY_SECONDS = {
-    'gaze_away': float(os.getenv('GAZE_AWAY_SECONDS', '5')),
-    'head_turned': float(os.getenv('HEAD_TURNED_SECONDS', '3')),
-    'face_absent': float(os.getenv('FACE_ABSENT_SECONDS', os.getenv('GAZE_AWAY_SECONDS', '5'))),
-    'multiple_faces': float(os.getenv('MULTIPLE_FACES_SECONDS', '3')),
+    'gaze_away': float(os.getenv('GAZE_AWAY_SECONDS', '2')),
+    'head_turned': float(os.getenv('HEAD_TURNED_SECONDS', '2')),
+    'face_absent': float(os.getenv('FACE_ABSENT_SECONDS', os.getenv('GAZE_AWAY_SECONDS', '2'))),
+    'multiple_faces': float(os.getenv('MULTIPLE_FACES_SECONDS', '2')),
 }
 _WARNING_COOLDOWN_SECONDS = float(os.getenv('WARNING_COOLDOWN_SECONDS', '15'))
 

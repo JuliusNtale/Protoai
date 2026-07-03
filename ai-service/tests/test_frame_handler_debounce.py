@@ -33,7 +33,7 @@ def test_direction_change_resets_persistence(monkeypatch):
 
 def test_sustained_same_direction_confirms_after_threshold(monkeypatch):
     _reset_state()
-    # Must clear both the persistence threshold (GAZE_AWAY_SECONDS, default 5s
+    # Must clear both the persistence threshold (GAZE_AWAY_SECONDS, default 2s
     # from started_at) AND the cooldown (WARNING_COOLDOWN_SECONDS, default 15s
     # from last_logged_at, which starts at 0.0).
     times = iter([0.0, 1.0, 16.0])

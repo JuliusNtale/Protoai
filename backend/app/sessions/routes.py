@@ -189,6 +189,33 @@ def verify_session_identity():
     return jsonify({"identity_verified": True, "confidence_score": round(confidence_score, 4), "verified_at": session.verified_at.isoformat() if session.verified_at else None}), 200
 
 
+@sessions_bp.get("/<int:session_id>/status")
+@jwt_required()
+def get_session_status(session_id):
+    """
+    Authoritative, server-side identity_verified check. The frontend's
+    /exam page previously only checked a client-side localStorage flag set
+    once on a successful verify and never re-validated - a stale flag from
+    ANY prior successful verification (even by a different person, at any
+    earlier point) would permanently bypass re-verification for that
+    session_id. This endpoint reflects the actual, current DB state, which
+    the /verify endpoint above already correctly overwrites (to False too)
+    on every attempt.
+    """
+    user_id = int(get_jwt_identity())
+    session = db.session.get(ExamSession, session_id)
+    if not session:
+        return jsonify({"error": {"message": "Session not found"}}), 404
+    if session.student_id != user_id:
+        return jsonify({"error": {"message": "Forbidden"}}), 403
+
+    return jsonify({
+        "session_id": session.session_id,
+        "identity_verified": bool(session.identity_verified),
+        "session_status": session.session_status,
+    }), 200
+
+
 @sessions_bp.post("/log")
 def log_event():
     data = request.get_json(silent=True) or {}
