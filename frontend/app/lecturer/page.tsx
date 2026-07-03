@@ -52,13 +52,6 @@ type StudentRow = {
   warning_count: number
 }
 
-type CourseStudentRow = {
-  user_id: number
-  full_name: string
-  registration_number: string
-  email: string
-}
-
 type SessionResultRow = {
   session_id: number
   exam_id: number
@@ -179,7 +172,6 @@ function LecturerDashboardInner() {
   const [selectedExamId, setSelectedExamId] = useState<number | null>(null)
   const [questions, setQuestions] = useState<QuestionRow[]>([])
   const [students, setStudents] = useState<StudentRow[]>([])
-  const [courseStudents, setCourseStudents] = useState<CourseStudentRow[]>([])
   const [sessionResults, setSessionResults] = useState<SessionResultRow[]>([])
   const [exporting, setExporting] = useState(false)
   const [viewingReport, setViewingReport] = useState<ReportDetail | null>(null)
@@ -221,7 +213,7 @@ function LecturerDashboardInner() {
     const picked = exams.find((row) => row.exam_id === requestedExamId)
     if (!picked) return
     setSelectedExamId(requestedExamId)
-    void loadExamDetails(token, requestedExamId, picked.course_code)
+    void loadExamDetails(token, requestedExamId)
   }, [token, exams, searchParams, selectedExamId])
 
   async function load(activeToken: string) {
@@ -272,14 +264,14 @@ function LecturerDashboardInner() {
         const selected = candidate || rows[0]
         const selectedId = selected.exam_id
         setSelectedExamId(selectedId)
-        await loadExamDetails(activeToken, selectedId, selected.course_code)
+        await loadExamDetails(activeToken, selectedId)
       }
     } finally {
       setLoading(false)
     }
   }
 
-  async function loadExamDetails(activeToken: string, examId: number, courseCode?: string) {
+  async function loadExamDetails(activeToken: string, examId: number) {
     const [examRes, studentsRes] = await Promise.all([
       fetch(getApiPath(`/exams/${examId}`), { headers: { Authorization: `Bearer ${activeToken}` } }),
       fetch(getApiPath(`/exams/${examId}/students`), { headers: { Authorization: `Bearer ${activeToken}` } }),
@@ -288,15 +280,6 @@ function LecturerDashboardInner() {
     const studentsPayload = await studentsRes.json().catch(() => ({}))
     if (examRes.ok) setQuestions(examPayload.questions || [])
     if (studentsRes.ok) setStudents(studentsPayload.students || [])
-
-    const resolvedCourseCode = courseCode || exams.find(e => e.exam_id === examId)?.course_code
-    if (resolvedCourseCode) {
-      const courseRes = await fetch(getApiPath(`/exams/course/${encodeURIComponent(resolvedCourseCode)}/students`), {
-        headers: { Authorization: `Bearer ${activeToken}` },
-      })
-      const coursePayload = await courseRes.json().catch(() => ({}))
-      if (courseRes.ok) setCourseStudents(coursePayload.students || [])
-    }
   }
 
   async function createExam() {
@@ -379,7 +362,7 @@ function LecturerDashboardInner() {
     setSavingExamEdit(false)
     await load(token)
     setSelectedExamId(editedExamId)
-    await loadExamDetails(token, editedExamId, courseCode)
+    await loadExamDetails(token, editedExamId)
   }
 
   async function deleteExam(exam: ExamRow) {
@@ -398,7 +381,6 @@ function LecturerDashboardInner() {
       setSelectedExamId(null)
       setQuestions([])
       setStudents([])
-      setCourseStudents([])
     }
     await load(token)
   }
@@ -544,9 +526,8 @@ function LecturerDashboardInner() {
 
   async function selectExam(nextExamId: number, targetTab: string) {
     if (!Number.isFinite(nextExamId) || nextExamId <= 0) return
-    const picked = exams.find((row) => row.exam_id === nextExamId)
     setSelectedExamId(nextExamId)
-    await loadExamDetails(token, nextExamId, picked?.course_code)
+    await loadExamDetails(token, nextExamId)
     router.push(`/lecturer?tab=${targetTab}&examId=${nextExamId}`)
   }
 
@@ -801,7 +782,7 @@ function LecturerDashboardInner() {
                       <button
                         onClick={async () => {
                           setSelectedExamId(exam.exam_id)
-                          await loadExamDetails(token, exam.exam_id, exam.course_code)
+                          await loadExamDetails(token, exam.exam_id)
                           router.push(`/lecturer?tab=questions&examId=${exam.exam_id}`)
                         }}
                         className="mr-2 rounded-md border border-border bg-card px-2 py-1 text-xs font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
@@ -924,11 +905,11 @@ function LecturerDashboardInner() {
 
         {tab === "students" && (
           <>
-        <DashboardPanel title={`Enrolled Students ${selectedExam ? `- ${selectedExam.title}` : ""}`}>
+        <DashboardPanel title={`Students In Course ${selectedExam ? `- ${selectedExam.course_code}` : ""}`}>
           {renderExamPicker("students")}
           <div className="flex items-center gap-2">
             <Users className="h-5 w-5 text-blue-700" />
-            <h2 className="text-base font-semibold">Enrolled Students {selectedExam ? `- ${selectedExam.title}` : ""}</h2>
+            <h2 className="text-base font-semibold">Students In Course {selectedExam ? `- ${selectedExam.course_code}` : ""}</h2>
           </div>
           <div className="mt-4 overflow-x-auto">
             <table className="w-full text-sm">
@@ -954,34 +935,6 @@ function LecturerDashboardInner() {
                   </tr>
                 ))}
                 {students.length === 0 && <tr><td colSpan={6} className="py-3 text-slate-600">No students enrolled yet (students appear after starting session).</td></tr>}
-              </tbody>
-            </table>
-          </div>
-        </DashboardPanel>
-
-        <DashboardPanel title={`Students In Course ${selectedExam ? `- ${selectedExam.course_code}` : ""}`}>
-          <div className="flex items-center gap-2">
-            <Users className="h-5 w-5 text-blue-700" />
-            <h2 className="text-base font-semibold">Students In Course {selectedExam ? `- ${selectedExam.course_code}` : ""}</h2>
-          </div>
-          <div className="mt-4 overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-left">
-                  <th className="py-2">Name</th>
-                  <th>Reg Number</th>
-                  <th>Email</th>
-                </tr>
-              </thead>
-              <tbody>
-                {courseStudents.map((s) => (
-                  <tr key={s.user_id} className="border-b">
-                    <td className="py-2">{s.full_name}</td>
-                    <td>{s.registration_number}</td>
-                    <td>{s.email}</td>
-                  </tr>
-                ))}
-                {courseStudents.length === 0 && <tr><td colSpan={3} className="py-3 text-slate-600">No course students yet.</td></tr>}
               </tbody>
             </table>
           </div>
