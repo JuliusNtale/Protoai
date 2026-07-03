@@ -21,6 +21,24 @@ _YAW_THRESHOLD   = float(os.getenv('HEAD_YAW_THRESHOLD',   '30'))
 _PITCH_THRESHOLD = float(os.getenv('HEAD_PITCH_THRESHOLD', '20'))
 
 
+def _normalize_angle(angle_deg: float) -> float:
+    """
+    cv2.RQDecomp3x3's Euler decomposition is ambiguous: any rotation has two
+    valid decompositions related by a ~180-degree flip on two axes. For this
+    face model/camera setup, that ambiguity consistently lands pitch and roll
+    on the "flipped" branch (observed: ~140-180 degrees for ordinary frontal
+    poses, which is not a real head angle). Folding the flipped branch back
+    (angle -+ 180) recovers the sensible small-magnitude value. Confirmed
+    empirically against real photos during the 2026-07-03 head-pose
+    investigation — see git history for the raw rotation matrices.
+    """
+    if angle_deg > 90:
+        return angle_deg - 180
+    if angle_deg < -90:
+        return angle_deg + 180
+    return angle_deg
+
+
 def estimate_head_pose(img_bgr: np.ndarray):
     """
     Estimate yaw, pitch, roll from MediaPipe face landmarks + OpenCV solvePnP.
@@ -67,8 +85,8 @@ def estimate_head_pose(img_bgr: np.ndarray):
         # cv2.RQDecomp3x3 already returns Euler angles in degrees.
         # Multiplying by 360 inflated values and broke verification phase checks.
         yaw = float(angles[1])
-        pitch = float(angles[0])
-        roll = float(angles[2])
+        pitch = _normalize_angle(float(angles[0]))
+        roll = _normalize_angle(float(angles[2]))
 
         alert = abs(yaw) > _YAW_THRESHOLD or abs(pitch) > _PITCH_THRESHOLD
 
