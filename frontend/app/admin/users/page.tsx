@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { LogOut, UserPlus, Users } from "lucide-react"
+import { LogOut, Pencil, UserPlus, Users, X } from "lucide-react"
 import { getApiPath } from "@/lib/api-url"
 import { appendGeneratedCredential } from "@/lib/generated-credentials"
 import { DashboardPanel, DashboardShell, MetricCard } from "@/components/dashboard-shell"
@@ -15,8 +15,28 @@ type ManagedUser = {
   registration_number: string
   username?: string | null
   email: string
+  phone_number?: string | null
+  department?: string | null
+  academic_year?: string | null
+  year_enrolled?: number | null
   role: string
   is_active: boolean
+}
+
+type ProgramOption = {
+  program_id: number
+  name: string
+}
+
+type EditUserForm = {
+  full_name: string
+  registration_number: string
+  username: string
+  email: string
+  phone_number: string
+  department: string
+  academic_year: string
+  year_enrolled: string
 }
 
 export default function AdminUsersPage() {
@@ -40,6 +60,21 @@ export default function AdminUsersPage() {
   const [uploadingByUser, setUploadingByUser] = useState<Record<number, boolean>>({})
   const [uploadMessage, setUploadMessage] = useState("")
   const [deletingUserId, setDeletingUserId] = useState<number | null>(null)
+  const [editingUser, setEditingUser] = useState<ManagedUser | null>(null)
+  const [editForm, setEditForm] = useState<EditUserForm>({
+    full_name: "",
+    registration_number: "",
+    username: "",
+    email: "",
+    phone_number: "",
+    department: "",
+    academic_year: "",
+    year_enrolled: "",
+  })
+  const [editError, setEditError] = useState("")
+  const [editSuccess, setEditSuccess] = useState("")
+  const [savingEdit, setSavingEdit] = useState(false)
+  const [programOptions, setProgramOptions] = useState<ProgramOption[]>([])
   const [isExiting, setIsExiting] = useState(false)
   const [query, setQuery] = useState("")
   const [roleFilter, setRoleFilter] = useState<"all" | "student" | "lecturer" | "admin">("all")
@@ -70,9 +105,19 @@ export default function AdminUsersPage() {
         router.push("/")
         return
       }
-      await fetchUsers(activeToken)
+      await Promise.all([fetchUsers(activeToken), fetchDegreePrograms(activeToken)])
     } finally {
       setLoadingMe(false)
+    }
+  }
+
+  async function fetchDegreePrograms(activeToken = token) {
+    const res = await fetch(getApiPath("/exams/programs"), {
+      headers: { Authorization: `Bearer ${activeToken}` },
+    })
+    const payload = await res.json().catch(() => ({}))
+    if (res.ok && Array.isArray(payload.programs)) {
+      setProgramOptions(payload.programs)
     }
   }
 
@@ -182,6 +227,74 @@ export default function AdminUsersPage() {
       await fetchUsers()
     } finally {
       setDeletingUserId(null)
+    }
+  }
+
+  function openEditUser(user: ManagedUser) {
+    setEditingUser(user)
+    setEditError("")
+    setEditSuccess("")
+    setEditForm({
+      full_name: user.full_name || "",
+      registration_number: user.registration_number || "",
+      username: user.username || "",
+      email: user.email || "",
+      phone_number: user.phone_number || "",
+      department: user.department || "",
+      academic_year: user.academic_year || "",
+      year_enrolled: user.year_enrolled ? String(user.year_enrolled) : "",
+    })
+  }
+
+  function closeEditUser() {
+    if (savingEdit) return
+    setEditingUser(null)
+    setEditError("")
+    setEditSuccess("")
+  }
+
+  function updateEditField(field: keyof EditUserForm, value: string) {
+    setEditForm((prev) => ({ ...prev, [field]: value }))
+  }
+
+  async function saveUserEdit() {
+    if (!editingUser) return
+    setEditError("")
+    setEditSuccess("")
+    if (!editForm.full_name.trim() || !editForm.email.trim() || !editForm.registration_number.trim()) {
+      setEditError("Full name, email, and registration number are required.")
+      return
+    }
+    if ((editingUser.role === "lecturer" || editingUser.role === "admin" || editingUser.role === "administrator") && !editForm.username.trim()) {
+      setEditError("Username is required for lecturer and admin accounts.")
+      return
+    }
+    setSavingEdit(true)
+    try {
+      const res = await fetch(getApiPath(`/users/${editingUser.user_id}`), {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          full_name: editForm.full_name,
+          registration_number: editForm.registration_number,
+          username: editForm.username,
+          email: editForm.email,
+          phone_number: editForm.phone_number,
+          department: editForm.department,
+          academic_year: editForm.academic_year,
+          year_enrolled: editForm.year_enrolled,
+        }),
+      })
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setEditError(payload?.error?.message || "Failed to update user.")
+        return
+      }
+      setEditSuccess("User details updated.")
+      setEditingUser(payload.user || editingUser)
+      await fetchUsers()
+    } finally {
+      setSavingEdit(false)
     }
   }
 
@@ -319,12 +432,13 @@ export default function AdminUsersPage() {
         {usersError && <p className="text-sm text-red-600">{usersError}</p>}
         {uploadMessage && <p className="text-sm text-emerald-700">{uploadMessage}</p>}
         <div className="overflow-x-auto rounded-xl border border-border">
-          <table className="w-full min-w-[980px] text-sm">
+          <table className="w-full min-w-[1120px] text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/50 text-left text-foreground">
                 <th className="px-4 py-3">Name</th>
                 <th className="px-4 py-3">Role</th>
                 <th className="px-4 py-3">Login ID</th>
+                <th className="px-4 py-3">Degree / Department</th>
                 <th className="px-4 py-3">Email</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">Baseline Photo</th>
@@ -337,6 +451,7 @@ export default function AdminUsersPage() {
                   <td className="px-4 py-3 font-medium">{user.full_name}</td>
                   <td className="px-4 py-3 align-middle">{user.role}</td>
                   <td className="px-4 py-3 align-middle font-mono">{user.username || user.registration_number}</td>
+                  <td className="max-w-[260px] px-4 py-3 align-middle text-muted-foreground">{user.department || "-"}</td>
                   <td className="px-4 py-3 align-middle">{user.email}</td>
                   <td className="px-4 py-3 align-middle"><StatusBadge value={user.is_active ? "active" : "inactive"} /></td>
                   <td className="px-4 py-3 align-middle">
@@ -364,6 +479,13 @@ export default function AdminUsersPage() {
                   <td className="px-4 py-3 text-right align-middle">
                     <div className="flex justify-end gap-2">
                       <button
+                        onClick={() => openEditUser(user)}
+                        disabled={deletingUserId === user.user_id}
+                        className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:opacity-60"
+                      >
+                        <Pencil className="h-3.5 w-3.5" /> Edit
+                      </button>
+                      <button
                         onClick={() => void toggleUserStatus(user)}
                         disabled={deletingUserId === user.user_id}
                         className="rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:opacity-60"
@@ -381,11 +503,149 @@ export default function AdminUsersPage() {
                   </td>
                 </tr>
               ))}
-              {users.length === 0 ? <tr><td className="px-4 py-4 text-muted-foreground" colSpan={7}>No users found.</td></tr> : null}
+              {users.length === 0 ? <tr><td className="px-4 py-4 text-muted-foreground" colSpan={8}>No users found.</td></tr> : null}
             </tbody>
           </table>
         </div>
       </DashboardPanel>
+
+      {editingUser ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4 py-6 backdrop-blur-sm">
+          <div className="w-full max-w-2xl rounded-lg border border-border bg-background shadow-2xl">
+            <div className="flex items-start justify-between border-b border-border px-6 py-5">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Admin Edit</p>
+                <h2 className="mt-1 text-xl font-semibold text-foreground">Edit User Details</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Update profile and login identifiers for {editingUser.full_name}.
+                </p>
+              </div>
+              <button
+                onClick={closeEditUser}
+                disabled={savingEdit}
+                className="rounded-md border border-border p-2 text-muted-foreground transition hover:bg-accent hover:text-foreground disabled:opacity-60"
+                aria-label="Close edit modal"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="grid max-h-[72vh] gap-4 overflow-y-auto px-6 py-5 md:grid-cols-2">
+              <label className="grid gap-1 text-sm">
+                <span className="font-medium text-foreground">Full Name</span>
+                <input
+                  value={editForm.full_name}
+                  onChange={(e) => updateEditField("full_name", e.target.value)}
+                  className="rounded-md border border-border bg-background p-2 text-sm text-foreground"
+                />
+              </label>
+
+              <label className="grid gap-1 text-sm">
+                <span className="font-medium text-foreground">Email</span>
+                <input
+                  value={editForm.email}
+                  onChange={(e) => updateEditField("email", e.target.value)}
+                  className="rounded-md border border-border bg-background p-2 text-sm text-foreground"
+                />
+              </label>
+
+              <label className="grid gap-1 text-sm">
+                <span className="font-medium text-foreground">Registration Number</span>
+                <input
+                  value={editForm.registration_number}
+                  onChange={(e) => updateEditField("registration_number", e.target.value)}
+                  className="rounded-md border border-border bg-background p-2 text-sm text-foreground"
+                />
+              </label>
+
+              <label className="grid gap-1 text-sm">
+                <span className="font-medium text-foreground">Username</span>
+                <input
+                  value={editForm.username}
+                  onChange={(e) => updateEditField("username", e.target.value)}
+                  placeholder={editingUser.role === "student" ? "Optional for students" : "Required"}
+                  className="rounded-md border border-border bg-background p-2 text-sm text-foreground"
+                />
+              </label>
+
+              <label className="grid gap-1 text-sm">
+                <span className="font-medium text-foreground">Phone Number</span>
+                <input
+                  value={editForm.phone_number}
+                  onChange={(e) => updateEditField("phone_number", e.target.value)}
+                  className="rounded-md border border-border bg-background p-2 text-sm text-foreground"
+                />
+              </label>
+
+              <label className="grid gap-1 text-sm">
+                <span className="font-medium text-foreground">
+                  {editingUser.role === "student" ? "Degree Program" : "Department"}
+                </span>
+                {editingUser.role === "student" ? (
+                  <select
+                    value={editForm.department}
+                    onChange={(e) => updateEditField("department", e.target.value)}
+                    className="rounded-md border border-border bg-background p-2 text-sm text-foreground"
+                  >
+                    <option value="">Select Degree Program</option>
+                    {programOptions.map((program) => (
+                      <option key={program.program_id} value={program.name}>{program.name}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    value={editForm.department}
+                    onChange={(e) => updateEditField("department", e.target.value)}
+                    className="rounded-md border border-border bg-background p-2 text-sm text-foreground"
+                  />
+                )}
+              </label>
+
+              <label className="grid gap-1 text-sm">
+                <span className="font-medium text-foreground">Academic Year</span>
+                <input
+                  value={editForm.academic_year}
+                  onChange={(e) => updateEditField("academic_year", e.target.value)}
+                  placeholder="e.g. Year 3"
+                  className="rounded-md border border-border bg-background p-2 text-sm text-foreground"
+                />
+              </label>
+
+              <label className="grid gap-1 text-sm">
+                <span className="font-medium text-foreground">Year Enrolled</span>
+                <input
+                  value={editForm.year_enrolled}
+                  onChange={(e) => updateEditField("year_enrolled", e.target.value)}
+                  placeholder="e.g. 2022"
+                  inputMode="numeric"
+                  className="rounded-md border border-border bg-background p-2 text-sm text-foreground"
+                />
+              </label>
+            </div>
+
+            <div className="border-t border-border px-6 py-4">
+              {editError ? <p className="mb-3 text-sm text-red-600">{editError}</p> : null}
+              {editSuccess ? <p className="mb-3 text-sm text-emerald-700">{editSuccess}</p> : null}
+              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <button
+                  onClick={closeEditUser}
+                  disabled={savingEdit}
+                  className="rounded-md border border-border px-4 py-2 text-sm font-semibold text-foreground transition hover:bg-accent disabled:opacity-60"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => void saveUserEdit()}
+                  disabled={savingEdit}
+                  className="rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                >
+                  {savingEdit ? "Saving..." : "Save Changes"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
       </>
       ) : null}
     </DashboardShell>

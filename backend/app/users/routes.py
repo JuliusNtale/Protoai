@@ -10,7 +10,18 @@ from sqlalchemy.exc import IntegrityError
 
 from app.audit import log_audit
 from app.extensions import db
-from app.models import AuditLog, BehavioralLog, Exam, ExamSession, FacialImage, Question, Report, SessionAnswer, User
+from app.models import (
+    AuditLog,
+    BehavioralLog,
+    DegreeProgram,
+    Exam,
+    ExamSession,
+    FacialImage,
+    Question,
+    Report,
+    SessionAnswer,
+    User,
+)
 
 users_bp = Blueprint("users", __name__)
 
@@ -220,6 +231,108 @@ def list_users():
 
     users = users_query.limit(500).all()
     return jsonify({"users": [u.to_auth_user() | {"is_active": u.is_active} for u in users]}), 200
+
+
+@users_bp.put("/<int:user_id>")
+@jwt_required()
+def update_user(user_id: int):
+    if not _is_admin():
+        return jsonify({"error": {"message": "Forbidden"}}), 403
+    actor_user_id = int(get_jwt_identity())
+
+    user = db.session.get(User, user_id)
+    if not user:
+        return jsonify({"error": {"message": "User not found"}}), 404
+
+    data = request.get_json(silent=True) or {}
+    full_name = (data.get("full_name") or "").strip()
+    email = (data.get("email") or "").strip().lower()
+    reg_number = (data.get("registration_number") or data.get("reg_number") or "").strip()
+    username = (data.get("username") or "").strip()
+    phone_number = (data.get("phone_number") or "").strip()
+    department = (data.get("department") or "").strip()
+    academic_year = (data.get("academic_year") or "").strip()
+    year_enrolled_raw = data.get("year_enrolled")
+
+    if not full_name or len(full_name) < 3:
+        return jsonify({"error": {"message": "Full name must be at least 3 characters"}}), 400
+    if not email or "@" not in email:
+        return jsonify({"error": {"message": "Valid email is required"}}), 400
+    if not reg_number:
+        return jsonify({"error": {"message": "Registration number is required"}}), 400
+    if user.role in {"lecturer", "admin", "administrator"} and not username:
+        return jsonify({"error": {"message": f"Username is required for {user.role} accounts"}}), 400
+
+    year_enrolled = None
+    if year_enrolled_raw not in (None, ""):
+        try:
+            year_enrolled = int(year_enrolled_raw)
+        except (TypeError, ValueError):
+            return jsonify({"error": {"message": "year_enrolled must be a valid year"}}), 400
+        if year_enrolled < 1990 or year_enrolled > 2100:
+            return jsonify({"error": {"message": "year_enrolled must be between 1990 and 2100"}}), 400
+
+    if user.role == "student" and department:
+        program_exists = DegreeProgram.query.filter_by(name=department).first() is not None
+        if not program_exists:
+            return jsonify({"error": {"message": "Selected degree program is invalid"}}), 400
+
+    existing_email = User.query.filter(User.email == email, User.user_id != user.user_id).first()
+    if existing_email:
+        return jsonify({"error": {"message": "Email already exists"}}), 409
+    existing_reg = User.query.filter(User.reg_number == reg_number, User.user_id != user.user_id).first()
+    if existing_reg:
+        return jsonify({"error": {"message": "Registration number already exists"}}), 409
+    if username:
+        existing_username = User.query.filter(User.username == username, User.user_id != user.user_id).first()
+        if existing_username:
+            return jsonify({"error": {"message": "Username already exists"}}), 409
+
+    before = {
+        "full_name": user.full_name,
+        "email": user.email,
+        "registration_number": user.reg_number,
+        "username": user.username,
+        "phone_number": user.phone_number,
+        "department": user.department,
+        "academic_year": user.academic_year,
+        "year_enrolled": user.year_enrolled,
+    }
+
+    user.full_name = full_name
+    user.email = email
+    user.reg_number = reg_number
+    user.username = username or None
+    user.phone_number = phone_number or None
+    user.department = department or None
+    user.academic_year = academic_year or None
+    user.year_enrolled = year_enrolled
+
+    after = {
+        "full_name": user.full_name,
+        "email": user.email,
+        "registration_number": user.reg_number,
+        "username": user.username,
+        "phone_number": user.phone_number,
+        "department": user.department,
+        "academic_year": user.academic_year,
+        "year_enrolled": user.year_enrolled,
+    }
+    changed_fields = [key for key, value in after.items() if before.get(key) != value]
+
+    log_audit(
+        action="admin.user_profile_updated",
+        actor_user_id=actor_user_id,
+        target_user_id=user.user_id,
+        metadata={"changed_fields": changed_fields, "role": user.role},
+    )
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({"error": {"message": "User details conflict with an existing account."}}), 409
+
+    return jsonify({"message": "User updated", "user": user.to_auth_user() | {"is_active": user.is_active}}), 200
 
 
 @users_bp.patch("/<int:user_id>/status")
