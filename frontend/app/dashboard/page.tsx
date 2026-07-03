@@ -4,12 +4,19 @@ import Link from "next/link"
 import { Suspense } from "react"
 import { useEffect, useMemo, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { BookOpenCheck, ClipboardList, Eye, EyeOff, FileText, LogOut, UserCircle2 } from "lucide-react"
+import { BookOpenCheck, ClipboardList, Eye, EyeOff, LogOut, UserCircle2 } from "lucide-react"
 import { getApiPath } from "@/lib/api-url"
 import { DashboardPanel, DashboardShell, MetricCard } from "@/components/dashboard-shell"
 import { StatusBadge } from "@/components/status-badge"
 
-type StudentTab = "dashboard" | "exams" | "sessions" | "reports" | "profile"
+type StudentTab = "dashboard" | "exams" | "sessions" | "profile"
+
+const STUDENT_TAB_TITLES: Record<StudentTab, string> = {
+  dashboard: "Dashboard",
+  exams: "Exams",
+  sessions: "Sessions & Reports",
+  profile: "Profile",
+}
 
 type MeUser = {
   user_id: number
@@ -32,22 +39,15 @@ type ExamRow = {
   duration_min: number
   scheduled_at?: string | null
   status: string
-}
-
-type SessionRow = {
-  session_id: number
-  exam_id?: number
-  exam_title: string
-  course_code: string
-  session_status: string
-  score?: number | null
-  warning_count: number
+  lecturer_name?: string | null
 }
 
 type MyReportRow = {
   session_id: number
+  exam_id?: number
   exam_title: string
   course_code: string
+  score?: number | null
   warning_count: number
   risk_level: string
   total_anomalies: number
@@ -87,7 +87,6 @@ function StudentDashboardInner() {
   const [token, setToken] = useState("")
   const [me, setMe] = useState<MeUser | null>(null)
   const [exams, setExams] = useState<ExamRow[]>([])
-  const [sessions, setSessions] = useState<SessionRow[]>([])
   const [reports, setReports] = useState<MyReportRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
@@ -134,15 +133,13 @@ function StudentDashboardInner() {
     setLoading(true)
     setError("")
     try {
-      const [meRes, examsRes, sessionsRes, reportsRes] = await Promise.all([
+      const [meRes, examsRes, reportsRes] = await Promise.all([
         fetch(getApiPath("/auth/me"), { headers: { Authorization: `Bearer ${activeToken}` } }),
         fetch(getApiPath("/exams"), { headers: { Authorization: `Bearer ${activeToken}` } }),
-        fetch(getApiPath("/sessions"), { headers: { Authorization: `Bearer ${activeToken}` } }),
         fetch(getApiPath("/reports/my"), { headers: { Authorization: `Bearer ${activeToken}` } }),
       ])
       const mePayload = await meRes.json().catch(() => ({}))
       const examsPayload = await examsRes.json().catch(() => ({}))
-      const sessionsPayload = await sessionsRes.json().catch(() => ({}))
       const reportsPayload = await reportsRes.json().catch(() => ({}))
 
       if (!meRes.ok) {
@@ -168,7 +165,6 @@ function StudentDashboardInner() {
       setAcademicYear(mePayload.user?.academic_year || "")
       setYearEnrolled(mePayload.user?.year_enrolled ? String(mePayload.user.year_enrolled) : "")
       setExams(examsPayload.exams || [])
-      setSessions(sessionsPayload.sessions || [])
       setReports(reportsPayload.reports || [])
       const hasBaseline = await loadBaselineImage(activeToken)
       const needsOnboarding =
@@ -392,7 +388,7 @@ function StudentDashboardInner() {
     router.push("/")
   }
 
-  const completed = useMemo(() => sessions.filter(s => s.session_status === "completed").length, [sessions])
+  const completed = useMemo(() => reports.filter(r => r.session_status === "completed").length, [reports])
   const studentProfileLocked = useMemo(
     () =>
       Boolean(
@@ -404,24 +400,23 @@ function StudentDashboardInner() {
     [me, showOnboarding],
   )
   const sessionByExamId = useMemo(() => {
-    const map = new Map<number, SessionRow>()
-    for (const session of sessions) {
+    const map = new Map<number, MyReportRow>()
+    for (const session of reports) {
       if (typeof session.exam_id === "number") map.set(session.exam_id, session)
     }
     return map
-  }, [sessions])
+  }, [reports])
 
   return (
     <>
     <DashboardShell
       appName="ProctorAI Student"
-      title={tab === "dashboard" ? "Dashboard" : tab.charAt(0).toUpperCase() + tab.slice(1)}
+      title={STUDENT_TAB_TITLES[tab] || "Dashboard"}
       subtitle={`${me?.full_name || "-"} | ${me?.registration_number || "-"} | ${me?.department || "Course not set"}`}
       sidebarItems={[
         { label: "Dashboard", href: "/dashboard", active: tab === "dashboard" },
         { label: "Exams", href: "/dashboard?tab=exams", active: tab === "exams" },
-        { label: "Sessions", href: "/dashboard?tab=sessions", active: tab === "sessions" },
-        { label: "Reports", href: "/dashboard?tab=reports", active: tab === "reports" },
+        { label: "Sessions & Reports", href: "/dashboard?tab=sessions", active: tab === "sessions" },
         { label: "Profile", href: "/dashboard?tab=profile", active: tab === "profile" },
       ]}
       avatarName={me?.full_name}
@@ -451,10 +446,10 @@ function StudentDashboardInner() {
           <section className="grid gap-3 md:grid-cols-3">
             <MetricCard label="Available Exams" value={exams.length} />
             <MetricCard label="Completed Sessions" value={completed} />
-            <MetricCard label="Reports" value={reports.length} />
+            <MetricCard label="Total Sessions" value={reports.length} />
           </section>
           <DashboardPanel title="Quick Shortcuts" subtitle="Move quickly between core student tasks.">
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               <Link href="/dashboard?tab=exams" className="rounded-xl border border-border bg-gradient-to-br from-blue-50 to-indigo-50 p-4 transition hover:shadow-md dark:from-slate-900 dark:to-slate-800">
                 <BookOpenCheck className="h-5 w-5 text-[#1a2d5a]" />
                 <p className="mt-2 text-sm font-semibold text-foreground">Exams</p>
@@ -462,13 +457,8 @@ function StudentDashboardInner() {
               </Link>
               <Link href="/dashboard?tab=sessions" className="rounded-xl border border-border bg-gradient-to-br from-emerald-50 to-teal-50 p-4 transition hover:shadow-md dark:from-slate-900 dark:to-slate-800">
                 <ClipboardList className="h-5 w-5 text-emerald-700" />
-                <p className="mt-2 text-sm font-semibold text-foreground">Sessions</p>
-                <p className="mt-1 text-xs text-muted-foreground">Track session status and score.</p>
-              </Link>
-              <Link href="/dashboard?tab=reports" className="rounded-xl border border-border bg-gradient-to-br from-amber-50 to-orange-50 p-4 transition hover:shadow-md dark:from-slate-900 dark:to-slate-800">
-                <FileText className="h-5 w-5 text-amber-700" />
-                <p className="mt-2 text-sm font-semibold text-foreground">Reports</p>
-                <p className="mt-1 text-xs text-muted-foreground">View anomalies and risk level.</p>
+                <p className="mt-2 text-sm font-semibold text-foreground">Sessions &amp; Reports</p>
+                <p className="mt-1 text-xs text-muted-foreground">Track score, status, and risk level.</p>
               </Link>
               <Link href="/dashboard?tab=profile" className="rounded-xl border border-border bg-gradient-to-br from-violet-50 to-fuchsia-50 p-4 transition hover:shadow-md dark:from-slate-900 dark:to-slate-800">
                 <UserCircle2 className="h-5 w-5 text-violet-700" />
@@ -488,6 +478,7 @@ function StudentDashboardInner() {
                 <tr className="border-b border-border bg-muted/50 text-left">
                   <th className="py-2 pl-3">Title</th>
                   <th>Course</th>
+                  <th>Lecturer</th>
                   <th>Schedule</th>
                   <th>Status</th>
                   <th className="pr-3">Action</th>
@@ -498,6 +489,7 @@ function StudentDashboardInner() {
                   <tr key={exam.exam_id} className="border-b last:border-b-0">
                     <td className="py-2 pl-3 font-medium">{exam.title}</td>
                     <td>{exam.course_code}</td>
+                    <td>{exam.lecturer_name || "-"}</td>
                     <td>{formatDateTime(exam.scheduled_at)}</td>
                     <td><StatusBadge value={exam.status} /></td>
                     <td className="pr-3">
@@ -513,7 +505,7 @@ function StudentDashboardInner() {
                     </td>
                   </tr>
                 ))}
-                {exams.length === 0 ? <tr><td colSpan={5} className="py-3 pl-3 text-muted-foreground">No exams assigned.</td></tr> : null}
+                {exams.length === 0 ? <tr><td colSpan={6} className="py-3 pl-3 text-muted-foreground">No exams assigned.</td></tr> : null}
               </tbody>
             </table>
           </div>
@@ -521,7 +513,7 @@ function StudentDashboardInner() {
       ) : null}
 
       {tab === "sessions" ? (
-        <DashboardPanel title="Sessions">
+        <DashboardPanel title="Sessions & Reports">
           <div className="overflow-x-auto rounded-xl border border-border">
             <table className="w-full text-sm">
               <thead>
@@ -531,37 +523,8 @@ function StudentDashboardInner() {
                   <th>Status</th>
                   <th>Score</th>
                   <th>Warnings</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sessions.map((s) => (
-                  <tr key={s.session_id} className="border-b last:border-b-0">
-                    <td className="py-2 pl-3">{s.exam_title}</td>
-                    <td>{s.course_code}</td>
-                    <td><StatusBadge value={s.session_status} /></td>
-                    <td>{s.score ?? "-"}</td>
-                    <td>{s.warning_count}</td>
-                  </tr>
-                ))}
-                {sessions.length === 0 ? <tr><td colSpan={5} className="py-3 pl-3 text-muted-foreground">No sessions yet.</td></tr> : null}
-              </tbody>
-            </table>
-          </div>
-        </DashboardPanel>
-      ) : null}
-
-      {tab === "reports" ? (
-        <DashboardPanel title="Reports">
-          <div className="overflow-x-auto rounded-xl border border-border">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border bg-muted/50 text-left">
-                  <th className="py-2 pl-3">Exam</th>
-                  <th>Course</th>
-                  <th>Status</th>
                   <th>Risk</th>
                   <th>Anomalies</th>
-                  <th>Warnings</th>
                 </tr>
               </thead>
               <tbody>
@@ -570,12 +533,13 @@ function StudentDashboardInner() {
                     <td className="py-2 pl-3">{r.exam_title}</td>
                     <td>{r.course_code}</td>
                     <td><StatusBadge value={r.session_status} /></td>
+                    <td>{r.score ?? "-"}</td>
+                    <td>{r.warning_count}</td>
                     <td><StatusBadge value={r.risk_level} /></td>
                     <td>{r.total_anomalies}</td>
-                    <td>{r.warning_count}</td>
                   </tr>
                 ))}
-                {reports.length === 0 ? <tr><td colSpan={6} className="py-3 pl-3 text-muted-foreground">No reports generated yet.</td></tr> : null}
+                {reports.length === 0 ? <tr><td colSpan={7} className="py-3 pl-3 text-muted-foreground">No sessions yet.</td></tr> : null}
               </tbody>
             </table>
           </div>

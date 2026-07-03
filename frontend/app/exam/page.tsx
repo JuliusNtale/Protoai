@@ -57,6 +57,7 @@ export default function ExamPage() {
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [showCongrats, setShowCongrats] = useState(false)
+  const [examScore, setExamScore] = useState<number | null>(null)
   const [timeUpModalOpen, setTimeUpModalOpen] = useState(false)
   const [leavingExam, setLeavingExam] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -392,7 +393,7 @@ export default function ExamPage() {
         .filter((entry): entry is [string, string] => Array.isArray(entry))
     )
 
-    await fetch(getApiPath(`/sessions/${sessionId}/submit`), {
+    const res = await fetch(getApiPath(`/sessions/${sessionId}/submit`), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -400,6 +401,10 @@ export default function ExamPage() {
       },
       body: JSON.stringify({ answers: payloadAnswers }),
     })
+    const payload = await res.json().catch(() => ({}))
+    if (res.ok && typeof payload?.score === "number") {
+      setExamScore(payload.score)
+    }
   }
 
   async function logTabSwitchViolation(reason: "visibility_hidden" | "window_blur") {
@@ -944,6 +949,14 @@ export default function ExamPage() {
                   <p className="text-xs text-gray-500">Total violations</p>
                   <p className="text-2xl font-bold text-red-500">{warnings} / {maxWarnings}</p>
                 </div>
+                {examScore !== null && (
+                  <div className="mb-5 rounded border border-gray-200 bg-gray-50 px-4 py-3 text-center">
+                    <p className="text-xs text-gray-500">Your Score</p>
+                    <p className="text-2xl font-bold text-gray-700">
+                      {examScore} / {questions.reduce((sum, q) => sum + (q.marks || 0), 0)}
+                    </p>
+                  </div>
+                )}
                 <button
                   onClick={() => void goToDashboard()}
                   className="w-full rounded bg-red-500 py-2.5 text-sm font-semibold text-white hover:bg-red-600 transition-colors"
@@ -995,6 +1008,14 @@ export default function ExamPage() {
             <p className="mt-2 text-sm text-gray-600 leading-relaxed">
               Your exam has been submitted successfully.
             </p>
+            {examScore !== null && (
+              <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-center">
+                <p className="text-xs text-gray-500">Your Score</p>
+                <p className="text-2xl font-bold text-emerald-600">
+                  {examScore} / {questions.reduce((sum, q) => sum + (q.marks || 0), 0)}
+                </p>
+              </div>
+            )}
             <button
               type="button"
               onClick={() => void goToDashboard()}
@@ -1016,6 +1037,14 @@ export default function ExamPage() {
             <p className="mt-2 text-sm text-gray-600 leading-relaxed">
               Your allotted exam time has ended and your answers have been submitted automatically.
             </p>
+            {examScore !== null && (
+              <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-center">
+                <p className="text-xs text-gray-500">Your Score</p>
+                <p className="text-2xl font-bold text-amber-600">
+                  {examScore} / {questions.reduce((sum, q) => sum + (q.marks || 0), 0)}
+                </p>
+              </div>
+            )}
             <button
               type="button"
               onClick={() => void goToDashboard()}
