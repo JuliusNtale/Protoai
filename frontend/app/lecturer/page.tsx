@@ -681,7 +681,6 @@ function LecturerDashboardInner() {
                   <th>Set Status</th>
                   <th>Exams</th>
                   <th>Delete</th>
-                  <th>Open</th>
                 </tr>
               </thead>
               <tbody>
@@ -726,20 +725,9 @@ function LecturerDashboardInner() {
                         Delete
                       </button>
                     </td>
-                    <td>
-                      <button
-                        onClick={async () => {
-                          setSelectedExamId(exam.exam_id)
-                          await loadExamDetails(token, exam.exam_id, exam.course_code)
-                        }}
-                        className="rounded-md bg-[#1a2d5a] px-2.5 py-1 text-xs font-semibold text-white hover:bg-[#142145]"
-                      >
-                        Select
-                      </button>
-                    </td>
                   </tr>
                 ))}
-                {exams.length === 0 && <tr><td colSpan={8} className="py-3 pl-3 text-slate-600">No exams created yet.</td></tr>}
+                {exams.length === 0 && <tr><td colSpan={7} className="py-3 pl-3 text-slate-600">No exams created yet.</td></tr>}
               </tbody>
             </table>
           </div>
