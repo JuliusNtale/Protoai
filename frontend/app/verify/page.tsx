@@ -531,7 +531,7 @@ export default function VerifyPage() {
       }
 
       if (result?.match !== true) {
-        setIdentityError("Face does not match your registered profile. Try again with better lighting.")
+        setIdentityError("Identity verification failed. The face captured does not match the registered profile for this account.")
         return
       }
 

@@ -73,6 +73,7 @@ export default function ExamPage() {
   const [loadingQuestions, setLoadingQuestions] = useState(true)
   const [socketConnected, setSocketConnected] = useState(false)
   const [sessionLocked, setSessionLocked] = useState(false)
+  const [accessChecked, setAccessChecked] = useState(false)
   const maxWarnings = 3
   const [, setTabSwitches] = useState(0)
   const { devtoolsLikelyOpen } = useBrowserLockdown({
@@ -176,24 +177,51 @@ export default function ExamPage() {
     void attachExamStreamToVideos(examStreamRef.current)
   }, [examCameraReady])
 
+  // A stale client-only "verified_session_id" flag from ANY prior successful
+  // verification would otherwise permanently bypass re-verification for this
+  // session_id (e.g. an impostor who fails verification, then leaves frame
+  // and re-enters, previously slipped in on a leftover flag). This re-checks
+  // the authoritative, current identity_verified state on the server before
+  // granting access.
   useEffect(() => {
     const rawSessionId = localStorage.getItem("session_id")
-    const verifiedSessionId = localStorage.getItem("verified_session_id")
-    if (!rawSessionId || !verifiedSessionId || rawSessionId !== verifiedSessionId) {
+    const token = localStorage.getItem("token")
+    const parsed = Number(rawSessionId)
+    if (!rawSessionId || !token || !Number.isFinite(parsed) || parsed <= 0) {
       router.replace("/verify")
       return
     }
-    const raw = localStorage.getItem("session_id")
-    if (!raw) return
-    const parsed = Number(raw)
-    if (Number.isFinite(parsed) && parsed > 0) {
-      setSessionId(parsed)
-    }
-    const rawExam = localStorage.getItem("exam_id")
-    if (!rawExam) return
-    const parsedExam = Number(rawExam)
-    if (Number.isFinite(parsedExam) && parsedExam > 0) {
-      setExamId(parsedExam)
+
+    let cancelled = false
+    void (async () => {
+      try {
+        const res = await fetch(getApiPath(`/sessions/${parsed}/status`), {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        const payload = await res.json().catch(() => ({}))
+        if (cancelled) return
+        if (!res.ok || payload?.identity_verified !== true) {
+          localStorage.removeItem("verified_session_id")
+          router.replace("/verify")
+          return
+        }
+
+        setSessionId(parsed)
+        const rawExam = localStorage.getItem("exam_id")
+        if (rawExam) {
+          const parsedExam = Number(rawExam)
+          if (Number.isFinite(parsedExam) && parsedExam > 0) {
+            setExamId(parsedExam)
+          }
+        }
+        setAccessChecked(true)
+      } catch {
+        if (!cancelled) router.replace("/verify")
+      }
+    })()
+
+    return () => {
+      cancelled = true
     }
   }, [router])
 
@@ -539,6 +567,14 @@ export default function ExamPage() {
     if (flagged.has(i)) return "flagged"
     if (answers[i] !== undefined) return "answered"
     return "unattempted"
+  }
+
+  if (!accessChecked) {
+    return (
+      <div className="flex min-h-[100dvh] items-center justify-center bg-white text-sm text-slate-500 dark:bg-slate-950 dark:text-slate-400">
+        Verifying access...
+      </div>
+    )
   }
 
   return (
