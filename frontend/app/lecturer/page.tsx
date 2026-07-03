@@ -73,6 +73,27 @@ type SessionResultRow = {
   risk_level: string
 }
 
+type ReportLogEntry = {
+  log_id: number
+  event_type: string
+  event_data: Record<string, unknown>
+  logged_at: string | null
+}
+
+type ReportDetail = {
+  session_id: number
+  student: { user_id: number; full_name: string; reg_number: string; email: string }
+  exam: { exam_id: number; title: string; course_code: string }
+  gaze_away_count: number
+  head_turned_count: number
+  tab_switch_count: number
+  face_absent_count: number
+  multiple_faces_count: number
+  total_anomalies: number
+  risk_level: string
+  logs: ReportLogEntry[]
+}
+
 const LECTURER_DEPARTMENT_OPTIONS = [
   "CSE - Computer Science & Engineering",
   "ETE - Electronic & Telecommunication Engineering",
@@ -92,6 +113,21 @@ function formatDateTimeInput(value?: string | null) {
   if (Number.isNaN(date.getTime())) return ""
   const offsetMs = date.getTimezoneOffset() * 60 * 1000
   return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16)
+}
+
+function formatEventDetail(entry: { event_type: string; event_data: Record<string, unknown> }): string {
+  const data = entry.event_data || {}
+  if (entry.event_type === "identity_verification") {
+    const parts: string[] = []
+    if (typeof data.match === "boolean") parts.push(data.match ? "matched" : "no match")
+    if (typeof data.confidence_score === "number") parts.push(`confidence: ${data.confidence_score.toFixed(2)}`)
+    return parts.join(", ")
+  }
+  const parts: string[] = []
+  if (typeof data.gaze_direction === "string") parts.push(`gaze: ${data.gaze_direction}`)
+  if (typeof data.yaw === "number") parts.push(`yaw: ${data.yaw.toFixed(1)}`)
+  if (typeof data.pitch === "number") parts.push(`pitch: ${data.pitch.toFixed(1)}`)
+  return parts.join(" ")
 }
 
 function LecturerDashboardInner() {
@@ -138,6 +174,9 @@ function LecturerDashboardInner() {
   const [courseStudents, setCourseStudents] = useState<CourseStudentRow[]>([])
   const [sessionResults, setSessionResults] = useState<SessionResultRow[]>([])
   const [exporting, setExporting] = useState(false)
+  const [viewingReport, setViewingReport] = useState<ReportDetail | null>(null)
+  const [loadingReportId, setLoadingReportId] = useState<number | null>(null)
+  const [reportError, setReportError] = useState("")
   const [questionText, setQuestionText] = useState("")
   const [questionType, setQuestionType] = useState<"mcq" | "true_false">("mcq")
   const [optionA, setOptionA] = useState("")
@@ -474,6 +513,24 @@ function LecturerDashboardInner() {
       URL.revokeObjectURL(url)
     } finally {
       setExporting(false)
+    }
+  }
+
+  async function openReport(sessionId: number) {
+    setReportError("")
+    setLoadingReportId(sessionId)
+    try {
+      const res = await fetch(getApiPath(`/reports/${sessionId}`), {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setReportError(payload?.error?.message || "Could not load report.")
+        return
+      }
+      setViewingReport(payload.report)
+    } finally {
+      setLoadingReportId(null)
     }
   }
 
@@ -919,7 +976,11 @@ function LecturerDashboardInner() {
         )}
 
         {tab === "results" && (
-        <DashboardPanel title="Sessions & Reports (Live Data)">
+        <DashboardPanel title="Sessions">
+          <p className="mt-1 text-xs text-muted-foreground">
+            One row per exam attempt. Click &quot;View Report&quot; on a completed session for a detailed breakdown of what happened during AI monitoring.
+          </p>
+          {reportError ? <p className="mt-2 text-sm text-red-600">{reportError}</p> : null}
           <div className="mt-4 overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -932,6 +993,7 @@ function LecturerDashboardInner() {
                   <th>Score</th>
                   <th>Warnings</th>
                   <th>Risk</th>
+                  <th>Report</th>
                 </tr>
               </thead>
               <tbody>
@@ -945,9 +1007,18 @@ function LecturerDashboardInner() {
                     <td>{row.score ?? "-"}</td>
                     <td>{row.warning_count}</td>
                     <td><StatusBadge value={row.risk_level} /></td>
+                    <td>
+                      <button
+                        onClick={() => void openReport(row.session_id)}
+                        disabled={loadingReportId === row.session_id}
+                        className="rounded border border-border px-2 py-1 text-xs font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-60"
+                      >
+                        {loadingReportId === row.session_id ? "Loading..." : "View Report"}
+                      </button>
+                    </td>
                   </tr>
                 ))}
-                {filteredSessionResults.length === 0 && <tr><td colSpan={8} className="py-3 text-slate-600">No session results for selected scope.</td></tr>}
+                {filteredSessionResults.length === 0 && <tr><td colSpan={9} className="py-3 text-slate-600">No session results for selected scope.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -1100,6 +1171,75 @@ function LecturerDashboardInner() {
               </button>
             </div>
           </form>
+        </div>
+      </div>
+    ) : null}
+    {viewingReport ? (
+      <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+        <div className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-border bg-card p-5 shadow-2xl">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h3 className="text-lg font-semibold text-foreground">Session Report</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {viewingReport.student.full_name} ({viewingReport.student.reg_number}) &middot; {viewingReport.exam.title} ({viewingReport.exam.course_code})
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setViewingReport(null)}
+              className="rounded-md border border-border p-1.5 text-muted-foreground transition hover:bg-accent hover:text-foreground"
+              aria-label="Close report"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <StatusBadge value={viewingReport.risk_level} />
+            <span className="text-xs text-muted-foreground">{viewingReport.total_anomalies} total anomalies logged</span>
+          </div>
+
+          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {[
+              { label: "Gaze Away", value: viewingReport.gaze_away_count },
+              { label: "Head Turned", value: viewingReport.head_turned_count },
+              { label: "Tab Switch", value: viewingReport.tab_switch_count },
+              { label: "Face Absent", value: viewingReport.face_absent_count },
+              { label: "Multiple Faces", value: viewingReport.multiple_faces_count },
+            ].map((stat) => (
+              <div key={stat.label} className="rounded-md border border-border bg-background p-3 text-center">
+                <p className="text-xl font-semibold text-foreground">{stat.value}</p>
+                <p className="mt-1 text-[10px] uppercase tracking-wide text-muted-foreground">{stat.label}</p>
+              </div>
+            ))}
+          </div>
+
+          <p className="mt-5 text-sm font-semibold text-foreground">Monitoring Timeline</p>
+          <div className="mt-2 max-h-64 overflow-y-auto rounded-md border border-border">
+            <table className="w-full text-xs">
+              <thead className="sticky top-0 bg-muted/60">
+                <tr className="border-b text-left">
+                  <th className="py-2 pl-2">Time</th>
+                  <th>Event</th>
+                  <th className="pr-2">Detail</th>
+                </tr>
+              </thead>
+              <tbody>
+                {viewingReport.logs.map((log) => (
+                  <tr key={log.log_id} className="border-b last:border-b-0">
+                    <td className="py-1.5 pl-2 whitespace-nowrap text-muted-foreground">
+                      {log.logged_at ? new Date(log.logged_at).toLocaleTimeString() : "—"}
+                    </td>
+                    <td className="whitespace-nowrap capitalize">{log.event_type.replace(/_/g, " ")}</td>
+                    <td className="pr-2 text-muted-foreground">{formatEventDetail(log)}</td>
+                  </tr>
+                ))}
+                {viewingReport.logs.length === 0 && (
+                  <tr><td colSpan={3} className="py-3 text-center text-muted-foreground">No anomalies were logged during this session.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     ) : null}
