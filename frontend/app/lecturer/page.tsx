@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { BookOpen, Eye, EyeOff, KeyRound, LogOut, Plus, Users } from "lucide-react"
+import { BookOpen, Eye, EyeOff, KeyRound, LogOut, Plus, Users, X } from "lucide-react"
 import Link from "next/link"
 import { getApiPath } from "@/lib/api-url"
 import { DashboardPanel, DashboardShell, MetricCard } from "@/components/dashboard-shell"
@@ -86,6 +86,14 @@ function formatDateTime(value?: string | null) {
   return date.toLocaleString()
 }
 
+function formatDateTimeInput(value?: string | null) {
+  if (!value) return ""
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ""
+  const offsetMs = date.getTimezoneOffset() * 60 * 1000
+  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16)
+}
+
 function LecturerDashboardInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -117,6 +125,12 @@ function LecturerDashboardInner() {
   const [newCourseCode, setNewCourseCode] = useState("")
   const [newDuration, setNewDuration] = useState("60")
   const [newSchedule, setNewSchedule] = useState("")
+  const [editingExam, setEditingExam] = useState<ExamRow | null>(null)
+  const [editTitle, setEditTitle] = useState("")
+  const [editCourseCode, setEditCourseCode] = useState("")
+  const [editDuration, setEditDuration] = useState("60")
+  const [editSchedule, setEditSchedule] = useState("")
+  const [savingExamEdit, setSavingExamEdit] = useState(false)
 
   const [selectedExamId, setSelectedExamId] = useState<number | null>(null)
   const [questions, setQuestions] = useState<QuestionRow[]>([])
@@ -268,33 +282,57 @@ function LecturerDashboardInner() {
     await load(token)
   }
 
-  async function editExam(exam: ExamRow) {
-    const title = window.prompt("Exam title", exam.title)
-    if (!title) return
-    const courseCode = window.prompt("Course code", exam.course_code)
-    if (!courseCode) return
-    const durationRaw = window.prompt("Duration (minutes)", String(exam.duration_min))
-    if (!durationRaw) return
-    const duration = Number(durationRaw)
-    if (!Number.isFinite(duration) || duration <= 0) return
-    const schedule = window.prompt("Scheduled at (ISO, optional)", exam.scheduled_at || "")
+  function openExamEditModal(exam: ExamRow) {
+    setEditingExam(exam)
+    setEditTitle(exam.title)
+    setEditCourseCode(exam.course_code)
+    setEditDuration(String(exam.duration_min))
+    setEditSchedule(formatDateTimeInput(exam.scheduled_at))
+    setError("")
+  }
 
-    const res = await fetch(getApiPath(`/exams/${exam.exam_id}`), {
+  function closeExamEditModal() {
+    if (savingExamEdit) return
+    setEditingExam(null)
+    setEditTitle("")
+    setEditCourseCode("")
+    setEditDuration("60")
+    setEditSchedule("")
+  }
+
+  async function saveExamEdit() {
+    if (!editingExam) return
+    const title = editTitle.trim()
+    const courseCode = editCourseCode.trim()
+    const duration = Number(editDuration)
+    if (!title || !courseCode || !Number.isFinite(duration) || duration <= 0) {
+      setError("Exam title, course code, and a valid duration are required.")
+      return
+    }
+
+    setSavingExamEdit(true)
+    const res = await fetch(getApiPath(`/exams/${editingExam.exam_id}`), {
       method: "PUT",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({
         title,
         course_code: courseCode,
         duration_min: duration,
-        scheduled_at: schedule || undefined,
+        scheduled_at: editSchedule || undefined,
       }),
     })
     const payload = await res.json().catch(() => ({}))
     if (!res.ok) {
       setError(payload?.error?.message || "Could not update exam.")
+      setSavingExamEdit(false)
       return
     }
+    const editedExamId = editingExam.exam_id
+    setEditingExam(null)
+    setSavingExamEdit(false)
     await load(token)
+    setSelectedExamId(editedExamId)
+    await loadExamDetails(token, editedExamId, courseCode)
   }
 
   async function deleteExam(exam: ExamRow) {
@@ -641,7 +679,7 @@ function LecturerDashboardInner() {
                   <th>Schedule</th>
                   <th>Status</th>
                   <th>Set Status</th>
-                  <th>Edit</th>
+                  <th>Exams</th>
                   <th>Delete</th>
                   <th>Open</th>
                 </tr>
@@ -674,10 +712,10 @@ function LecturerDashboardInner() {
                         }}
                         className="mr-2 rounded-md border border-border bg-card px-2 py-1 text-xs font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
                       >
-                        Questions
+                        Exams
                       </button>
                       <button
-                        onClick={() => editExam(exam)}
+                        onClick={() => openExamEditModal(exam)}
                         className="rounded-md border border-border bg-card px-2 py-1 text-xs font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
                       >
                         Edit
@@ -987,6 +1025,96 @@ function LecturerDashboardInner() {
       </>
       ) : null}
     </DashboardShell>
+    {editingExam ? (
+      <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+        <div className="w-full max-w-lg rounded-2xl border border-border bg-card p-5 shadow-2xl">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h3 className="text-lg font-semibold text-foreground">Edit Exam</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Update the exam details shown to students.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={closeExamEditModal}
+              className="rounded-md border border-border p-1.5 text-muted-foreground transition hover:bg-accent hover:text-foreground"
+              aria-label="Close edit exam modal"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          <form
+            className="mt-5 grid gap-3"
+            onSubmit={(event) => {
+              event.preventDefault()
+              void saveExamEdit()
+            }}
+          >
+            <label className="grid gap-1.5 text-sm font-medium text-foreground">
+              Exam title
+              <input
+                value={editTitle}
+                onChange={e => setEditTitle(e.target.value)}
+                className="rounded-md border border-border bg-background p-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100"
+                placeholder="Exam title"
+              />
+            </label>
+            <label className="grid gap-1.5 text-sm font-medium text-foreground">
+              Course code
+              <input
+                value={editCourseCode}
+                onChange={e => setEditCourseCode(e.target.value)}
+                className="rounded-md border border-border bg-background p-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100"
+                placeholder="Course code"
+              />
+            </label>
+            <div className="grid gap-3 md:grid-cols-2">
+              <label className="grid gap-1.5 text-sm font-medium text-foreground">
+                Duration minutes
+                <input
+                  value={editDuration}
+                  onChange={e => setEditDuration(e.target.value)}
+                  className="rounded-md border border-border bg-background p-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  placeholder="Duration minutes"
+                />
+              </label>
+              <label className="grid gap-1.5 text-sm font-medium text-foreground">
+                Schedule
+                <input
+                  type="datetime-local"
+                  value={editSchedule}
+                  onChange={e => setEditSchedule(e.target.value)}
+                  onClick={(e) => {
+                    const el = e.currentTarget as HTMLInputElement & { showPicker?: () => void }
+                    el.showPicker?.()
+                  }}
+                  className="cursor-pointer rounded-md border border-border bg-background p-2 text-sm text-foreground focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100"
+                />
+              </label>
+            </div>
+            <div className="mt-2 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={closeExamEditModal}
+                disabled={savingExamEdit}
+                className="rounded-md border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition hover:bg-accent disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={savingExamEdit}
+                className="rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#142145] disabled:opacity-60"
+              >
+                {savingExamEdit ? "Saving..." : "Save Changes"}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    ) : null}
     {showOnboarding ? (
       <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
         <div className="w-full max-w-xl rounded-2xl border border-border bg-card p-5 shadow-2xl">
