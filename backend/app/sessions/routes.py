@@ -394,6 +394,21 @@ def terminate_session(session_id):
     data = request.get_json(silent=True) or {}
     reason = str(data.get("reason") or "Suspicious activity detected during your exam.")[:255]
 
+    # A terminated session still gets credit for whatever the student had
+    # already answered correctly, rather than a blanket zero. Answers are
+    # autosaved to SessionAnswer via POST /<id>/answer as the student picks
+    # them (see save_answer below) specifically so this is possible - before
+    # that endpoint existed, in-progress answers only lived in the student's
+    # browser and a lecturer terminating a session had nothing to score.
+    answered = SessionAnswer.query.filter_by(session_id=session.session_id).all()
+    questions_by_id = {q.question_id: q for q in Question.query.filter_by(exam_id=session.exam_id).all()}
+    score = sum(
+        float(questions_by_id[a.question_id].marks or 1)
+        for a in answered
+        if a.is_correct and a.question_id in questions_by_id
+    )
+    session.score = score
+
     session.session_status = "terminated"
     session.termination_reason = reason
     session.terminated_by = user_id
@@ -411,17 +426,19 @@ def terminate_session(session_id):
         action="session.terminated",
         actor_user_id=user_id,
         target_user_id=session.student_id,
-        metadata={"session_id": session.session_id, "reason": reason},
+        metadata={"session_id": session.session_id, "reason": reason, "score": score},
     )
     db.session.commit()
 
     _notify_ai_service(
         session.session_id,
         "session_terminated",
-        {"session_id": session.session_id, "reason": reason},
+        {"session_id": session.session_id, "reason": reason, "score": score},
     )
 
-    return jsonify({"session_id": session.session_id, "session_status": session.session_status}), 200
+    return jsonify(
+        {"session_id": session.session_id, "session_status": session.session_status, "score": float(session.score)}
+    ), 200
 
 
 @sessions_bp.post("/<int:session_id>/warn")
@@ -484,6 +501,56 @@ def warn_session(session_id):
     )
 
     return jsonify({"session_id": session.session_id, "warning_count": session.warning_count, "log_id": log_entry.log_id}), 200
+
+
+@sessions_bp.post("/<int:session_id>/answer")
+@jwt_required()
+def save_answer(session_id):
+    """
+    Autosaves a single answer as the student picks it, independent of the
+    full-payload POST /<id>/submit at the end of the exam. Without this, a
+    student's in-progress answers only ever existed in the browser's React
+    state - a lecturer terminating a session mid-exam (see terminate_session
+    above) would have no answers in the database to score. Upserts on the
+    (session_id, question_id) unique constraint so re-picking an answer for
+    a question just updates that row instead of creating duplicates.
+    """
+    session = db.session.get(ExamSession, session_id)
+    if not session:
+        return jsonify({"error": {"message": "Session not found"}}), 404
+    if session.student_id != int(get_jwt_identity()):
+        return jsonify({"error": {"message": "Forbidden"}}), 403
+    if session.session_status not in {"active", "pending"}:
+        return jsonify({"error": {"message": "Session is not active"}}), 409
+
+    data = request.get_json(silent=True) or {}
+    question_id = data.get("question_id")
+    selected_answer = data.get("selected_answer")
+    if question_id is None or not selected_answer:
+        return jsonify({"error": {"message": "question_id and selected_answer are required"}}), 400
+
+    question = db.session.get(Question, int(question_id))
+    if not question or question.exam_id != session.exam_id:
+        return jsonify({"error": {"message": "Question does not belong to this session's exam"}}), 400
+
+    is_correct = str(question.correct_answer).upper() == str(selected_answer).upper()
+    existing = SessionAnswer.query.filter_by(session_id=session.session_id, question_id=question.question_id).first()
+    if existing:
+        existing.selected_answer = str(selected_answer)
+        existing.is_correct = is_correct
+        existing.answered_at = datetime.utcnow()
+    else:
+        db.session.add(
+            SessionAnswer(
+                session_id=session.session_id,
+                question_id=question.question_id,
+                selected_answer=str(selected_answer),
+                is_correct=is_correct,
+            )
+        )
+    db.session.commit()
+
+    return jsonify({"question_id": question.question_id, "is_correct": is_correct}), 200
 
 
 @sessions_bp.post("/<int:session_id>/submit")

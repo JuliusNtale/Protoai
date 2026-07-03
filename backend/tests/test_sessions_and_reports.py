@@ -2,7 +2,7 @@ from datetime import datetime
 from pathlib import Path
 
 from app.extensions import db
-from app.models import BehavioralLog, Exam, ExamSession, FacialImage, User
+from app.models import BehavioralLog, Exam, ExamSession, FacialImage, SessionAnswer, User
 
 
 def _register_and_login(client, reg, role="student"):
@@ -496,6 +496,117 @@ def test_authorize_viewer_and_terminate_session(client, app, tmp_path):
         headers={"Authorization": f"Bearer {lecturer_token}"},
     )
     assert already_terminated.status_code == 409
+
+
+def test_terminate_session_scores_only_autosaved_correct_answers(client, app, tmp_path):
+    lecturer_token = _register_and_login(client, "L22-03-73001", role="lecturer")
+    student_token = _register_and_login(client, "T22-03-73002")
+    other_student_token = _register_and_login(client, "T22-03-73003")
+    _complete_student_verification_prerequisites(app, "T22-03-73002", tmp_path)
+    _complete_lecturer_verification_prerequisites(app, "L22-03-73001")
+
+    create_exam = client.post(
+        "/api/exams",
+        json={"title": "Data Structures", "course_code": "CS307", "duration_min": 60, "program_ids": [1]},
+        headers={"Authorization": f"Bearer {lecturer_token}"},
+    )
+    exam_id = create_exam.get_json()["exam_id"]
+
+    def _add_question(text, correct, marks):
+        res = client.post(
+            f"/api/exams/{exam_id}/questions",
+            json={
+                "question_text": text,
+                "question_type": "mcq",
+                "option_a": "1",
+                "option_b": "2",
+                "option_c": "3",
+                "option_d": "4",
+                "correct_answer": correct,
+                "marks": marks,
+                "order_num": 1,
+            },
+            headers={"Authorization": f"Bearer {lecturer_token}"},
+        )
+        return res.get_json()["question_id"]
+
+    q1_id = _add_question("2 + 2 = ?", "B", 2)
+    q2_id = _add_question("3 + 3 = ?", "C", 3)
+    q3_id = _add_question("4 + 4 = ?", "A", 5)
+
+    client.patch(
+        f"/api/exams/{exam_id}/status",
+        json={"status": "scheduled"},
+        headers={"Authorization": f"Bearer {lecturer_token}"},
+    )
+
+    start = client.post(
+        "/api/sessions/start",
+        json={"exam_id": exam_id},
+        headers={"Authorization": f"Bearer {student_token}"},
+    )
+    session_id = start.get_json()["session_id"]
+
+    # A different student cannot autosave an answer into someone else's
+    # session.
+    forbidden_save = client.post(
+        f"/api/sessions/{session_id}/answer",
+        json={"question_id": q1_id, "selected_answer": "B"},
+        headers={"Authorization": f"Bearer {other_student_token}"},
+    )
+    assert forbidden_save.status_code == 403
+
+    # Answer Q1 correctly, then change their mind on Q1 (upsert should
+    # overwrite, not duplicate), and answer Q2 incorrectly. Q3 is left
+    # unanswered entirely, simulating a termination mid-exam.
+    client.post(
+        f"/api/sessions/{session_id}/answer",
+        json={"question_id": q1_id, "selected_answer": "A"},
+        headers={"Authorization": f"Bearer {student_token}"},
+    )
+    save_q1 = client.post(
+        f"/api/sessions/{session_id}/answer",
+        json={"question_id": q1_id, "selected_answer": "B"},
+        headers={"Authorization": f"Bearer {student_token}"},
+    )
+    assert save_q1.status_code == 200
+    assert save_q1.get_json()["is_correct"] is True
+
+    save_q2 = client.post(
+        f"/api/sessions/{session_id}/answer",
+        json={"question_id": q2_id, "selected_answer": "D"},
+        headers={"Authorization": f"Bearer {student_token}"},
+    )
+    assert save_q2.status_code == 200
+    assert save_q2.get_json()["is_correct"] is False
+
+    with app.app_context():
+        saved_rows = SessionAnswer.query.filter_by(session_id=session_id).all()
+        assert len(saved_rows) == 2  # the Q1 upsert didn't create a duplicate row
+
+    terminate = client.post(
+        f"/api/sessions/{session_id}/terminate",
+        json={"reason": "Multiple faces detected"},
+        headers={"Authorization": f"Bearer {lecturer_token}"},
+    )
+    assert terminate.status_code == 200
+    terminate_payload = terminate.get_json()
+    # Only Q1 (2 marks) was answered correctly - Q2 was wrong and Q3 was
+    # never answered, so neither contributes to the score.
+    assert terminate_payload["score"] == 2.0
+
+    with app.app_context():
+        stored_session = db.session.get(ExamSession, session_id)
+        assert float(stored_session.score) == 2.0
+        assert stored_session.session_status == "terminated"
+
+    # Answers can no longer be autosaved once the session has ended.
+    blocked_save = client.post(
+        f"/api/sessions/{session_id}/answer",
+        json={"question_id": q3_id, "selected_answer": "A"},
+        headers={"Authorization": f"Bearer {student_token}"},
+    )
+    assert blocked_save.status_code == 409
 
 
 def test_lecturer_can_send_manual_warning_to_active_session(client, app, tmp_path):
