@@ -1,10 +1,12 @@
 "use client"
 
-import { Suspense, useEffect, useMemo, useState } from "react"
+import { Suspense, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { BookOpen, Eye, EyeOff, KeyRound, LogOut, Plus, Users, X } from "lucide-react"
+import { BookOpen, Eye, EyeOff, KeyRound, LogOut, Plus, ShieldAlert, Users, X } from "lucide-react"
 import Link from "next/link"
+import { io } from "socket.io-client"
 import { getApiPath } from "@/lib/api-url"
+import { cn } from "@/lib/utils"
 import { DashboardPanel, DashboardShell, MetricCard } from "@/components/dashboard-shell"
 import { StatusBadge } from "@/components/status-badge"
 
@@ -89,6 +91,20 @@ type ReportLogEntry = {
   event_type: string
   event_data: Record<string, unknown>
   logged_at: string | null
+  is_suspicious?: boolean | null
+  reviewed_by?: number | null
+  reviewed_at?: string | null
+}
+
+type LiveAlert = {
+  session_id: number
+  log_id: number
+  event_type: string
+  warning_count: number
+  logged_at: string | null
+  student_name: string
+  exam_title: string
+  is_suspicious?: boolean | null
 }
 
 type ReportDetail = {
@@ -205,9 +221,18 @@ function LecturerDashboardInner() {
   const [assignError, setAssignError] = useState("")
   const [sessionResults, setSessionResults] = useState<SessionResultRow[]>([])
   const [exporting, setExporting] = useState(false)
+  const [exportingAll, setExportingAll] = useState(false)
   const [viewingReport, setViewingReport] = useState<ReportDetail | null>(null)
   const [loadingReportId, setLoadingReportId] = useState<number | null>(null)
   const [reportError, setReportError] = useState("")
+  const [liveAlerts, setLiveAlerts] = useState<LiveAlert[]>([])
+  const [liveAlertsConnected, setLiveAlertsConnected] = useState(false)
+  const [reviewingLogId, setReviewingLogId] = useState<number | null>(null)
+  const [terminatingSession, setTerminatingSession] = useState<SessionResultRow | null>(null)
+  const [terminationReason, setTerminationReason] = useState("Suspicious activity detected during your exam.")
+  const [terminating, setTerminating] = useState(false)
+  const [terminateError, setTerminateError] = useState("")
+  const sessionResultsRef = useRef<SessionResultRow[]>([])
   const [questionText, setQuestionText] = useState("")
   const [questionType, setQuestionType] = useState<"mcq" | "true_false">("mcq")
   const [optionA, setOptionA] = useState("")
@@ -585,6 +610,139 @@ function LecturerDashboardInner() {
     return sessionResults.filter((row) => row.exam_id === selectedExamId)
   }, [selectedExamId, sessionResults])
 
+  useEffect(() => {
+    sessionResultsRef.current = sessionResults
+  }, [sessionResults])
+
+  // Live suspicious-activity feed for the Sessions & Reports tab: subscribes
+  // to every session currently in view via the AI service's Socket.IO
+  // server (the only process holding a live connection to each student's
+  // browser - see ai-service/app.py::/internal/broadcast), so a new
+  // behavioural log or a termination shows up immediately instead of only
+  // after a manual refresh.
+  const visibleSessionIds = filteredSessionResults.map((row) => row.session_id).join(",")
+  useEffect(() => {
+    if (tab !== "results" || !token || !visibleSessionIds) {
+      setLiveAlertsConnected(false)
+      return
+    }
+
+    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || "http://localhost:8000"
+    const socket = io(wsUrl, { transports: ["websocket", "polling"] })
+
+    socket.on("connect", () => {
+      setLiveAlertsConnected(true)
+      for (const idString of visibleSessionIds.split(",")) {
+        socket.emit("join_session_room", { session_id: Number(idString), token })
+      }
+    })
+    socket.on("disconnect", () => setLiveAlertsConnected(false))
+
+    socket.on(
+      "lecturer_alert",
+      (event: { session_id: number; log_id: number; event_type: string; warning_count: number; logged_at: string | null }) => {
+        setSessionResults((prev) =>
+          prev.map((row) =>
+            row.session_id === event.session_id
+              ? {
+                  ...row,
+                  warning_count: event.warning_count,
+                  risk_level: event.warning_count >= 3 ? "high" : event.warning_count > 1 ? "medium" : "low",
+                }
+              : row
+          )
+        )
+        const row = sessionResultsRef.current.find((r) => r.session_id === event.session_id)
+        setLiveAlerts((prev) => [
+          {
+            session_id: event.session_id,
+            log_id: event.log_id,
+            event_type: event.event_type,
+            warning_count: event.warning_count,
+            logged_at: event.logged_at,
+            student_name: row?.student_name ?? `Session #${event.session_id}`,
+            exam_title: row?.exam_title ?? "",
+            is_suspicious: null,
+          },
+          ...prev,
+        ].slice(0, 30))
+      }
+    )
+
+    socket.on("session_terminated", (event: { session_id: number }) => {
+      setSessionResults((prev) =>
+        prev.map((row) => (row.session_id === event.session_id ? { ...row, session_status: "terminated" } : row))
+      )
+    })
+
+    return () => {
+      socket.disconnect()
+      setLiveAlertsConnected(false)
+    }
+  }, [tab, token, visibleSessionIds])
+
+  async function reviewLog(logId: number, isSuspicious: boolean) {
+    setReviewingLogId(logId)
+    try {
+      const res = await fetch(getApiPath(`/reports/logs/${logId}/review`), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ is_suspicious: isSuspicious }),
+      })
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) return
+      setLiveAlerts((prev) =>
+        prev.map((alert) => (alert.log_id === logId ? { ...alert, is_suspicious: payload.is_suspicious } : alert))
+      )
+      setViewingReport((prev) =>
+        prev
+          ? {
+              ...prev,
+              logs: prev.logs.map((log) =>
+                log.log_id === logId
+                  ? { ...log, is_suspicious: payload.is_suspicious, reviewed_by: payload.reviewed_by, reviewed_at: payload.reviewed_at }
+                  : log
+              ),
+            }
+          : prev
+      )
+    } finally {
+      setReviewingLogId(null)
+    }
+  }
+
+  function openTerminateModal(row: SessionResultRow) {
+    setTerminateError("")
+    setTerminationReason("Suspicious activity detected during your exam.")
+    setTerminatingSession(row)
+  }
+
+  async function confirmTerminateSession() {
+    if (!terminatingSession) return
+    setTerminating(true)
+    setTerminateError("")
+    try {
+      const res = await fetch(getApiPath(`/sessions/${terminatingSession.session_id}/terminate`), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ reason: terminationReason }),
+      })
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setTerminateError(payload?.error?.message || "Could not terminate session.")
+        return
+      }
+      setSessionResults((prev) =>
+        prev.map((row) =>
+          row.session_id === terminatingSession.session_id ? { ...row, session_status: "terminated" } : row
+        )
+      )
+      setTerminatingSession(null)
+    } finally {
+      setTerminating(false)
+    }
+  }
+
   async function exportSelectedExamReport() {
     if (!selectedExamId) return
     setExporting(true)
@@ -606,6 +764,29 @@ function LecturerDashboardInner() {
       URL.revokeObjectURL(url)
     } finally {
       setExporting(false)
+    }
+  }
+
+  async function exportAllReports() {
+    setExportingAll(true)
+    try {
+      const res = await fetch(getApiPath("/reports/export"), {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}))
+        setError(payload?.error?.message || "Failed to export reports.")
+        return
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `all_exam_reports_${new Date().toISOString().slice(0, 10)}.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+    } finally {
+      setExportingAll(false)
     }
   }
 
@@ -942,15 +1123,6 @@ function LecturerDashboardInner() {
               </tbody>
             </table>
           </div>
-          <div className="mt-3">
-            <button
-              onClick={exportSelectedExamReport}
-              disabled={!selectedExamId || exporting}
-              className="rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#142145] disabled:opacity-60"
-            >
-              {exporting ? "Exporting..." : "Export Selected Exam CSV"}
-            </button>
-          </div>
         </DashboardPanel>
           </>
         )}
@@ -1180,12 +1352,89 @@ function LecturerDashboardInner() {
         )}
 
         {tab === "results" && (
+        <>
+        <DashboardPanel title="Live Suspicious Activity">
+          <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+            <span className={cn("h-1.5 w-1.5 rounded-full", liveAlertsConnected ? "bg-emerald-500" : "bg-amber-400")} />
+            {liveAlertsConnected ? "Connected — new anomalies appear here in real time" : "Connecting..."}
+          </div>
+          <div className="mt-3 max-h-72 overflow-y-auto rounded-md border border-border">
+            <table className="w-full text-xs">
+              <thead className="sticky top-0 bg-muted/60">
+                <tr className="border-b text-left">
+                  <th className="py-2 pl-2">Time</th>
+                  <th>Student</th>
+                  <th>Exam</th>
+                  <th>Event</th>
+                  <th>Warnings</th>
+                  <th className="pr-2">Decision</th>
+                </tr>
+              </thead>
+              <tbody>
+                {liveAlerts.map((alert) => (
+                  <tr key={alert.log_id} className="border-b last:border-b-0">
+                    <td className="py-1.5 pl-2 whitespace-nowrap text-muted-foreground">
+                      {alert.logged_at ? new Date(alert.logged_at).toLocaleTimeString() : "—"}
+                    </td>
+                    <td className="whitespace-nowrap">{alert.student_name}</td>
+                    <td className="whitespace-nowrap">{alert.exam_title}</td>
+                    <td className="capitalize">{alert.event_type.replace(/_/g, " ")}</td>
+                    <td>{alert.warning_count}</td>
+                    <td className="pr-2">
+                      {alert.is_suspicious === null || alert.is_suspicious === undefined ? (
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => void reviewLog(alert.log_id, true)}
+                            disabled={reviewingLogId === alert.log_id}
+                            className="rounded border border-red-300 px-1.5 py-0.5 text-[11px] font-medium text-red-600 hover:bg-red-50 disabled:opacity-60"
+                          >
+                            Suspicious
+                          </button>
+                          <button
+                            onClick={() => void reviewLog(alert.log_id, false)}
+                            disabled={reviewingLogId === alert.log_id}
+                            className="rounded border border-border px-1.5 py-0.5 text-[11px] font-medium text-foreground hover:bg-accent disabled:opacity-60"
+                          >
+                            Not Suspicious
+                          </button>
+                        </div>
+                      ) : (
+                        <span className={cn("text-[11px] font-medium", alert.is_suspicious ? "text-red-600" : "text-muted-foreground")}>
+                          {alert.is_suspicious ? "Marked suspicious" : "Dismissed"}
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+                {liveAlerts.length === 0 && (
+                  <tr><td colSpan={6} className="py-3 text-center text-muted-foreground">No suspicious activity reported yet.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </DashboardPanel>
         <DashboardPanel title={`Sessions ${selectedExam ? `- ${selectedExam.title}` : ""}`}>
           <p className="mt-1 text-xs text-muted-foreground">
             One row per exam attempt. Click &quot;View Report&quot; on a completed session for a detailed breakdown of what happened during AI monitoring.
           </p>
           {renderExamPicker("results")}
           {reportError ? <p className="mt-2 text-sm text-red-600">{reportError}</p> : null}
+          <div className="mt-3 flex gap-2">
+            <button
+              onClick={exportSelectedExamReport}
+              disabled={!selectedExamId || exporting}
+              className="rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#142145] disabled:opacity-60"
+            >
+              {exporting ? "Exporting..." : "Export Selected Exam CSV"}
+            </button>
+            <button
+              onClick={exportAllReports}
+              disabled={exportingAll}
+              className="rounded-md border border-[#1a2d5a] px-4 py-2 text-sm font-semibold text-[#1a2d5a] transition hover:bg-[#1a2d5a]/5 disabled:opacity-60"
+            >
+              {exportingAll ? "Exporting..." : "Export All Sessions CSV"}
+            </button>
+          </div>
           <div className="mt-4 overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -1199,6 +1448,7 @@ function LecturerDashboardInner() {
                   <th>Warnings</th>
                   <th>Risk</th>
                   <th>Report</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -1221,13 +1471,27 @@ function LecturerDashboardInner() {
                         {loadingReportId === row.session_id ? "Loading..." : "View Report"}
                       </button>
                     </td>
+                    <td>
+                      {["active", "pending"].includes((row.session_status || "").toLowerCase()) ? (
+                        <button
+                          onClick={() => openTerminateModal(row)}
+                          className="flex items-center gap-1 rounded border border-red-300 px-2 py-1 text-xs font-medium text-red-600 transition-colors hover:bg-red-50"
+                        >
+                          <ShieldAlert className="h-3.5 w-3.5" />
+                          Terminate
+                        </button>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </td>
                   </tr>
                 ))}
-                {filteredSessionResults.length === 0 && <tr><td colSpan={9} className="py-3 text-slate-600">No session results for selected scope.</td></tr>}
+                {filteredSessionResults.length === 0 && <tr><td colSpan={10} className="py-3 text-slate-600">No session results for selected scope.</td></tr>}
               </tbody>
             </table>
           </div>
         </DashboardPanel>
+        </>
         )}
 
         {tab === "profile" && (
@@ -1457,7 +1721,8 @@ function LecturerDashboardInner() {
                 <tr className="border-b text-left">
                   <th className="py-2 pl-2">Time</th>
                   <th>Event</th>
-                  <th className="pr-2">Detail</th>
+                  <th>Detail</th>
+                  <th className="pr-2">Decision</th>
                 </tr>
               </thead>
               <tbody>
@@ -1467,14 +1732,92 @@ function LecturerDashboardInner() {
                       {log.logged_at ? new Date(log.logged_at).toLocaleTimeString() : "—"}
                     </td>
                     <td className="whitespace-nowrap capitalize">{log.event_type.replace(/_/g, " ")}</td>
-                    <td className="pr-2 text-muted-foreground">{formatEventDetail(log)}</td>
+                    <td className="text-muted-foreground">{formatEventDetail(log)}</td>
+                    <td className="pr-2">
+                      {log.is_suspicious === null || log.is_suspicious === undefined ? (
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => void reviewLog(log.log_id, true)}
+                            disabled={reviewingLogId === log.log_id}
+                            className="rounded border border-red-300 px-1.5 py-0.5 text-[11px] font-medium text-red-600 hover:bg-red-50 disabled:opacity-60"
+                          >
+                            Suspicious
+                          </button>
+                          <button
+                            onClick={() => void reviewLog(log.log_id, false)}
+                            disabled={reviewingLogId === log.log_id}
+                            className="rounded border border-border px-1.5 py-0.5 text-[11px] font-medium text-foreground hover:bg-accent disabled:opacity-60"
+                          >
+                            Dismiss
+                          </button>
+                        </div>
+                      ) : (
+                        <span className={cn("text-[11px] font-medium", log.is_suspicious ? "text-red-600" : "text-muted-foreground")}>
+                          {log.is_suspicious ? "Suspicious" : "Dismissed"}
+                        </span>
+                      )}
+                    </td>
                   </tr>
                 ))}
                 {viewingReport.logs.length === 0 && (
-                  <tr><td colSpan={3} className="py-3 text-center text-muted-foreground">No anomalies were logged during this session.</td></tr>
+                  <tr><td colSpan={4} className="py-3 text-center text-muted-foreground">No anomalies were logged during this session.</td></tr>
                 )}
               </tbody>
             </table>
+          </div>
+        </div>
+      </div>
+    ) : null}
+    {terminatingSession ? (
+      <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+        <div className="w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-2xl">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h3 className="text-lg font-semibold text-foreground">Terminate Exam Session</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {terminatingSession.student_name} ({terminatingSession.registration_number}) &middot; {terminatingSession.exam_title}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setTerminatingSession(null)}
+              disabled={terminating}
+              className="rounded-md border border-border p-1.5 text-muted-foreground transition hover:bg-accent hover:text-foreground"
+              aria-label="Close terminate modal"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <p className="mt-4 text-sm text-muted-foreground">
+            This immediately ends the student&apos;s exam session. They will see the message below and will not be able to continue.
+          </p>
+          <label className="mt-4 grid gap-1.5 text-sm font-medium text-foreground">
+            Message shown to student
+            <textarea
+              value={terminationReason}
+              onChange={(e) => setTerminationReason(e.target.value)}
+              rows={3}
+              className="rounded-md border border-border bg-background p-2 text-sm text-foreground focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100"
+            />
+          </label>
+          {terminateError ? <p className="mt-2 text-sm text-red-600">{terminateError}</p> : null}
+          <div className="mt-4 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setTerminatingSession(null)}
+              disabled={terminating}
+              className="rounded-md border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition hover:bg-accent disabled:opacity-60"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => void confirmTerminateSession()}
+              disabled={terminating || !terminationReason.trim()}
+              className="rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700 disabled:opacity-60"
+            >
+              {terminating ? "Terminating..." : "Terminate Session"}
+            </button>
           </div>
         </div>
       </div>

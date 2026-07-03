@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
-import { Flag, ChevronLeft, ChevronRight, AlertTriangle, X } from "lucide-react"
+import { Flag, ChevronLeft, ChevronRight, AlertTriangle } from "lucide-react"
 import { io, type Socket } from "socket.io-client"
 import { cn } from "@/lib/utils"
 import { useBrowserLockdown } from "@/hooks/use-browser-lockdown"
@@ -21,17 +21,14 @@ type LiveQuestion = {
 // Grid layout: 4 columns of 5 rows = 20
 const COLS = 4
 
-type WarningLevel = "warning" | "final"
-
 type AnomalyResultEvent = {
   session_id?: number | string
-  warning_count?: number | string
-  anomalies?: unknown
   calibrating?: boolean
 }
 
-type SessionLockedEvent = {
+type SessionTerminatedEvent = {
   session_id?: number | string
+  reason?: string
 }
 
 export default function ExamPage() {
@@ -46,15 +43,12 @@ export default function ExamPage() {
   const tabViolationInFlightRef = useRef(false)
   const lastTabViolationAtRef = useRef(0)
   const examStartedAtRef = useRef(Date.now())
-  const warningsRef = useRef(0)
   const [current, setCurrent] = useState(0)
   const [answers, setAnswers] = useState<Record<number, number>>({})
   const [flagged, setFlagged] = useState<Set<number>>(new Set())
   // Placeholder until the real exam duration loads; see the /exams/:id fetch
   // below, which sets this to the exam's actual duration_min * 60.
   const [timeLeft, setTimeLeft] = useState(60 * 60)
-  const [warnings, setWarnings] = useState(0)
-  const [warningModal, setWarningModal] = useState<WarningLevel | null>(null)
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [showCongrats, setShowCongrats] = useState(false)
@@ -77,8 +71,7 @@ export default function ExamPage() {
   const [socketConnected, setSocketConnected] = useState(false)
   const [sessionLocked, setSessionLocked] = useState(false)
   const [accessChecked, setAccessChecked] = useState(false)
-  const maxWarnings = 3
-  const [, setTabSwitches] = useState(0)
+  const [terminatedReason, setTerminatedReason] = useState<string | null>(null)
   const { devtoolsLikelyOpen } = useBrowserLockdown({
     onBlockedAction: message => setSecurityAlert(message),
   })
@@ -342,8 +335,11 @@ export default function ExamPage() {
 
   // The countdown above only clamps timeLeft at 0 - nothing was actually
   // submitting the exam when the clock ran out. Fire the auto-submit exactly
-  // once when it hits zero, gated by sessionLocked so it can't double-fire
-  // and so it doesn't collide with the identity/warning lock flow.
+  // once when it hits zero, gated by sessionLocked so it can't double-fire.
+  // This is the only automatic submission path left in the exam flow -
+  // proctoring anomalies are logged for lecturer/admin review but never
+  // interrupt or auto-submit the exam. The student always completes the
+  // exam, either by manual submit or by running out of time.
   useEffect(() => {
     if (timeLeft > 0 || sessionLocked || !sessionId) return
     stopMonitoring()
@@ -385,14 +381,6 @@ export default function ExamPage() {
       stopExamCameraStream()
     }
   }, [])
-
-  const applyWarning = useCallback((incomingCount: number) => {
-    const next = Math.max(incomingCount, 0)
-    warningsRef.current = next
-    setWarnings(next)
-    setTabSwitches(next)
-    setWarningModal(next >= maxWarnings ? "final" : "warning")
-  }, [maxWarnings, setTabSwitches])
 
   async function submitSessionToServer() {
     if (!sessionId) return
@@ -436,7 +424,9 @@ export default function ExamPage() {
     tabViolationInFlightRef.current = true
     lastTabViolationAtRef.current = now
     try {
-      const res = await fetch(getApiPath("/sessions/log"), {
+      // Best-effort behavioural log for lecturer/admin post-exam review -
+      // this never interrupts or auto-submits the student's exam.
+      await fetch(getApiPath("/sessions/log"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -448,19 +438,8 @@ export default function ExamPage() {
           metadata: { reason, source: "browser_lockdown", timestamp: new Date().toISOString() },
         }),
       })
-      const payload = await res.json().catch(() => ({}))
-      if (res.ok) {
-        const warningCount = Number(payload?.warning_count ?? 0)
-        applyWarning(warningCount)
-        return
-      }
-      const warningCount = Number(payload?.warning_count ?? 0)
-      if (warningCount > 0) applyWarning(warningCount)
-      if (String(payload?.error?.code || "").toUpperCase().includes("LOCKED")) {
-        setSessionLocked(true)
-      }
     } catch {
-      // Ignore network errors; socket proctoring may still enforce violations.
+      // Ignore network errors; this is a best-effort behavioural log.
     } finally {
       tabViolationInFlightRef.current = false
     }
@@ -474,16 +453,10 @@ export default function ExamPage() {
     answersRef.current = answers
   }, [answers])
 
-  // The socket connection (and the session_locked handler registered inside
-  // it) is set up in an effect that only runs once, early - before this
-  // exam's questions have finished loading from their own separate fetch.
-  // That handler's captured submitSessionToServer() closure was therefore
-  // reading `questions` as it was AT THAT EARLY RENDER (usually still []),
-  // so an auto-submit triggered by session_locked (3 warnings, identity
-  // mismatch) silently submitted an empty answer map - the student's real
-  // answers were lost and scored as 0 regardless of what they'd actually
-  // answered. Reading from this ref instead of the `questions` state keeps
-  // submitSessionToServer correct no matter which render's closure calls it.
+  // submitSessionToServer() reads from this ref rather than the `questions`
+  // state directly, so it stays correct even if it's ever called from a
+  // long-lived closure set up before questions finished loading (e.g. an
+  // effect that only runs once, early).
   useEffect(() => {
     questionsRef.current = questions
   }, [questions])
@@ -542,25 +515,28 @@ export default function ExamPage() {
         socket.on("connect", () => setSocketConnected(true))
         socket.on("disconnect", () => setSocketConnected(false))
 
+        // Anomalies detected by the AI service are logged server-side for
+        // lecturer/admin post-exam review; the only thing the client needs
+        // from this event is the calibration signal below. The exam is
+        // never auto-submitted based on proctoring anomalies.
         socket.on("anomaly_result", (event: AnomalyResultEvent) => {
           if (!event || Number(event.session_id) !== sessionId) return
           if (event.calibrating === false) {
             setMonitoringCalibrated(true)
           }
-          const count = Number(event.warning_count || 0)
-          if (count > warningsRef.current) {
-            applyWarning(count)
-          }
-          if (Array.isArray(event.anomalies) && event.anomalies.length > 0) {
-            setTabSwitches(count)
-          }
         })
 
-        socket.on("session_locked", async (event: SessionLockedEvent) => {
+        // A lecturer/admin can end this session early from the Sessions &
+        // Reports tab (see /api/sessions/<id>/terminate on the backend) when
+        // they judge flagged activity to be genuine misconduct. That HTTP
+        // action has no direct line to this browser tab - it reaches us via
+        // the AI service's socket room for this session_id (see
+        // ai-service/app.py::/internal/broadcast), which our webcam_frame
+        // loop has already joined.
+        socket.on("session_terminated", (event: SessionTerminatedEvent) => {
           if (!event || Number(event.session_id) !== sessionId) return
           stopMonitoring()
-          applyWarning(maxWarnings)
-          await submitSessionToServer()
+          setTerminatedReason(event.reason || "Your session was terminated due to suspicious activity.")
         })
 
         interval = setInterval(() => {
@@ -588,7 +564,7 @@ export default function ExamPage() {
       socketRef.current = null
       setSocketConnected(false)
     }
-  }, [applyWarning, examCameraReady, maxWarnings, sessionId, sessionLocked, setTabSwitches])
+  }, [examCameraReady, sessionId, sessionLocked])
 
   useEffect(() => {
     if (!sessionId || sessionLocked) return
@@ -719,13 +695,7 @@ export default function ExamPage() {
         {/* ── Main question area ── */}
         <main className="flex flex-1 flex-col overflow-hidden">
           <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-8 sm:py-8">
-            <div className="mb-4 grid grid-cols-2 gap-2 xl:hidden">
-              <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-800 dark:bg-slate-900">
-                <p className="text-[10px] uppercase tracking-wider text-slate-400">Warnings</p>
-                <p className={cn("text-sm font-semibold", warnings > 0 ? "text-amber-600" : "text-slate-700 dark:text-slate-200")}>
-                  {warnings} / {maxWarnings}
-                </p>
-              </div>
+            <div className="mb-4 xl:hidden">
               <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-800 dark:bg-slate-900">
                 <p className="text-[10px] uppercase tracking-wider text-slate-400">Camera</p>
                 <p className={cn("text-sm font-semibold", examCameraReady ? "text-emerald-600" : "text-amber-600")}>
@@ -908,14 +878,6 @@ export default function ExamPage() {
               Retry Camera
             </button>
           ) : null}
-
-          {/* Warning count */}
-          <div className="mt-4 rounded-md border border-slate-200 bg-white px-3 py-3 text-center dark:border-slate-800 dark:bg-slate-900">
-            <p className="text-[10px] uppercase tracking-[0.16em] text-slate-400">Warnings</p>
-            <p className={cn("mt-1 text-xl font-semibold", warnings > 0 ? "text-amber-600" : "text-slate-800 dark:text-slate-100")}>
-              {warnings} <span className="text-xs font-medium text-gray-400">/ {maxWarnings}</span>
-            </p>
-          </div>
         </aside>
       </div>
 
@@ -928,75 +890,6 @@ export default function ExamPage() {
             <p className="mt-2 text-sm text-gray-500 dark:text-slate-400 leading-relaxed">
               Please look at your screen normally for a few seconds while we calibrate your camera. Your exam will begin automatically once this is done.
             </p>
-          </div>
-        </div>
-      )}
-
-      {/* ── Warning Modal ── */}
-      {warningModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className={cn(
-            "relative w-full max-w-sm rounded-xl border bg-white p-6 shadow-2xl",
-            warningModal === "final" ? "border-red-200" : "border-orange-200"
-          )}>
-            {warningModal !== "final" && (
-              <button
-                onClick={() => setWarningModal(null)}
-                className="absolute right-4 top-4 text-gray-400 hover:text-gray-600"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            )}
-
-            {warningModal === "warning" ? (
-              <>
-                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-orange-100">
-                  <AlertTriangle className="h-6 w-6 text-orange-500" />
-                </div>
-                <h3 className="mb-1 text-base font-bold text-gray-900">Proctoring Warning</h3>
-                <p className="mb-4 text-sm text-gray-500 leading-relaxed">
-                  Suspicious behaviour has been detected. Please keep your eyes on the screen and remain in the exam window.
-                </p>
-                <div className="mb-5 flex items-center justify-between rounded-lg border border-orange-200 bg-orange-50 px-4 py-2.5">
-                  <span className="text-sm text-gray-600">Warnings remaining</span>
-                  <span className="text-lg font-bold text-orange-500">{maxWarnings - warnings} / {maxWarnings}</span>
-                </div>
-                <button
-                  onClick={() => setWarningModal(null)}
-                  className="w-full rounded bg-[#1a2d5a] py-2.5 text-sm font-semibold text-white hover:bg-[#243d73] transition-colors"
-                >
-                  I Understand — Continue Exam
-                </button>
-              </>
-            ) : (
-              <>
-                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-100">
-                  <AlertTriangle className="h-6 w-6 text-red-500" />
-                </div>
-                <h3 className="mb-1 text-base font-bold text-gray-900">Exam Auto-Submitted</h3>
-                <p className="mb-4 text-sm text-gray-500 leading-relaxed">
-                  Your exam has been automatically submitted due to repeated proctoring violations. This incident has been logged.
-                </p>
-                <div className="mb-5 rounded border border-red-200 bg-red-50 px-4 py-3 text-center">
-                  <p className="text-xs text-gray-500">Total violations</p>
-                  <p className="text-2xl font-bold text-red-500">{warnings} / {maxWarnings}</p>
-                </div>
-                {examScore !== null && (
-                  <div className="mb-5 rounded border border-gray-200 bg-gray-50 px-4 py-3 text-center">
-                    <p className="text-xs text-gray-500">Your Score</p>
-                    <p className="text-2xl font-bold text-gray-700">
-                      {examScore} / {questions.reduce((sum, q) => sum + (q.marks || 0), 0)}
-                    </p>
-                  </div>
-                )}
-                <button
-                  onClick={() => void goToDashboard()}
-                  className="w-full rounded bg-red-500 py-2.5 text-sm font-semibold text-white hover:bg-red-600 transition-colors"
-                >
-                  Return to Dashboard
-                </button>
-              </>
-            )}
           </div>
         </div>
       )}
@@ -1088,7 +981,26 @@ export default function ExamPage() {
         </div>
       )}
 
-      {!isFullscreen && !leavingExam && (
+      {terminatedReason && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/90 p-4">
+          <div className="w-full max-w-sm rounded-xl border border-red-500/40 bg-white p-6 shadow-2xl">
+            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-red-100">
+              <AlertTriangle className="h-6 w-6 text-red-600" />
+            </div>
+            <h3 className="text-base font-bold text-gray-900">Session Terminated</h3>
+            <p className="mt-2 text-sm text-gray-600 leading-relaxed">{terminatedReason}</p>
+            <button
+              type="button"
+              onClick={() => void goToDashboard()}
+              className="mt-5 w-full rounded bg-[#1a2d5a] py-2.5 text-sm font-semibold text-white hover:bg-[#243d73]"
+            >
+              Go to Dashboard
+            </button>
+          </div>
+        </div>
+      )}
+
+      {!isFullscreen && !leavingExam && !terminatedReason && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4">
           <div className="w-full max-w-md rounded-2xl border border-zinc-700 bg-zinc-900 px-6 py-6 text-center">
             <p className="text-base font-semibold text-white">Fullscreen Required</p>
@@ -1109,7 +1021,7 @@ export default function ExamPage() {
         </div>
       )}
 
-      {(devtoolsLikelyOpen || securityAlert) && !leavingExam && (
+      {(devtoolsLikelyOpen || securityAlert) && !leavingExam && !terminatedReason && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 p-4">
           <div className="w-full max-w-md rounded-2xl border border-red-500/30 bg-zinc-950 px-6 py-6 text-center">
             <p className="text-base font-semibold text-white">Inspection Blocked</p>

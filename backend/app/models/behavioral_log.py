@@ -11,3 +11,6 @@ class BehavioralLog(db.Model):
     event_type = db.Column(db.String(50), nullable=False)
     event_data = db.Column(db.JSON)
     logged_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    is_suspicious = db.Column(db.Boolean)
+    reviewed_by = db.Column(db.Integer, db.ForeignKey("users.user_id"))
+    reviewed_at = db.Column(db.DateTime)

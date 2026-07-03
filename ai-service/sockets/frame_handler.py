@@ -3,7 +3,7 @@ import requests
 import os
 import time
 
-from flask_socketio import SocketIO, emit
+from flask_socketio import SocketIO, emit, join_room
 
 from services.preprocessing import base64_to_numpy
 from services.gaze_estimator import estimate_gaze
@@ -181,7 +181,8 @@ def _check_identity_mismatch(session_id, img_bgr):
     _IDENTITY_MISMATCH_CONFIRM_COUNT CONSECUTIVE mismatched checks (not one
     bad-angle/lighting frame) before reporting a confirmed mismatch — same
     confidence+persistence philosophy already used for gaze/head-pose
-    anomalies, but here the consequence (immediate session lock) is severe
+    anomalies, but here the consequence (identity_verified flipping to
+    False, which blocks any attempt to reload back into the exam) is severe
     enough that a lone bad frame must not be able to trigger it.
 
     Returns (confirmed: bool, confidence: float | None).
@@ -243,6 +244,12 @@ def register_handlers(socketio: SocketIO):
 
         if not session_id or not frame_base64:
             return
+
+        # Puts this student's own connection into the room the backend
+        # broadcasts session-scoped events into (e.g. session_terminated) -
+        # see /internal/broadcast in app.py. Cheap and idempotent, so it's
+        # fine to call on every frame rather than only on first connect.
+        join_room(str(session_id))
 
         try:
             img_bgr = base64_to_numpy(frame_base64)
@@ -368,7 +375,7 @@ def register_handlers(socketio: SocketIO):
                 pass  # Backend unreachable — don't crash the WebSocket handler
 
         if identity_mismatch_confirmed:
-            print(f"[identity_debug] session={session_id} CONFIRMED MISMATCH - locking session", flush=True)
+            print(f"[identity_debug] session={session_id} CONFIRMED MISMATCH - flagging session for review", flush=True)
             try:
                 requests.post(
                     f"{_BACKEND_URL}/api/sessions/verify",
@@ -404,6 +411,11 @@ def register_handlers(socketio: SocketIO):
 
         gaze_direction = gaze.get('direction', 'Unknown') if gaze else 'Unknown'
 
+        # Anomalies and warning_count are still emitted for observability/
+        # debugging, but nothing here ever locks or auto-submits the
+        # session - the exam always runs to completion, and anomalies are
+        # only surfaced to lecturers/admins after the fact via the
+        # BehavioralLog rows written by the /sessions/log calls above.
         emit('anomaly_result', {
             'session_id':     session_id,
             'anomalies':      [_base_type(a) for a in anomalies],
@@ -413,11 +425,36 @@ def register_handlers(socketio: SocketIO):
             'calibrating':    calibrating,
         })
 
-        if identity_mismatch_confirmed or warning_count >= 3:
-            emit('session_locked', {
-                'session_id': session_id,
-                'reason': 'identity_mismatch' if identity_mismatch_confirmed else 'warning_count_exceeded',
-            })
+    @socketio.on('join_session_room')
+    def handle_join_session_room(data):
+        """
+        A lecturer's browser calls this to subscribe to a specific session's
+        live events (lecturer_alert, session_terminated) - see
+        /internal/broadcast in app.py, which is what actually delivers those
+        events into this room. Authorization is checked against the backend
+        on every join rather than trusted client-side, the same pattern
+        _resolve_student_id below uses for the identity re-check: a raw
+        session_id in a socket payload is trivially spoofable, so the
+        lecturer's JWT must be independently verified server-side against
+        that specific session's owning exam before granting access to
+        another student's live monitoring feed.
+        """
+        session_id = data.get('session_id')
+        token = data.get('token')
+        if not session_id or not token:
+            return
+
+        try:
+            resp = requests.get(
+                f"{_BACKEND_URL}/api/sessions/{session_id}/authorize-viewer",
+                headers={'Authorization': f'Bearer {token}'},
+                timeout=3,
+            )
+        except requests.exceptions.RequestException:
+            return
+        if resp.ok:
+            join_room(str(session_id))
+            emit('joined_session_room', {'session_id': session_id})
 
     @socketio.on('connect')
     def handle_connect():
