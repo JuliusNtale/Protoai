@@ -54,7 +54,7 @@ type MyReportRow = {
   session_status: string
 }
 
-const DEGREE_PROGRAM_OPTIONS = [
+const FALLBACK_DEGREE_PROGRAM_OPTIONS = [
   "Bachelor of Science in Information Technology with Business Analytics",
   "Bachelor of Science in Instructional Design and Information Technology (BSc IDIT)",
   "Bachelor of Science in Multimedia Technology and Animation",
@@ -111,6 +111,7 @@ function StudentDashboardInner() {
   const [onboardingMsg, setOnboardingMsg] = useState("")
   const [showForcePasswordModal, setShowForcePasswordModal] = useState(false)
   const [forcePasswordMsg, setForcePasswordMsg] = useState("")
+  const [degreeProgramOptions, setDegreeProgramOptions] = useState<string[]>(FALLBACK_DEGREE_PROGRAM_OPTIONS)
 
   useEffect(() => {
     const rawToken = localStorage.getItem("token")
@@ -133,14 +134,19 @@ function StudentDashboardInner() {
     setLoading(true)
     setError("")
     try {
-      const [meRes, examsRes, reportsRes] = await Promise.all([
+      const [meRes, examsRes, reportsRes, programsRes] = await Promise.all([
         fetch(getApiPath("/auth/me"), { headers: { Authorization: `Bearer ${activeToken}` } }),
         fetch(getApiPath("/exams"), { headers: { Authorization: `Bearer ${activeToken}` } }),
         fetch(getApiPath("/reports/my"), { headers: { Authorization: `Bearer ${activeToken}` } }),
+        fetch(getApiPath("/exams/programs"), { headers: { Authorization: `Bearer ${activeToken}` } }),
       ])
       const mePayload = await meRes.json().catch(() => ({}))
       const examsPayload = await examsRes.json().catch(() => ({}))
       const reportsPayload = await reportsRes.json().catch(() => ({}))
+      const programsPayload = await programsRes.json().catch(() => ({}))
+      if (programsRes.ok && Array.isArray(programsPayload.programs) && programsPayload.programs.length > 0) {
+        setDegreeProgramOptions(programsPayload.programs.map((p: { name: string }) => p.name))
+      }
 
       if (!meRes.ok) {
         localStorage.removeItem("token")
@@ -554,7 +560,7 @@ function StudentDashboardInner() {
               <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="Phone number" className="rounded-md border border-border bg-background p-2 text-sm text-foreground" />
               <select value={department} onChange={e => setDepartment(e.target.value)} disabled={studentProfileLocked} className="rounded-md border border-border bg-background p-2 text-sm text-foreground disabled:cursor-not-allowed disabled:bg-muted/40 md:col-span-2">
                 <option value="">Select Degree / Course Program</option>
-                {DEGREE_PROGRAM_OPTIONS.map((program) => (
+                {degreeProgramOptions.map((program) => (
                   <option key={program} value={program}>{program}</option>
                 ))}
               </select>
@@ -637,7 +643,7 @@ function StudentDashboardInner() {
             <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="Phone number" className="rounded-md border border-border bg-background p-2 text-sm text-foreground" />
             <select value={department} onChange={e => setDepartment(e.target.value)} className="rounded-md border border-border bg-background p-2 text-sm text-foreground">
               <option value="">Select Degree Program</option>
-              {DEGREE_PROGRAM_OPTIONS.map((program) => (
+              {degreeProgramOptions.map((program) => (
                 <option key={program} value={program}>{program}</option>
               ))}
             </select>

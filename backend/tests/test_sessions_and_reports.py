@@ -51,7 +51,7 @@ def test_start_session_returns_409_if_existing(client, app, tmp_path):
 
     create_exam = client.post(
         "/api/exams",
-        json={"title": "Algorithms", "course_code": "CS301", "duration_min": 120},
+        json={"title": "Algorithms", "course_code": "CS301", "duration_min": 120, "program_ids": [1]},
         headers={"Authorization": f"Bearer {lecturer_token}"},
     )
     create_exam_json = create_exam.get_json() or {}
@@ -247,7 +247,7 @@ def test_internal_session_lookup_requires_token_and_returns_student_id(client, a
 
     create_exam = client.post(
         "/api/exams",
-        json={"title": "Internal Lookup", "course_code": "CS403", "duration_min": 60},
+        json={"title": "Internal Lookup", "course_code": "CS403", "duration_min": 60, "program_ids": [1]},
         headers={"Authorization": f"Bearer {lecturer_token}"},
     )
     exam_id = create_exam.get_json()["exam_id"]
@@ -317,7 +317,7 @@ def test_session_status_reflects_current_identity_verified_state(client, app, tm
 
     create_exam = client.post(
         "/api/exams",
-        json={"title": "Networks", "course_code": "CS310", "duration_min": 60},
+        json={"title": "Networks", "course_code": "CS310", "duration_min": 60, "program_ids": [1]},
         headers={"Authorization": f"Bearer {lecturer_token}"},
     )
     exam_id = create_exam.get_json()["exam_id"]

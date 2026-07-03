@@ -4,7 +4,17 @@ from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt, get_jwt_identity, jwt_required
 
 from app.extensions import db
-from app.models import BehavioralLog, Exam, ExamSession, Question, Report, SessionAnswer, User
+from app.models import (
+    BehavioralLog,
+    DegreeProgram,
+    Exam,
+    ExamSession,
+    ExamStudentAssignment,
+    Question,
+    Report,
+    SessionAnswer,
+    User,
+)
 
 exams_bp = Blueprint("exams", __name__)
 
@@ -39,6 +49,18 @@ def list_exams():
         query = query.filter_by(lecturer_id=user_id)
     if role == "student":
         query = query.filter(Exam.status.in_(["scheduled", "live", "completed"]))
+        student = db.session.get(User, user_id)
+        student_department = (student.department or "").strip() if student else ""
+        assigned_exam_ids = db.session.query(ExamStudentAssignment.exam_id).filter(
+            ExamStudentAssignment.student_id == user_id
+        )
+        query = query.filter(
+            db.or_(
+                ~Exam.programs.any(),
+                Exam.programs.any(DegreeProgram.name == student_department),
+                Exam.exam_id.in_(assigned_exam_ids),
+            )
+        )
     if status_filter:
         query = query.filter_by(status=status_filter)
 
@@ -59,10 +81,22 @@ def list_exams():
                     "status": exam.status,
                     "lecturer_id": exam.lecturer_id,
                     "lecturer_name": lecturer_map.get(exam.lecturer_id),
+                    "programs": [
+                        {"program_id": program.program_id, "name": program.name} for program in exam.programs
+                    ],
                 }
                 for exam in exams
             ]
         }
+    ), 200
+
+
+@exams_bp.get("/programs")
+@jwt_required()
+def list_degree_programs():
+    programs = DegreeProgram.query.order_by(DegreeProgram.name.asc()).all()
+    return jsonify(
+        {"programs": [{"program_id": program.program_id, "name": program.name} for program in programs]}
     ), 200
 
 
@@ -81,9 +115,16 @@ def create_exam():
     course_code = (data.get("course_code") or "").strip()
     duration_min = data.get("duration_min")
     scheduled_raw = data.get("scheduled_at")
+    program_ids = data.get("program_ids") or []
 
     if not title or not course_code or not duration_min:
         return jsonify({"error": {"message": "Missing required fields"}}), 400
+    if not isinstance(program_ids, list) or not program_ids:
+        return jsonify({"error": {"message": "Select at least one degree program"}}), 400
+
+    programs = DegreeProgram.query.filter(DegreeProgram.program_id.in_(program_ids)).all()
+    if len(programs) != len(set(program_ids)):
+        return jsonify({"error": {"message": "One or more selected degree programs are invalid"}}), 400
 
     scheduled_at = None
     if scheduled_raw:
@@ -99,6 +140,7 @@ def create_exam():
         duration_min=int(duration_min),
         scheduled_at=scheduled_at,
         status="draft",
+        programs=programs,
     )
     db.session.add(exam)
     db.session.commit()
@@ -156,6 +198,7 @@ def update_exam(exam_id):
     course_code = (data.get("course_code") or exam.course_code).strip()
     duration_min = int(data.get("duration_min") or exam.duration_min)
     scheduled_raw = data.get("scheduled_at")
+    program_ids = data.get("program_ids")
 
     scheduled_at = exam.scheduled_at
     if scheduled_raw:
@@ -166,6 +209,14 @@ def update_exam(exam_id):
 
     if not title or not course_code or duration_min <= 0:
         return jsonify({"error": {"message": "title, course_code and positive duration_min are required"}}), 400
+
+    if program_ids is not None:
+        if not isinstance(program_ids, list) or not program_ids:
+            return jsonify({"error": {"message": "Select at least one degree program"}}), 400
+        programs = DegreeProgram.query.filter(DegreeProgram.program_id.in_(program_ids)).all()
+        if len(programs) != len(set(program_ids)):
+            return jsonify({"error": {"message": "One or more selected degree programs are invalid"}}), 400
+        exam.programs = programs
 
     exam.title = title
     exam.course_code = course_code
@@ -242,6 +293,9 @@ def get_exam(exam_id):
                     "duration_min": exam.duration_min,
                     "scheduled_at": exam.scheduled_at.isoformat() if exam.scheduled_at else None,
                     "status": exam.status,
+                    "programs": [
+                        {"program_id": program.program_id, "name": program.name} for program in exam.programs
+                    ],
                 },
                 "questions": payload_questions,
             }
@@ -403,6 +457,143 @@ def list_exam_students(exam_id):
             ]
         }
     ), 200
+
+
+@exams_bp.get("/students/search")
+@jwt_required()
+def search_students_for_assignment():
+    role = get_jwt().get("role")
+    if role not in {"lecturer", "admin"}:
+        return jsonify({"error": {"message": "Forbidden"}}), 403
+
+    query_text = (request.args.get("q") or "").strip()
+    if len(query_text) < 2:
+        return jsonify({"students": []}), 200
+
+    pattern = f"%{query_text}%"
+    rows = (
+        User.query.filter(User.role == "student")
+        .filter(
+            db.or_(
+                User.full_name.ilike(pattern),
+                User.reg_number.ilike(pattern),
+                User.email.ilike(pattern),
+            )
+        )
+        .order_by(User.full_name.asc())
+        .limit(20)
+        .all()
+    )
+    return jsonify(
+        {
+            "students": [
+                {
+                    "user_id": user.user_id,
+                    "full_name": user.full_name,
+                    "registration_number": user.reg_number,
+                    "email": user.email,
+                    "department": user.department,
+                }
+                for user in rows
+            ]
+        }
+    ), 200
+
+
+@exams_bp.get("/<int:exam_id>/assigned-students")
+@jwt_required()
+def list_assigned_students(exam_id):
+    role = get_jwt().get("role")
+    user_id = int(get_jwt_identity())
+    if role not in {"lecturer", "admin"}:
+        return jsonify({"error": {"message": "Forbidden"}}), 403
+
+    exam = db.session.get(Exam, exam_id)
+    if not exam:
+        return jsonify({"error": {"message": "Exam not found"}}), 404
+    if role == "lecturer" and exam.lecturer_id != user_id:
+        return jsonify({"error": {"message": "Forbidden"}}), 403
+
+    rows = (
+        db.session.query(ExamStudentAssignment, User)
+        .join(User, User.user_id == ExamStudentAssignment.student_id)
+        .filter(ExamStudentAssignment.exam_id == exam_id)
+        .order_by(User.full_name.asc())
+        .all()
+    )
+    return jsonify(
+        {
+            "assigned_students": [
+                {
+                    "assignment_id": assignment.assignment_id,
+                    "user_id": user.user_id,
+                    "full_name": user.full_name,
+                    "registration_number": user.reg_number,
+                    "email": user.email,
+                    "department": user.department,
+                    "created_at": assignment.created_at.isoformat() if assignment.created_at else None,
+                }
+                for assignment, user in rows
+            ]
+        }
+    ), 200
+
+
+@exams_bp.post("/<int:exam_id>/assigned-students")
+@jwt_required()
+def assign_student_to_exam(exam_id):
+    role = get_jwt().get("role")
+    user_id = int(get_jwt_identity())
+    if role not in {"lecturer", "admin"}:
+        return jsonify({"error": {"message": "Forbidden"}}), 403
+    if role == "lecturer" and not _lecturer_profile_confirmed(user_id):
+        return jsonify({"error": {"message": "Complete and confirm your lecturer profile before managing exams."}}), 403
+
+    exam = db.session.get(Exam, exam_id)
+    if not exam:
+        return jsonify({"error": {"message": "Exam not found"}}), 404
+    if role == "lecturer" and exam.lecturer_id != user_id:
+        return jsonify({"error": {"message": "Forbidden"}}), 403
+
+    data = request.get_json(silent=True) or {}
+    student_id = data.get("student_id")
+    if not student_id:
+        return jsonify({"error": {"message": "student_id is required"}}), 400
+
+    student = db.session.get(User, int(student_id))
+    if not student or student.role != "student":
+        return jsonify({"error": {"message": "Student not found"}}), 404
+
+    existing = ExamStudentAssignment.query.filter_by(exam_id=exam_id, student_id=student.user_id).first()
+    if existing:
+        return jsonify({"error": {"message": "Student is already assigned to this exam"}}), 409
+
+    assignment = ExamStudentAssignment(exam_id=exam_id, student_id=student.user_id, added_by=user_id)
+    db.session.add(assignment)
+    db.session.commit()
+    return jsonify({"assignment_id": assignment.assignment_id, "message": "Student assigned to exam"}), 201
+
+
+@exams_bp.delete("/<int:exam_id>/assigned-students/<int:student_id>")
+@jwt_required()
+def unassign_student_from_exam(exam_id, student_id):
+    role = get_jwt().get("role")
+    user_id = int(get_jwt_identity())
+    if role not in {"lecturer", "admin"}:
+        return jsonify({"error": {"message": "Forbidden"}}), 403
+
+    exam = db.session.get(Exam, exam_id)
+    if not exam:
+        return jsonify({"error": {"message": "Exam not found"}}), 404
+    if role == "lecturer" and exam.lecturer_id != user_id:
+        return jsonify({"error": {"message": "Forbidden"}}), 403
+
+    assignment = ExamStudentAssignment.query.filter_by(exam_id=exam_id, student_id=student_id).first()
+    if not assignment:
+        return jsonify({"error": {"message": "Assignment not found"}}), 404
+    db.session.delete(assignment)
+    db.session.commit()
+    return jsonify({"message": "Student removed from exam"}), 200
 
 
 @exams_bp.get("/course/<string:course_code>/students")

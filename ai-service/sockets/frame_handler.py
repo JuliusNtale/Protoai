@@ -50,7 +50,15 @@ _ANOMALY_SECONDS = {
     'face_absent': float(os.getenv('FACE_ABSENT_SECONDS', os.getenv('GAZE_AWAY_SECONDS', '2'))),
     'multiple_faces': float(os.getenv('MULTIPLE_FACES_SECONDS', '2')),
 }
-_WARNING_COOLDOWN_SECONDS = float(os.getenv('WARNING_COOLDOWN_SECONDS', '15'))
+# Gap required between two CONFIRMED logs of the same continuously-sustained
+# anomaly. This is the real strictness bottleneck for a student who never
+# breaks the violation at all (e.g. stares away continuously): the 2s
+# persistence window above only gates the FIRST confirmation, so with the
+# old 15s cooldown a continuous violation only re-fired every 15s, reaching
+# the 3-strike auto-submit around ~32s in. Tightened to 5s (2026-07-03) so
+# the same continuous violation re-fires at ~2s/7s/12s, auto-submitting by
+# ~12s - closer to how aggressively Duolingo-style proctoring escalates.
+_WARNING_COOLDOWN_SECONDS = float(os.getenv('WARNING_COOLDOWN_SECONDS', '5'))
 
 # Minimum gaze-model confidence before a non-Screen reading counts as a real
 # anomaly at all. The model's confidence sits close to chance level (~0.2 for

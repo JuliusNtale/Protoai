@@ -20,6 +20,11 @@ type MeUser = {
   role: string
 }
 
+type ProgramOption = {
+  program_id: number
+  name: string
+}
+
 type ExamRow = {
   exam_id: number
   title: string
@@ -27,6 +32,19 @@ type ExamRow = {
   duration_min: number
   scheduled_at?: string | null
   status: string
+  programs?: ProgramOption[]
+}
+
+type StudentSearchRow = {
+  user_id: number
+  full_name: string
+  registration_number: string
+  email: string
+  department?: string | null
+}
+
+type AssignedStudentRow = StudentSearchRow & {
+  assignment_id: number
 }
 
 type QuestionRow = {
@@ -111,6 +129,10 @@ function formatDateTimeInput(value?: string | null) {
   return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16)
 }
 
+function toggleProgramId(list: number[], id: number): number[] {
+  return list.includes(id) ? list.filter((existing) => existing !== id) : [...list, id]
+}
+
 function formatEventDetail(entry: { event_type: string; event_data: Record<string, unknown> }): string {
   const data = entry.event_data || {}
   if (entry.event_type === "identity_verification") {
@@ -162,16 +184,25 @@ function LecturerDashboardInner() {
   const [newCourseCode, setNewCourseCode] = useState("")
   const [newDuration, setNewDuration] = useState("60")
   const [newSchedule, setNewSchedule] = useState("")
+  const [newProgramIds, setNewProgramIds] = useState<number[]>([])
   const [editingExam, setEditingExam] = useState<ExamRow | null>(null)
   const [editTitle, setEditTitle] = useState("")
   const [editCourseCode, setEditCourseCode] = useState("")
   const [editDuration, setEditDuration] = useState("60")
   const [editSchedule, setEditSchedule] = useState("")
+  const [editProgramIds, setEditProgramIds] = useState<number[]>([])
   const [savingExamEdit, setSavingExamEdit] = useState(false)
+  const [programOptions, setProgramOptions] = useState<ProgramOption[]>([])
 
   const [selectedExamId, setSelectedExamId] = useState<number | null>(null)
   const [questions, setQuestions] = useState<QuestionRow[]>([])
   const [students, setStudents] = useState<StudentRow[]>([])
+  const [assignedStudents, setAssignedStudents] = useState<AssignedStudentRow[]>([])
+  const [studentSearchQuery, setStudentSearchQuery] = useState("")
+  const [studentSearchResults, setStudentSearchResults] = useState<StudentSearchRow[]>([])
+  const [searchingStudents, setSearchingStudents] = useState(false)
+  const [assigningStudentId, setAssigningStudentId] = useState<number | null>(null)
+  const [assignError, setAssignError] = useState("")
   const [sessionResults, setSessionResults] = useState<SessionResultRow[]>([])
   const [exporting, setExporting] = useState(false)
   const [viewingReport, setViewingReport] = useState<ReportDetail | null>(null)
@@ -219,14 +250,17 @@ function LecturerDashboardInner() {
   async function load(activeToken: string) {
     setLoading(true)
     try {
-      const [meRes, examsRes, sessionsRes] = await Promise.all([
+      const [meRes, examsRes, sessionsRes, programsRes] = await Promise.all([
         fetch(getApiPath("/auth/me"), { headers: { Authorization: `Bearer ${activeToken}` } }),
         fetch(getApiPath("/exams"), { headers: { Authorization: `Bearer ${activeToken}` } }),
         fetch(getApiPath("/sessions"), { headers: { Authorization: `Bearer ${activeToken}` } }),
+        fetch(getApiPath("/exams/programs"), { headers: { Authorization: `Bearer ${activeToken}` } }),
       ])
       const mePayload = await meRes.json().catch(() => ({}))
       const examsPayload = await examsRes.json().catch(() => ({}))
       const sessionsPayload = await sessionsRes.json().catch(() => ({}))
+      const programsPayload = await programsRes.json().catch(() => ({}))
+      if (programsRes.ok) setProgramOptions(programsPayload.programs || [])
       if (!meRes.ok) {
         localStorage.removeItem("token")
         localStorage.removeItem("user")
@@ -272,18 +306,78 @@ function LecturerDashboardInner() {
   }
 
   async function loadExamDetails(activeToken: string, examId: number) {
-    const [examRes, studentsRes] = await Promise.all([
+    const [examRes, studentsRes, assignedRes] = await Promise.all([
       fetch(getApiPath(`/exams/${examId}`), { headers: { Authorization: `Bearer ${activeToken}` } }),
       fetch(getApiPath(`/exams/${examId}/students`), { headers: { Authorization: `Bearer ${activeToken}` } }),
+      fetch(getApiPath(`/exams/${examId}/assigned-students`), { headers: { Authorization: `Bearer ${activeToken}` } }),
     ])
     const examPayload = await examRes.json().catch(() => ({}))
     const studentsPayload = await studentsRes.json().catch(() => ({}))
+    const assignedPayload = await assignedRes.json().catch(() => ({}))
     if (examRes.ok) setQuestions(examPayload.questions || [])
     if (studentsRes.ok) setStudents(studentsPayload.students || [])
+    if (assignedRes.ok) setAssignedStudents(assignedPayload.assigned_students || [])
+    setStudentSearchQuery("")
+    setStudentSearchResults([])
+    setAssignError("")
+  }
+
+  async function searchStudentsForAssignment() {
+    const q = studentSearchQuery.trim()
+    if (q.length < 2) {
+      setStudentSearchResults([])
+      return
+    }
+    setSearchingStudents(true)
+    try {
+      const res = await fetch(getApiPath(`/exams/students/search?q=${encodeURIComponent(q)}`), {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const payload = await res.json().catch(() => ({}))
+      if (res.ok) setStudentSearchResults(payload.students || [])
+    } finally {
+      setSearchingStudents(false)
+    }
+  }
+
+  async function assignStudentToExam(student: StudentSearchRow) {
+    if (!selectedExamId) return
+    setAssigningStudentId(student.user_id)
+    setAssignError("")
+    const res = await fetch(getApiPath(`/exams/${selectedExamId}/assigned-students`), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ student_id: student.user_id }),
+    })
+    const payload = await res.json().catch(() => ({}))
+    setAssigningStudentId(null)
+    if (!res.ok) {
+      setAssignError(payload?.error?.message || "Could not assign student.")
+      return
+    }
+    await loadExamDetails(token, selectedExamId)
+  }
+
+  async function removeAssignedStudent(studentId: number) {
+    if (!selectedExamId) return
+    const res = await fetch(getApiPath(`/exams/${selectedExamId}/assigned-students/${studentId}`), {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    const payload = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      setAssignError(payload?.error?.message || "Could not remove student.")
+      return
+    }
+    await loadExamDetails(token, selectedExamId)
   }
 
   async function createExam() {
     if (!newTitle || !newCourseCode) return
+    if (newProgramIds.length === 0) {
+      setError("Select at least one degree program for this exam.")
+      return
+    }
     const res = await fetch(getApiPath("/exams"), {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -292,6 +386,7 @@ function LecturerDashboardInner() {
         course_code: newCourseCode,
         duration_min: Number(newDuration),
         scheduled_at: newSchedule || undefined,
+        program_ids: newProgramIds,
       }),
     })
     const payload = await res.json().catch(() => ({}))
@@ -303,6 +398,7 @@ function LecturerDashboardInner() {
     setNewCourseCode("")
     setNewDuration("60")
     setNewSchedule("")
+    setNewProgramIds([])
     const createdExamId = Number(payload?.exam_id || payload?.id)
     if (Number.isFinite(createdExamId) && createdExamId > 0) {
       await load(token)
@@ -318,6 +414,7 @@ function LecturerDashboardInner() {
     setEditCourseCode(exam.course_code)
     setEditDuration(String(exam.duration_min))
     setEditSchedule(formatDateTimeInput(exam.scheduled_at))
+    setEditProgramIds((exam.programs || []).map((program) => program.program_id))
     setError("")
   }
 
@@ -328,6 +425,7 @@ function LecturerDashboardInner() {
     setEditCourseCode("")
     setEditDuration("60")
     setEditSchedule("")
+    setEditProgramIds([])
   }
 
   async function saveExamEdit() {
@@ -337,6 +435,10 @@ function LecturerDashboardInner() {
     const duration = Number(editDuration)
     if (!title || !courseCode || !Number.isFinite(duration) || duration <= 0) {
       setError("Exam title, course code, and a valid duration are required.")
+      return
+    }
+    if (editProgramIds.length === 0) {
+      setError("Select at least one degree program for this exam.")
       return
     }
 
@@ -349,6 +451,7 @@ function LecturerDashboardInner() {
         course_code: courseCode,
         duration_min: duration,
         scheduled_at: editSchedule || undefined,
+        program_ids: editProgramIds,
       }),
     })
     const payload = await res.json().catch(() => ({}))
@@ -735,6 +838,24 @@ function LecturerDashboardInner() {
               className="cursor-pointer rounded-md border border-border bg-background p-2 text-sm text-foreground focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100"
             />
           </div>
+          <div className="mt-3">
+            <p className="text-sm font-medium text-foreground">Degree programs eligible for this exam <span className="text-red-600">*</span></p>
+            <p className="text-xs text-muted-foreground">Only students in the selected program(s) will see this exam. Add exceptions later from the Students tab.</p>
+            <div className="mt-2 grid max-h-48 gap-1.5 overflow-y-auto rounded-md border border-border p-2 md:grid-cols-2">
+              {programOptions.map((program) => (
+                <label key={program.program_id} className="flex items-start gap-2 text-xs text-foreground">
+                  <input
+                    type="checkbox"
+                    checked={newProgramIds.includes(program.program_id)}
+                    onChange={() => setNewProgramIds((prev) => toggleProgramId(prev, program.program_id))}
+                    className="mt-0.5"
+                  />
+                  {program.name}
+                </label>
+              ))}
+              {programOptions.length === 0 && <p className="text-xs text-muted-foreground">Loading degree programs...</p>}
+            </div>
+          </div>
           <p className="mt-3 text-xs text-muted-foreground">
             Workflow: create exam, add questions immediately, then set exam status to <span className="font-semibold">scheduled</span> or <span className="font-semibold">live</span>.
           </p>
@@ -752,6 +873,7 @@ function LecturerDashboardInner() {
                 <tr className="border-b border-border bg-muted/50 text-left">
                   <th className="py-2 pl-3">Title</th>
                   <th>Course</th>
+                  <th>Programs</th>
                   <th>Schedule</th>
                   <th>Status</th>
                   <th>Set Status</th>
@@ -764,6 +886,19 @@ function LecturerDashboardInner() {
                   <tr key={exam.exam_id} className="border-b last:border-b-0">
                     <td className="py-2 pl-3 font-medium">{exam.title}</td>
                     <td>{exam.course_code}</td>
+                    <td className="max-w-[220px]">
+                      {(exam.programs || []).length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {(exam.programs || []).map((program) => (
+                            <span key={program.program_id} className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                              {program.name.length > 28 ? `${program.name.slice(0, 28)}...` : program.name}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">All programs (legacy)</span>
+                      )}
+                    </td>
                     <td>{formatDateTime(exam.scheduled_at)}</td>
                     <td><StatusBadge value={exam.status} /></td>
                     <td>
@@ -803,7 +938,7 @@ function LecturerDashboardInner() {
                     </td>
                   </tr>
                 ))}
-                {exams.length === 0 && <tr><td colSpan={7} className="py-3 pl-3 text-slate-600">No exams created yet.</td></tr>}
+                {exams.length === 0 && <tr><td colSpan={8} className="py-3 pl-3 text-slate-600">No exams created yet.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -935,6 +1070,108 @@ function LecturerDashboardInner() {
                   </tr>
                 ))}
                 {students.length === 0 && <tr><td colSpan={6} className="py-3 text-slate-600">No students enrolled yet (students appear after starting session).</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </DashboardPanel>
+
+        <DashboardPanel title="Manually Assign Students">
+          <div className="flex items-center gap-2">
+            <Users className="h-5 w-5 text-blue-700" />
+            <h2 className="text-base font-semibold">Manually Assign Students {selectedExam ? `- ${selectedExam.title}` : ""}</h2>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Grant a specific student access to this exam even if they are not in one of the exam&apos;s assigned degree programs (e.g. a special case or retake).
+          </p>
+          {assignError ? <p className="mt-2 text-sm text-red-600">{assignError}</p> : null}
+          <div className="mt-3 flex flex-wrap gap-2">
+            <input
+              value={studentSearchQuery}
+              onChange={(e) => setStudentSearchQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault()
+                  void searchStudentsForAssignment()
+                }
+              }}
+              placeholder="Search by name, reg number, or email"
+              disabled={!selectedExamId}
+              className="min-w-[240px] flex-1 rounded-md border border-border bg-background p-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100"
+            />
+            <button
+              onClick={() => void searchStudentsForAssignment()}
+              disabled={!selectedExamId || searchingStudents}
+              className="rounded-md border border-border bg-card px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-60"
+            >
+              {searchingStudents ? "Searching..." : "Search"}
+            </button>
+          </div>
+          {studentSearchResults.length > 0 && (
+            <div className="mt-3 overflow-x-auto rounded-md border border-border">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/50 text-left">
+                    <th className="py-2 pl-2">Name</th>
+                    <th>Reg Number</th>
+                    <th>Email</th>
+                    <th>Degree Program</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {studentSearchResults.map((s) => {
+                    const alreadyAssigned = assignedStudents.some((a) => a.user_id === s.user_id)
+                    return (
+                      <tr key={s.user_id} className="border-b last:border-b-0">
+                        <td className="py-2 pl-2">{s.full_name}</td>
+                        <td>{s.registration_number}</td>
+                        <td>{s.email}</td>
+                        <td>{s.department || "-"}</td>
+                        <td className="py-1 pr-2 text-right">
+                          <button
+                            onClick={() => void assignStudentToExam(s)}
+                            disabled={alreadyAssigned || assigningStudentId === s.user_id}
+                            className="rounded-md border border-border bg-card px-2 py-1 text-xs font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-60"
+                          >
+                            {alreadyAssigned ? "Assigned" : assigningStudentId === s.user_id ? "Adding..." : "Add"}
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left">
+                  <th className="py-2">Name</th>
+                  <th>Reg Number</th>
+                  <th>Email</th>
+                  <th>Degree Program</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {assignedStudents.map((a) => (
+                  <tr key={a.assignment_id} className="border-b">
+                    <td className="py-2">{a.full_name}</td>
+                    <td>{a.registration_number}</td>
+                    <td>{a.email}</td>
+                    <td>{a.department || "-"}</td>
+                    <td className="py-1 text-right">
+                      <button
+                        onClick={() => void removeAssignedStudent(a.user_id)}
+                        className="rounded-md border border-red-200 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50"
+                      >
+                        Remove
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {assignedStudents.length === 0 && <tr><td colSpan={5} className="py-3 text-slate-600">No manually assigned students for this exam.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -1120,6 +1357,22 @@ function LecturerDashboardInner() {
                   className="cursor-pointer rounded-md border border-border bg-background p-2 text-sm text-foreground focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100"
                 />
               </label>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-foreground">Degree programs eligible for this exam <span className="text-red-600">*</span></p>
+              <div className="mt-2 grid max-h-40 gap-1.5 overflow-y-auto rounded-md border border-border p-2 md:grid-cols-2">
+                {programOptions.map((program) => (
+                  <label key={program.program_id} className="flex items-start gap-2 text-xs text-foreground">
+                    <input
+                      type="checkbox"
+                      checked={editProgramIds.includes(program.program_id)}
+                      onChange={() => setEditProgramIds((prev) => toggleProgramId(prev, program.program_id))}
+                      className="mt-0.5"
+                    />
+                    {program.name}
+                  </label>
+                ))}
+              </div>
             </div>
             <div className="mt-2 flex flex-wrap justify-end gap-2">
               <button
