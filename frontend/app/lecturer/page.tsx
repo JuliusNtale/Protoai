@@ -123,6 +123,11 @@ function formatEventDetail(entry: { event_type: string; event_data: Record<strin
     if (typeof data.confidence_score === "number") parts.push(`confidence: ${data.confidence_score.toFixed(2)}`)
     return parts.join(", ")
   }
+  if (entry.event_type === "identity_mismatch") {
+    const parts: string[] = ["face did not match registered profile during exam"]
+    if (typeof data.confidence_score === "number") parts.push(`confidence: ${data.confidence_score.toFixed(2)}`)
+    return parts.join(", ")
+  }
   const parts: string[] = []
   if (typeof data.gaze_direction === "string") parts.push(`gaze: ${data.gaze_direction}`)
   if (typeof data.yaw === "number") parts.push(`yaw: ${data.yaw.toFixed(1)}`)

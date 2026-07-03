@@ -8,7 +8,9 @@ from flask_socketio import SocketIO, emit
 from services.preprocessing import base64_to_numpy
 from services.gaze_estimator import estimate_gaze
 from services.head_pose import estimate_head_pose, _YAW_THRESHOLD, _PITCH_THRESHOLD
-from services.face_detector import count_faces
+from services.face_detector import count_faces, detect_and_crop_face
+from services.model_loader import get_facenet
+from services.identity_verifier import match_face_crop_to_baseline
 
 _BACKEND_URL = os.getenv('BACKEND_URL', 'http://localhost:5000')
 _AI_SERVICE_TOKEN = os.getenv('AI_SERVICE_TOKEN', '').strip()
@@ -18,7 +20,18 @@ _AI_SERVICE_TOKEN = os.getenv('AI_SERVICE_TOKEN', '').strip()
 _warning_counts: dict = {}
 _anomaly_states: dict = {}
 _baseline_pose: dict = {}
+_session_student_id: dict = {}
+_identity_check_state: dict = {}
 _lock = threading.Lock()
+
+# How often to re-run the (comparatively expensive) FaceNet identity check
+# against the registered baseline during the exam, and how many CONSECUTIVE
+# mismatched checks are required before treating it as a confirmed impostor.
+# This is the check that catches someone swapping in mid-exam without ever
+# leaving/reloading the /exam page (the one-time /verify-identity call and
+# the page-load /status guard only cover entry, not the middle of a session).
+_IDENTITY_RECHECK_SECONDS = float(os.getenv('IDENTITY_RECHECK_SECONDS', '8'))
+_IDENTITY_MISMATCH_CONFIRM_COUNT = int(os.getenv('IDENTITY_MISMATCH_CONFIRM_COUNT', '2'))
 
 # Number of frames at the start of a session used to calibrate that
 # student's own neutral head pose, before any head_turned alert can fire.
@@ -122,6 +135,93 @@ def _confirmed_anomalies(session_id, current_anomalies):
     return confirmed
 
 
+def _resolve_student_id(session_id):
+    """Trusted session_id -> student_id lookup via the backend (never trust
+    a client-supplied user_id here - see the internal endpoint's docstring
+    for why that would defeat the whole check)."""
+    with _lock:
+        cached = _session_student_id.get(session_id)
+    if cached is not None:
+        return cached
+
+    try:
+        response = requests.get(
+            f"{_BACKEND_URL}/api/sessions/internal/{session_id}",
+            headers={'X-Internal-Token': _AI_SERVICE_TOKEN} if _AI_SERVICE_TOKEN else None,
+            timeout=3,
+        )
+        if response.ok:
+            student_id = response.json().get('student_id')
+            if student_id is not None:
+                with _lock:
+                    _session_student_id[session_id] = student_id
+                return student_id
+    except requests.exceptions.RequestException:
+        pass
+    return None
+
+
+def _check_identity_mismatch(session_id, img_bgr):
+    """
+    Periodically re-verify the current frame's face against the session's
+    registered baseline, throttled to _IDENTITY_RECHECK_SECONDS since FaceNet
+    inference is heavier than gaze/pose/count. Requires
+    _IDENTITY_MISMATCH_CONFIRM_COUNT CONSECUTIVE mismatched checks (not one
+    bad-angle/lighting frame) before reporting a confirmed mismatch — same
+    confidence+persistence philosophy already used for gaze/head-pose
+    anomalies, but here the consequence (immediate session lock) is severe
+    enough that a lone bad frame must not be able to trigger it.
+
+    Returns (confirmed: bool, confidence: float | None).
+    """
+    now = time.monotonic()
+    with _lock:
+        state = _identity_check_state.setdefault(
+            session_id, {'last_check_at': 0.0, 'consecutive_mismatches': 0}
+        )
+        if now - state['last_check_at'] < _IDENTITY_RECHECK_SECONDS:
+            return False, None
+        state['last_check_at'] = now
+
+    facenet = get_facenet()
+    if facenet is None:
+        return False, None
+
+    student_id = _resolve_student_id(session_id)
+    if student_id is None:
+        return False, None
+
+    face_crop, _ = detect_and_crop_face(img_bgr)
+    if face_crop is None:
+        return False, None
+
+    try:
+        match, confidence, error = match_face_crop_to_baseline(face_crop, student_id, facenet)
+    except Exception:
+        return False, None
+    if match is None:
+        print(f"[identity_debug] session={session_id} student_id={student_id} baseline unavailable: {error}", flush=True)
+        return False, None
+
+    print(
+        f"[identity_debug] session={session_id} student_id={student_id} "
+        f"match={match} confidence={confidence}",
+        flush=True,
+    )
+
+    with _lock:
+        state = _identity_check_state[session_id]
+        if match:
+            state['consecutive_mismatches'] = 0
+            return False, confidence
+        state['consecutive_mismatches'] += 1
+        confirmed = state['consecutive_mismatches'] >= _IDENTITY_MISMATCH_CONFIRM_COUNT
+        if confirmed:
+            state['consecutive_mismatches'] = 0
+
+    return confirmed, confidence
+
+
 def register_handlers(socketio: SocketIO):
 
     @socketio.on('webcam_frame')
@@ -159,6 +259,15 @@ def register_handlers(socketio: SocketIO):
 
         gaze = gaze_result[0]
         pose = pose_result[0]
+
+        # Only re-check identity when exactly one face is present - with zero
+        # faces there's nothing to compare, and with multiple faces the
+        # multiple_faces anomaly above already covers it and it's ambiguous
+        # which face would even be compared.
+        identity_mismatch_confirmed = False
+        identity_confidence = None
+        if face_count[0] == 1:
+            identity_mismatch_confirmed, identity_confidence = _check_identity_mismatch(session_id, img_bgr)
 
         print(
             f"[gaze_debug] session={session_id} "
@@ -241,6 +350,38 @@ def register_handlers(socketio: SocketIO):
             except requests.exceptions.RequestException:
                 pass  # Backend unreachable — don't crash the WebSocket handler
 
+        if identity_mismatch_confirmed:
+            print(f"[identity_debug] session={session_id} CONFIRMED MISMATCH - locking session", flush=True)
+            try:
+                requests.post(
+                    f"{_BACKEND_URL}/api/sessions/verify",
+                    headers=headers,
+                    json={
+                        'session_id': session_id,
+                        'match': False,
+                        'confidence_score': float(identity_confidence or 0.0),
+                        'verification_method': 'periodic-recheck',
+                    },
+                    timeout=3,
+                )
+            except requests.exceptions.RequestException:
+                pass
+            try:
+                resp = requests.post(
+                    f"{_BACKEND_URL}/api/sessions/log",
+                    headers=headers,
+                    json={
+                        'session_id': session_id,
+                        'event_type': 'identity_mismatch',
+                        'event_data': {'confidence_score': round(float(identity_confidence or 0.0), 4)},
+                    },
+                    timeout=3,
+                )
+                if resp.ok:
+                    warning_count = resp.json().get('warning_count', warning_count)
+            except requests.exceptions.RequestException:
+                pass
+
         with _lock:
             _warning_counts[session_id] = warning_count
 
@@ -255,10 +396,10 @@ def register_handlers(socketio: SocketIO):
             'calibrating':    calibrating,
         })
 
-        if warning_count >= 3:
+        if identity_mismatch_confirmed or warning_count >= 3:
             emit('session_locked', {
                 'session_id': session_id,
-                'reason': 'warning_count_exceeded',
+                'reason': 'identity_mismatch' if identity_mismatch_confirmed else 'warning_count_exceeded',
             })
 
     @socketio.on('connect')

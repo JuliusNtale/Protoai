@@ -1,6 +1,8 @@
 import sys
 import os
 
+import numpy as np
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 import sockets.frame_handler as fh
@@ -10,6 +12,11 @@ def _reset_state():
     fh._anomaly_states.clear()
     fh._warning_counts.clear()
     fh._baseline_pose.clear()
+
+
+def _reset_identity_state():
+    fh._session_student_id.clear()
+    fh._identity_check_state.clear()
 
 
 def test_base_type_strips_direction_qualifier():
@@ -107,3 +114,100 @@ def test_real_deviation_from_baseline_still_alerts():
     alert, calibrating = fh._calibrated_head_alert('s5', {'yaw': -58.0, 'pitch': -43.0, 'roll': -4.0})
     assert calibrating is False
     assert alert is True
+
+
+def test_resolve_student_id_caches_after_first_lookup(monkeypatch):
+    """The AI service must resolve session_id -> student_id from the backend
+    (never trust a client-supplied user_id, or an impostor could simply
+    claim their own account and match their own face). This should only hit
+    the network once per session, not on every frame."""
+    fh._session_student_id.clear()
+    calls = []
+
+    class FakeResponse:
+        ok = True
+
+        def json(self):
+            return {'student_id': 55}
+
+    def fake_get(url, headers=None, timeout=None):
+        calls.append(url)
+        return FakeResponse()
+
+    monkeypatch.setattr(fh.requests, 'get', fake_get)
+
+    first = fh._resolve_student_id('sA')
+    second = fh._resolve_student_id('sA')
+
+    assert first == 55
+    assert second == 55
+    assert len(calls) == 1
+
+
+def test_identity_check_throttled_within_recheck_interval(monkeypatch):
+    """FaceNet inference is heavier than gaze/pose/count, so the periodic
+    identity re-check must not run on every single frame."""
+    _reset_identity_state()
+    fh._session_student_id['sX'] = 7
+    monkeypatch.setattr(fh, 'get_facenet', lambda: object())
+    monkeypatch.setattr(fh, 'detect_and_crop_face', lambda img: (np.zeros((10, 10, 3)), 0.9))
+
+    calls = []
+
+    def fake_match(face_crop, student_id, facenet):
+        calls.append(student_id)
+        return False, 0.1, None
+
+    monkeypatch.setattr(fh, 'match_face_crop_to_baseline', fake_match)
+
+    times = iter([100.0, 101.0])  # second call only 1s later, inside the 8s window
+    monkeypatch.setattr(fh.time, 'monotonic', lambda: next(times))
+
+    confirmed1, _ = fh._check_identity_mismatch('sX', np.zeros((10, 10, 3)))
+    confirmed2, _ = fh._check_identity_mismatch('sX', np.zeros((10, 10, 3)))
+
+    assert confirmed1 is False
+    assert confirmed2 is False
+    assert len(calls) == 1  # second call was throttled before ever reaching the match check
+
+
+def test_identity_mismatch_confirmed_after_consecutive_mismatches(monkeypatch):
+    """A single bad-angle/lighting frame must not lock the session - only
+    IDENTITY_MISMATCH_CONFIRM_COUNT consecutive mismatched checks should."""
+    _reset_identity_state()
+    fh._session_student_id['sY'] = 9
+    monkeypatch.setattr(fh, 'get_facenet', lambda: object())
+    monkeypatch.setattr(fh, 'detect_and_crop_face', lambda img: (np.zeros((10, 10, 3)), 0.9))
+    monkeypatch.setattr(fh, 'match_face_crop_to_baseline', lambda face_crop, student_id, facenet: (False, 0.1, None))
+
+    times = iter([100.0, 200.0])  # spaced well beyond the 8s throttle window
+    monkeypatch.setattr(fh.time, 'monotonic', lambda: next(times))
+
+    confirmed1, _ = fh._check_identity_mismatch('sY', np.zeros((10, 10, 3)))
+    confirmed2, _ = fh._check_identity_mismatch('sY', np.zeros((10, 10, 3)))
+
+    assert confirmed1 is False
+    assert confirmed2 is True
+
+
+def test_identity_mismatch_counter_resets_on_a_matching_check(monkeypatch):
+    """A single matching check in between two mismatches must reset the
+    consecutive-mismatch counter, not just decrement it."""
+    _reset_identity_state()
+    fh._session_student_id['sZ'] = 11
+    monkeypatch.setattr(fh, 'get_facenet', lambda: object())
+    monkeypatch.setattr(fh, 'detect_and_crop_face', lambda img: (np.zeros((10, 10, 3)), 0.9))
+
+    results = iter([(False, 0.2, None), (True, 0.95, None), (False, 0.15, None)])
+    monkeypatch.setattr(fh, 'match_face_crop_to_baseline', lambda face_crop, student_id, facenet: next(results))
+
+    times = iter([100.0, 200.0, 300.0])
+    monkeypatch.setattr(fh.time, 'monotonic', lambda: next(times))
+
+    confirmed1, _ = fh._check_identity_mismatch('sZ', np.zeros((10, 10, 3)))  # mismatch #1
+    confirmed2, _ = fh._check_identity_mismatch('sZ', np.zeros((10, 10, 3)))  # match -> resets counter
+    confirmed3, _ = fh._check_identity_mismatch('sZ', np.zeros((10, 10, 3)))  # mismatch #1 again, not #2
+
+    assert confirmed1 is False
+    assert confirmed2 is False
+    assert confirmed3 is False

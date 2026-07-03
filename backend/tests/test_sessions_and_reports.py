@@ -166,6 +166,148 @@ def test_ai_service_can_log_monitoring_anomaly_with_internal_token(client, app):
         assert stored_log.event_data["source"] == "ai-service"
 
 
+def test_identity_mismatch_forces_immediate_lock_regardless_of_warning_count(client, app):
+    with app.app_context():
+        student = User(
+            full_name="Swap Student",
+            reg_number="T22-03-32001",
+            email="swap.student@example.test",
+            username="T22-03-32001",
+            role="student",
+            is_active=True,
+        )
+        lecturer = User(
+            full_name="Swap Lecturer",
+            reg_number="L22-03-42001",
+            email="swap.lecturer@example.test",
+            username="L22-03-42001",
+            role="lecturer",
+            is_active=True,
+        )
+        student.set_password("Password123")
+        lecturer.set_password("Password123")
+        db.session.add_all([student, lecturer])
+        db.session.commit()
+
+        exam = Exam(
+            title="Swap Contract",
+            course_code="CS402",
+            lecturer_id=lecturer.user_id,
+            duration_min=60,
+            scheduled_at=datetime.utcnow(),
+            status="active",
+        )
+        db.session.add(exam)
+        db.session.commit()
+
+        session = ExamSession(
+            student_id=student.user_id,
+            exam_id=exam.exam_id,
+            started_at=datetime.utcnow(),
+            session_status="active",
+            identity_verified=True,
+            warning_count=0,
+        )
+        db.session.add(session)
+        db.session.commit()
+        session_id = session.session_id
+
+    # A single confirmed mid-exam identity mismatch must lock the session
+    # immediately - this is not a graduated 1-2-3 warning like gaze/head
+    # anomalies, since it represents confirmed identity fraud rather than a
+    # momentary distraction.
+    logged = client.post(
+        "/api/sessions/log",
+        json={
+            "session_id": session_id,
+            "event_type": "identity_mismatch",
+            "event_data": {"confidence_score": 0.12},
+        },
+        headers={"X-Internal-Token": "test-internal-token"},
+    )
+    assert logged.status_code == 200
+    payload = logged.get_json()
+    assert payload["auto_submitted"] is True
+    assert payload["reason"] == "identity_mismatch"
+
+    with app.app_context():
+        stored_session = db.session.get(ExamSession, session_id)
+        assert stored_session.session_status == "locked"
+        assert stored_session.submitted_at is not None
+        # identity_verified must flip back to False so the /status guard the
+        # /exam page relies on also blocks any attempt to reload back in.
+        assert stored_session.identity_verified is False
+
+
+def test_internal_session_lookup_requires_token_and_returns_student_id(client, app, tmp_path):
+    student_token = _register_and_login(client, "T22-03-33001")
+    lecturer_token = _register_and_login(client, "L22-03-43001", role="lecturer")
+    _complete_student_verification_prerequisites(app, "T22-03-33001", tmp_path)
+    _complete_lecturer_verification_prerequisites(app, "L22-03-43001")
+
+    create_exam = client.post(
+        "/api/exams",
+        json={"title": "Internal Lookup", "course_code": "CS403", "duration_min": 60},
+        headers={"Authorization": f"Bearer {lecturer_token}"},
+    )
+    exam_id = create_exam.get_json()["exam_id"]
+    client.post(
+        f"/api/exams/{exam_id}/questions",
+        json={
+            "question_text": "1 + 1 = ?",
+            "question_type": "mcq",
+            "option_a": "1",
+            "option_b": "2",
+            "option_c": "3",
+            "option_d": "4",
+            "correct_answer": "B",
+            "marks": 1,
+            "order_num": 1,
+        },
+        headers={"Authorization": f"Bearer {lecturer_token}"},
+    )
+    client.patch(
+        f"/api/exams/{exam_id}/status",
+        json={"status": "scheduled"},
+        headers={"Authorization": f"Bearer {lecturer_token}"},
+    )
+
+    start = client.post(
+        "/api/sessions/start",
+        json={"exam_id": exam_id},
+        headers={"Authorization": f"Bearer {student_token}"},
+    )
+    start_json = start.get_json() or {}
+    assert start.status_code == 201, start_json
+    session_id = start_json["session_id"]
+
+    with app.app_context():
+        student = User.query.filter_by(reg_number="T22-03-33001").first()
+        expected_student_id = student.user_id
+
+    unauthorized = client.get(f"/api/sessions/internal/{session_id}")
+    assert unauthorized.status_code == 401
+
+    wrong_token = client.get(
+        f"/api/sessions/internal/{session_id}",
+        headers={"X-Internal-Token": "not-the-right-token"},
+    )
+    assert wrong_token.status_code == 401
+
+    ok = client.get(
+        f"/api/sessions/internal/{session_id}",
+        headers={"X-Internal-Token": "test-internal-token"},
+    )
+    assert ok.status_code == 200
+    assert ok.get_json()["student_id"] == expected_student_id
+
+    missing = client.get(
+        "/api/sessions/internal/999999",
+        headers={"X-Internal-Token": "test-internal-token"},
+    )
+    assert missing.status_code == 404
+
+
 def test_session_status_reflects_current_identity_verified_state(client, app, tmp_path):
     student_token = _register_and_login(client, "T22-03-60001")
     other_student_token = _register_and_login(client, "T22-03-60002")
