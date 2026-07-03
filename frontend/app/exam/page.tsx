@@ -27,6 +27,7 @@ type AnomalyResultEvent = {
   session_id?: number | string
   warning_count?: number | string
   anomalies?: unknown
+  calibrating?: boolean
 }
 
 type SessionLockedEvent = {
@@ -61,6 +62,7 @@ export default function ExamPage() {
   const [securityAlert, setSecurityAlert] = useState<string | null>(null)
   const [examCameraReady, setExamCameraReady] = useState(false)
   const [examCameraError, setExamCameraError] = useState<string | null>(null)
+  const [monitoringCalibrated, setMonitoringCalibrated] = useState(false)
   const [sessionId, setSessionId] = useState<number | null>(null)
   const [examId, setExamId] = useState<number | null>(null)
   const [examTitle, setExamTitle] = useState("Exam")
@@ -271,11 +273,22 @@ export default function ExamPage() {
   }, [sessionId, questions])
 
   useEffect(() => {
+    if (!monitoringCalibrated) return
     const id = setInterval(() => {
       setTimeLeft(t => (t <= 0 ? 0 : t - 1))
     }, 1000)
     return () => clearInterval(id)
-  }, [])
+  }, [monitoringCalibrated])
+
+  // Safety net: if calibration never reports back (e.g. a camera/socket
+  // hiccup), don't block the student from their exam indefinitely — proceed
+  // anyway after a bounded wait. head_turned will just fall back to "still
+  // calibrating" (never alerts) for that session rather than blocking access.
+  useEffect(() => {
+    if (!examCameraReady || monitoringCalibrated) return
+    const timeout = setTimeout(() => setMonitoringCalibrated(true), 20000)
+    return () => clearTimeout(timeout)
+  }, [examCameraReady, monitoringCalibrated])
 
   useEffect(() => {
     function handleFullscreenChange() {
@@ -440,6 +453,9 @@ export default function ExamPage() {
 
         socket.on("anomaly_result", (event: AnomalyResultEvent) => {
           if (!event || Number(event.session_id) !== sessionId) return
+          if (event.calibrating === false) {
+            setMonitoringCalibrated(true)
+          }
           const count = Number(event.warning_count || 0)
           if (count > warningsRef.current) {
             applyWarning(count)
@@ -803,6 +819,19 @@ export default function ExamPage() {
           </div>
         </aside>
       </div>
+
+      {/* ── Environment/monitoring calibration gate ── */}
+      {examCameraReady && !monitoringCalibrated && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-6 text-center shadow-2xl dark:border-slate-800 dark:bg-slate-900">
+            <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-[#1a2d5a] dark:border-slate-700 dark:border-t-white" />
+            <h3 className="text-base font-bold text-gray-900 dark:text-white">Setting Up Monitoring</h3>
+            <p className="mt-2 text-sm text-gray-500 dark:text-slate-400 leading-relaxed">
+              Please look at your screen normally for a few seconds while we calibrate your camera. Your exam will begin automatically once this is done.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* ── Warning Modal ── */}
       {warningModal && (

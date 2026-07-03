@@ -168,7 +168,13 @@ def register_handlers(socketio: SocketIO):
             f"face_count={face_count[0]}",
             flush=True,
         )
-        head_alert, calibrating = (False, False)
+        with _lock:
+            already_calibrated = _baseline_pose.get(session_id, {}).get('baseline_yaw') is not None
+
+        # Default to "still calibrating" (not "done") when there's no pose to
+        # calibrate from yet (e.g. face not detected), so the frontend keeps
+        # waiting instead of assuming setup finished.
+        head_alert, calibrating = (False, not already_calibrated)
         if pose is not None:
             head_alert, calibrating = _calibrated_head_alert(session_id, pose)
 
@@ -246,6 +252,7 @@ def register_handlers(socketio: SocketIO):
             'confirmed_anomalies': [_base_type(a) for a in confirmed_anomalies],
             'warning_count':  warning_count,
             'gaze_direction': gaze_direction,
+            'calibrating':    calibrating,
         })
 
         if warning_count >= 3:
