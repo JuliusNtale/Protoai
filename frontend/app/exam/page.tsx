@@ -40,6 +40,7 @@ export default function ExamPage() {
   const examMonitorVideoRef = useRef<HTMLVideoElement>(null)
   const examStreamRef = useRef<MediaStream | null>(null)
   const answersRef = useRef<Record<number, number>>({})
+  const questionsRef = useRef<LiveQuestion[]>([])
   const frameCanvasRef = useRef<HTMLCanvasElement>(null)
   const socketRef = useRef<Socket | null>(null)
   const tabViolationInFlightRef = useRef(false)
@@ -140,6 +141,20 @@ export default function ExamPage() {
     if (!examStreamRef.current) return
     examStreamRef.current.getTracks().forEach(track => track.stop())
     examStreamRef.current = null
+  }
+
+  // Submission (manual, time-up, or a lock) previously only set sessionLocked
+  // for the lock/time-up paths, which stops the frame-capture socket loop -
+  // but the actual camera hardware stream kept running (camera light stayed
+  // on, resources unreleased) until the student clicked "Go to Dashboard"
+  // and the page unmounted. A manual "Submit" click didn't even set
+  // sessionLocked, so frames kept being sent and processed after
+  // submission. Call this on every submission path so monitoring stops the
+  // moment the exam is actually over, not on eventual navigation away.
+  function stopMonitoring() {
+    setSessionLocked(true)
+    stopExamCameraStream()
+    setExamCameraReady(false)
   }
 
   async function startExamCamera() {
@@ -331,7 +346,7 @@ export default function ExamPage() {
   // and so it doesn't collide with the identity/warning lock flow.
   useEffect(() => {
     if (timeLeft > 0 || sessionLocked || !sessionId) return
-    setSessionLocked(true)
+    stopMonitoring()
     setShowSubmitConfirm(false)
     setTimeUpModalOpen(true)
     void submitSessionToServer()
@@ -387,7 +402,7 @@ export default function ExamPage() {
     const payloadAnswers = Object.fromEntries(
       Object.entries(answersRef.current)
         .map(([idx, optionIdx]) => {
-          const question = questions[Number(idx)]
+          const question = questionsRef.current[Number(idx)]
           if (!question) return null
           const selectedAnswer = String.fromCharCode(65 + Number(optionIdx))
           return [String(question.id), selectedAnswer]
@@ -459,6 +474,20 @@ export default function ExamPage() {
     answersRef.current = answers
   }, [answers])
 
+  // The socket connection (and the session_locked handler registered inside
+  // it) is set up in an effect that only runs once, early - before this
+  // exam's questions have finished loading from their own separate fetch.
+  // That handler's captured submitSessionToServer() closure was therefore
+  // reading `questions` as it was AT THAT EARLY RENDER (usually still []),
+  // so an auto-submit triggered by session_locked (3 warnings, identity
+  // mismatch) silently submitted an empty answer map - the student's real
+  // answers were lost and scored as 0 regardless of what they'd actually
+  // answered. Reading from this ref instead of the `questions` state keeps
+  // submitSessionToServer correct no matter which render's closure calls it.
+  useEffect(() => {
+    questionsRef.current = questions
+  }, [questions])
+
   function toggleFlag() {
     setFlagged(f => {
       const s = new Set(f)
@@ -490,6 +519,7 @@ export default function ExamPage() {
     } finally {
       setSubmitting(false)
       setShowSubmitConfirm(false)
+      stopMonitoring()
       setShowCongrats(true)
     }
   }
@@ -528,7 +558,7 @@ export default function ExamPage() {
 
         socket.on("session_locked", async (event: SessionLockedEvent) => {
           if (!event || Number(event.session_id) !== sessionId) return
-          setSessionLocked(true)
+          stopMonitoring()
           applyWarning(maxWarnings)
           await submitSessionToServer()
         })
