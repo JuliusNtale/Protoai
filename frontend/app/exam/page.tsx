@@ -168,15 +168,17 @@ export default function ExamPage() {
     }
   }
 
-  // The visible monitor <video> only mounts once examCameraReady flips to
-  // true, which happens AFTER attachExamStreamToVideos already ran (that
-  // call reads the ref synchronously, before React commits the new DOM
-  // node) — so its srcObject never got set on the first attempt. Re-attach
-  // once the element actually exists.
+  // The visible monitor <video> only mounts once BOTH examCameraReady is true
+  // AND accessChecked has resolved (the whole exam JSX, including this video
+  // element, is behind an `if (!accessChecked) return <Verifying/>` guard).
+  // The camera starts on mount independently of that access check, so
+  // attachExamStreamToVideos's first call almost always runs before the real
+  // <video> node exists yet, leaving its srcObject unset. Re-attach whenever
+  // either flips, so it fires again once the element actually exists.
   useEffect(() => {
-    if (!examCameraReady || !examStreamRef.current) return
+    if (!examCameraReady || !accessChecked || !examStreamRef.current) return
     void attachExamStreamToVideos(examStreamRef.current)
-  }, [examCameraReady])
+  }, [examCameraReady, accessChecked])
 
   // A stale client-only "verified_session_id" flag from ANY prior successful
   // verification would otherwise permanently bypass re-verification for this
