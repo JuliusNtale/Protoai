@@ -5,7 +5,8 @@
       "Bash(./node_modules/.bin/tsc --noEmit -p tsconfig.json)",
       "Read(//c/SIDE/GIT/**)",
       "Bash(python -c \"import ast; ast.parse\\(open\\('app/reports/routes.py'\\).read\\(\\)\\)\")",
-      "Bash(python -c \"import ast; ast.parse\\(open\\('c:/SIDE/GIT/ai-exam-proctoring-system/backend/app/reports/routes.py'\\).read\\(\\)\\)\")"
+      "Bash(python -c \"import ast; ast.parse\\(open\\('c:/SIDE/GIT/ai-exam-proctoring-system/backend/app/reports/routes.py'\\).read\\(\\)\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('c:/SIDE/GIT/ai-exam-proctoring-system/backend/app/exams/routes.py'\\).read\\(\\)\\); ast.parse\\(open\\('c:/SIDE/GIT/ai-exam-proctoring-system/backend/app/reports/routes.py'\\).read\\(\\)\\)\")"
     ]
   }
 }

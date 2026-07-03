@@ -59,14 +59,18 @@ _WARNING_COOLDOWN_SECONDS = float(os.getenv('WARNING_COOLDOWN_SECONDS', '15'))
 # investigation.
 _GAZE_CONFIDENCE_THRESHOLD = float(os.getenv('GAZE_CONFIDENCE_THRESHOLD', '0.4'))
 
-# Directions that count as "looking away" for warning purposes. The model's
-# own "Center" class (per trained_model_exports/checkpoints/label_config.json:
-# pitch_center=-8.93, yaw_scale=7.21, center_thresh=0.85) is a narrow ~±6°
-# yaw / ~±4° pitch cone — much narrower than the angle spanned by reading
-# across a normal-sized monitor. Left/Right is expected, normal screen-reading
-# behavior and is NOT treated as away; only Down/Up (looking away from the
-# screen plane entirely, e.g. at a phone or notes) escalates.
-_AWAY_DIRECTIONS = {'Down', 'Up'}
+# Directions that count as "looking away" for warning purposes. All four
+# non-Screen classes now escalate (policy decision 2026-07-03: previously
+# Left/Right were excluded since the model's "Center" class is a narrow
+# ~±6° yaw / ~±4° pitch cone per trained_model_exports/checkpoints/
+# label_config.json - narrower than the eye movement of normal
+# screen-reading, which was a real false-positive risk for Left/Right
+# specifically. That trade-off was accepted in favor of covering all
+# look-away directions; the confidence floor (_GAZE_CONFIDENCE_THRESHOLD)
+# and the SAME-direction persistence requirement below are what keep brief,
+# noisy readings from escalating. Re-tighten back to {'Down', 'Up'} if
+# Left/Right prove too noisy in practice.
+_AWAY_DIRECTIONS = {'Down', 'Up', 'Left', 'Right'}
 
 
 def _base_type(anomaly):
