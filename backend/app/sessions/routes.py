@@ -10,7 +10,7 @@ from app.models import BehavioralLog, Exam, ExamSession, Question, SessionAnswer
 from app.models import FacialImage
 
 sessions_bp = Blueprint("sessions", __name__)
-VALID_EVENTS = {"gaze_away", "head_turned", "face_absent", "tab_switch", "multiple_faces"}
+VALID_EVENTS = {"gaze_away", "head_turned", "face_absent", "tab_switch", "multiple_faces", "identity_mismatch"}
 
 
 def _student_profile_ready_for_verification(user: User) -> tuple[bool, str]:
@@ -189,6 +189,33 @@ def verify_session_identity():
     return jsonify({"identity_verified": True, "confidence_score": round(confidence_score, 4), "verified_at": session.verified_at.isoformat() if session.verified_at else None}), 200
 
 
+@sessions_bp.get("/internal/<int:session_id>")
+def get_session_internal(session_id):
+    """
+    Trusted, internal-only lookup of a session's owning student. The AI
+    service needs this to run its periodic mid-exam identity re-check
+    against the CORRECT registered baseline - it must never trust a
+    client-supplied user_id for this, since a socket payload is easy to
+    spoof from the browser and would let an impostor simply claim their
+    own account's user_id, which would then match their own face and
+    defeat the whole check.
+    """
+    expected_token = os.getenv("AI_SERVICE_TOKEN", "").strip()
+    provided_token = (request.headers.get("X-Internal-Token") or "").strip()
+    if not expected_token or provided_token != expected_token:
+        return jsonify({"error": {"message": "Unauthorized internal request"}}), 401
+
+    session = db.session.get(ExamSession, session_id)
+    if not session:
+        return jsonify({"error": {"message": "Session not found"}}), 404
+
+    return jsonify({
+        "session_id": session.session_id,
+        "student_id": session.student_id,
+        "session_status": session.session_status,
+    }), 200
+
+
 @sessions_bp.get("/<int:session_id>/status")
 @jwt_required()
 def get_session_status(session_id):
@@ -251,12 +278,23 @@ def log_event():
     )
     session.warning_count = (session.warning_count or 0) + 1
 
+    # A confirmed mid-exam face mismatch is treated as immediate identity
+    # fraud, not a graduated 1-2-3 warning - it locks the session on its own
+    # regardless of warning_count, and flips identity_verified back to False
+    # so the /status-based exam-access guard also blocks any attempt to
+    # reload back into the exam.
+    force_lock = event_type == "identity_mismatch"
+    if force_lock:
+        session.identity_verified = False
+
     response = {"warning_count": session.warning_count}
-    if session.warning_count >= 3:
+    if force_lock or session.warning_count >= 3:
         session.session_status = "locked"
         if not session.submitted_at:
             session.submitted_at = datetime.utcnow()
         response["auto_submitted"] = True
+        if force_lock:
+            response["reason"] = "identity_mismatch"
 
     db.session.commit()
     return jsonify(response), 200

@@ -57,6 +57,7 @@ export default function ExamPage() {
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [showCongrats, setShowCongrats] = useState(false)
+  const [timeUpModalOpen, setTimeUpModalOpen] = useState(false)
   const [leavingExam, setLeavingExam] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [fullscreenError, setFullscreenError] = useState<string | null>(null)
@@ -320,6 +321,18 @@ export default function ExamPage() {
     }, 1000)
     return () => clearInterval(id)
   }, [monitoringCalibrated])
+
+  // The countdown above only clamps timeLeft at 0 - nothing was actually
+  // submitting the exam when the clock ran out. Fire the auto-submit exactly
+  // once when it hits zero, gated by sessionLocked so it can't double-fire
+  // and so it doesn't collide with the identity/warning lock flow.
+  useEffect(() => {
+    if (timeLeft > 0 || sessionLocked || !sessionId) return
+    setSessionLocked(true)
+    setShowSubmitConfirm(false)
+    setTimeUpModalOpen(true)
+    void submitSessionToServer()
+  }, [timeLeft, sessionLocked, sessionId])
 
   // Safety net: if calibration never reports back (e.g. a camera/socket
   // hiccup), don't block the student from their exam indefinitely — proceed
@@ -986,6 +999,27 @@ export default function ExamPage() {
               type="button"
               onClick={() => void goToDashboard()}
               className="mt-5 w-full rounded bg-emerald-600 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700"
+            >
+              Go to Dashboard
+            </button>
+          </div>
+        </div>
+      )}
+
+      {timeUpModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="w-full max-w-sm rounded-xl border border-amber-200 bg-white p-6 shadow-2xl">
+            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-amber-100">
+              <AlertTriangle className="h-6 w-6 text-amber-600" />
+            </div>
+            <h3 className="text-base font-bold text-gray-900">Time&apos;s Up</h3>
+            <p className="mt-2 text-sm text-gray-600 leading-relaxed">
+              Your allotted exam time has ended and your answers have been submitted automatically.
+            </p>
+            <button
+              type="button"
+              onClick={() => void goToDashboard()}
+              className="mt-5 w-full rounded bg-[#1a2d5a] py-2.5 text-sm font-semibold text-white hover:bg-[#243d73]"
             >
               Go to Dashboard
             </button>
