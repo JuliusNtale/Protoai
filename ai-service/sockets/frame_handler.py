@@ -260,15 +260,6 @@ def register_handlers(socketio: SocketIO):
         gaze = gaze_result[0]
         pose = pose_result[0]
 
-        # Only re-check identity when exactly one face is present - with zero
-        # faces there's nothing to compare, and with multiple faces the
-        # multiple_faces anomaly above already covers it and it's ambiguous
-        # which face would even be compared.
-        identity_mismatch_confirmed = False
-        identity_confidence = None
-        if face_count[0] == 1:
-            identity_mismatch_confirmed, identity_confidence = _check_identity_mismatch(session_id, img_bgr)
-
         print(
             f"[gaze_debug] session={session_id} "
             f"direction={gaze.get('direction') if gaze else None} "
@@ -297,17 +288,31 @@ def register_handlers(socketio: SocketIO):
             flush=True,
         )
 
+        # Nothing below should be treated as a violation while the session is
+        # still calibrating ("Setting Up Monitoring" on the frontend) - the
+        # whole point of that phase is "get comfortable, we're not judging
+        # you yet". Only re-check identity, and only build up gaze/head/face
+        # anomaly state, once calibration has actually finished; otherwise a
+        # student adjusting their seat or glancing away while the camera is
+        # still calibrating could rack up persistence toward a warning that
+        # then fires the moment "Setting Up Monitoring" disappears.
+        identity_mismatch_confirmed = False
+        identity_confidence = None
+        if not calibrating and face_count[0] == 1:
+            identity_mismatch_confirmed, identity_confidence = _check_identity_mismatch(session_id, img_bgr)
+
         anomalies = []
-        if gaze is None or face_count[0] == 0:
-            anomalies.append('face_absent')
-        elif gaze.get('direction') in _AWAY_DIRECTIONS and gaze.get('confidence', 0.0) >= _GAZE_CONFIDENCE_THRESHOLD:
-            anomalies.append(f"gaze_away:{gaze['direction']}")
+        if not calibrating:
+            if gaze is None or face_count[0] == 0:
+                anomalies.append('face_absent')
+            elif gaze.get('direction') in _AWAY_DIRECTIONS and gaze.get('confidence', 0.0) >= _GAZE_CONFIDENCE_THRESHOLD:
+                anomalies.append(f"gaze_away:{gaze['direction']}")
 
-        if head_alert:
-            anomalies.append('head_turned')
+            if head_alert:
+                anomalies.append('head_turned')
 
-        if face_count[0] > 1:
-            anomalies.append('multiple_faces')
+            if face_count[0] > 1:
+                anomalies.append('multiple_faces')
 
         with _lock:
             warning_count = _warning_counts.get(session_id, 0)
@@ -316,7 +321,7 @@ def register_handlers(socketio: SocketIO):
 
         print(
             f"[anomaly_debug] session={session_id} "
-            f"face_count={face_count[0]} gaze_is_none={gaze is None} "
+            f"face_count={face_count[0]} gaze_is_none={gaze is None} calibrating={calibrating} "
             f"raw_anomalies={anomalies} confirmed={confirmed_anomalies}",
             flush=True,
         )
