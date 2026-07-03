@@ -498,6 +498,97 @@ def test_authorize_viewer_and_terminate_session(client, app, tmp_path):
     assert already_terminated.status_code == 409
 
 
+def test_lecturer_can_send_manual_warning_to_active_session(client, app, tmp_path):
+    lecturer_token = _register_and_login(client, "L22-03-72001", role="lecturer")
+    other_lecturer_token = _register_and_login(client, "L22-03-72002", role="lecturer")
+    student_token = _register_and_login(client, "T22-03-72003")
+    _complete_student_verification_prerequisites(app, "T22-03-72003", tmp_path)
+    _complete_lecturer_verification_prerequisites(app, "L22-03-72001")
+
+    with app.app_context():
+        lecturer = User.query.filter_by(reg_number="L22-03-72001").first()
+        exam = Exam(
+            title="Databases",
+            course_code="CS306",
+            lecturer_id=lecturer.user_id,
+            duration_min=60,
+            scheduled_at=datetime.utcnow(),
+            status="active",
+        )
+        db.session.add(exam)
+        db.session.commit()
+        exam_id = exam.exam_id
+
+    start = client.post(
+        "/api/sessions/start",
+        json={"exam_id": exam_id},
+        headers={"Authorization": f"Bearer {student_token}"},
+    )
+    start_json = start.get_json() or {}
+    assert start.status_code == 201, start_json
+    session_id = start_json["session_id"]
+
+    # A student cannot send themselves a warning.
+    student_forbidden = client.post(
+        f"/api/sessions/{session_id}/warn",
+        json={"message": "n/a"},
+        headers={"Authorization": f"Bearer {student_token}"},
+    )
+    assert student_forbidden.status_code == 403
+
+    # A lecturer who doesn't own this exam cannot warn its students either.
+    other_forbidden = client.post(
+        f"/api/sessions/{session_id}/warn",
+        json={"message": "Not your call"},
+        headers={"Authorization": f"Bearer {other_lecturer_token}"},
+    )
+    assert other_forbidden.status_code == 403
+
+    warn = client.post(
+        f"/api/sessions/{session_id}/warn",
+        json={"message": "Please keep your eyes on your own screen."},
+        headers={"Authorization": f"Bearer {lecturer_token}"},
+    )
+    assert warn.status_code == 200
+    warn_payload = warn.get_json()
+    assert warn_payload["warning_count"] == 1
+
+    # Sending a second warning increments warning_count again and is
+    # reflected in risk_level exactly like an AI-detected anomaly would be.
+    warn_again = client.post(
+        f"/api/sessions/{session_id}/warn",
+        headers={"Authorization": f"Bearer {lecturer_token}"},
+    )
+    assert warn_again.status_code == 200
+    assert warn_again.get_json()["warning_count"] == 2
+
+    with app.app_context():
+        stored_session = db.session.get(ExamSession, session_id)
+        assert stored_session.warning_count == 2
+        assert stored_session.session_status == "active"
+        logs = BehavioralLog.query.filter_by(session_id=session_id, event_type="lecturer_warning").order_by(
+            BehavioralLog.log_id
+        ).all()
+        assert len(logs) == 2
+        assert logs[0].event_data["message"] == "Please keep your eyes on your own screen."
+        # No message supplied on the second call - a sensible default is used.
+        assert logs[1].event_data["message"]
+
+    # Terminating the session, then trying to warn it, is rejected - warnings
+    # only make sense while the exam is still in progress.
+    client.post(
+        f"/api/sessions/{session_id}/terminate",
+        json={"reason": "wrap up"},
+        headers={"Authorization": f"Bearer {lecturer_token}"},
+    )
+    warn_after_terminate = client.post(
+        f"/api/sessions/{session_id}/warn",
+        json={"message": "too late"},
+        headers={"Authorization": f"Bearer {lecturer_token}"},
+    )
+    assert warn_after_terminate.status_code == 409
+
+
 def test_review_behavioral_log_records_lecturer_decision(client, app, tmp_path):
     lecturer_token = _register_and_login(client, "L22-03-71001", role="lecturer")
     other_lecturer_token = _register_and_login(client, "L22-03-71002", role="lecturer")

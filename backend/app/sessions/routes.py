@@ -424,6 +424,68 @@ def terminate_session(session_id):
     return jsonify({"session_id": session.session_id, "session_status": session.session_status}), 200
 
 
+@sessions_bp.post("/<int:session_id>/warn")
+@roles_required("lecturer", "admin")
+def warn_session(session_id):
+    """
+    Lets a lecturer/admin who's watching a session's warning_count climb
+    send the student a direct, real-time warning - a step short of
+    terminate_session above. Unlike the automated anomaly path in
+    log_event(), this is a deliberate human decision, so it's a distinct
+    endpoint gated by role rather than the internal AI-service token, and
+    it increments warning_count the same way an automated anomaly would so
+    it's reflected in risk_level/reports alongside AI-detected warnings.
+    """
+    claims = get_jwt()
+    role = claims.get("role")
+    user_id = int(get_jwt_identity())
+
+    session = db.session.get(ExamSession, session_id)
+    if not session:
+        return jsonify({"error": {"message": "Session not found"}}), 404
+    exam = db.session.get(Exam, session.exam_id)
+    if not exam or not _can_view_session(role, user_id, exam):
+        return jsonify({"error": {"message": "Forbidden"}}), 403
+
+    if session.session_status not in {"active", "pending"}:
+        return jsonify({"error": {"message": "Session is not active"}}), 409
+
+    data = request.get_json(silent=True) or {}
+    message = str(
+        data.get("message")
+        or "Your invigilator has flagged unusual activity. Please stay focused on your exam."
+    )[:255]
+
+    session.warning_count = (session.warning_count or 0) + 1
+
+    log_entry = BehavioralLog(
+        session_id=session.session_id,
+        event_type="lecturer_warning",
+        event_data={"message": message, "sent_by": user_id},
+    )
+    db.session.add(log_entry)
+    log_audit(
+        action="session.lecturer_warning",
+        actor_user_id=user_id,
+        target_user_id=session.student_id,
+        metadata={"session_id": session.session_id, "message": message, "warning_count": session.warning_count},
+    )
+    db.session.commit()
+
+    _notify_ai_service(
+        session.session_id,
+        "manual_warning",
+        {
+            "session_id": session.session_id,
+            "message": message,
+            "warning_count": session.warning_count,
+            "logged_at": log_entry.logged_at.isoformat() if log_entry.logged_at else None,
+        },
+    )
+
+    return jsonify({"session_id": session.session_id, "warning_count": session.warning_count, "log_id": log_entry.log_id}), 200
+
+
 @sessions_bp.post("/<int:session_id>/submit")
 @jwt_required()
 def submit_session(session_id):

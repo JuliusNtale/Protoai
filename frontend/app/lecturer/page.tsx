@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { BookOpen, Eye, EyeOff, KeyRound, LogOut, Plus, ShieldAlert, Users, X } from "lucide-react"
+import { AlertTriangle, BookOpen, Eye, EyeOff, KeyRound, LogOut, Plus, ShieldAlert, Users, X } from "lucide-react"
 import Link from "next/link"
 import { io } from "socket.io-client"
 import { getApiPath } from "@/lib/api-url"
@@ -222,6 +222,7 @@ function LecturerDashboardInner() {
   const [sessionResults, setSessionResults] = useState<SessionResultRow[]>([])
   const [exporting, setExporting] = useState(false)
   const [exportingAll, setExportingAll] = useState(false)
+  const [selectedSessionIds, setSelectedSessionIds] = useState<Set<number>>(new Set())
   const [viewingReport, setViewingReport] = useState<ReportDetail | null>(null)
   const [loadingReportId, setLoadingReportId] = useState<number | null>(null)
   const [reportError, setReportError] = useState("")
@@ -232,6 +233,10 @@ function LecturerDashboardInner() {
   const [terminationReason, setTerminationReason] = useState("Suspicious activity detected during your exam.")
   const [terminating, setTerminating] = useState(false)
   const [terminateError, setTerminateError] = useState("")
+  const [warningTargetSession, setWarningTargetSession] = useState<SessionResultRow | null>(null)
+  const [warningMessage, setWarningMessage] = useState("Your invigilator has flagged unusual activity. Please stay focused on your exam.")
+  const [sendingWarning, setSendingWarning] = useState(false)
+  const [warningSendError, setWarningSendError] = useState("")
   const sessionResultsRef = useRef<SessionResultRow[]>([])
   const [questionText, setQuestionText] = useState("")
   const [questionType, setQuestionType] = useState<"mcq" | "true_false">("mcq")
@@ -711,9 +716,20 @@ function LecturerDashboardInner() {
     }
   }
 
-  function openTerminateModal(row: SessionResultRow) {
+  // The reason shown to the student is derived from the specific
+  // behavioural event the lecturer was looking at when they decided to
+  // terminate, rather than a generic boilerplate message - the student
+  // should be told what was actually observed, not just "suspicious
+  // activity".
+  function defaultTerminationReason(eventType?: string): string {
+    if (!eventType) return "Suspicious activity detected during your exam."
+    const label = eventType.replace(/_/g, " ")
+    return `Your exam session was terminated because the following was detected during monitoring: ${label}.`
+  }
+
+  function openTerminateModal(row: SessionResultRow, eventType?: string) {
     setTerminateError("")
-    setTerminationReason("Suspicious activity detected during your exam.")
+    setTerminationReason(defaultTerminationReason(eventType))
     setTerminatingSession(row)
   }
 
@@ -740,6 +756,48 @@ function LecturerDashboardInner() {
       setTerminatingSession(null)
     } finally {
       setTerminating(false)
+    }
+  }
+
+  function openWarningModal(row: SessionResultRow) {
+    setWarningSendError("")
+    setWarningMessage("Your invigilator has flagged unusual activity. Please stay focused on your exam.")
+    setWarningTargetSession(row)
+  }
+
+  // A step short of terminate: pushes a real-time message to the student
+  // without ending their session, so a lecturer watching warning_count
+  // climb on a session can intervene before deciding termination is
+  // warranted.
+  async function confirmSendWarning() {
+    if (!warningTargetSession) return
+    setSendingWarning(true)
+    setWarningSendError("")
+    try {
+      const res = await fetch(getApiPath(`/sessions/${warningTargetSession.session_id}/warn`), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ message: warningMessage }),
+      })
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setWarningSendError(payload?.error?.message || "Could not send warning.")
+        return
+      }
+      setSessionResults((prev) =>
+        prev.map((row) =>
+          row.session_id === warningTargetSession.session_id
+            ? {
+                ...row,
+                warning_count: payload.warning_count,
+                risk_level: payload.warning_count >= 3 ? "high" : payload.warning_count > 1 ? "medium" : "low",
+              }
+            : row
+        )
+      )
+      setWarningTargetSession(null)
+    } finally {
+      setSendingWarning(false)
     }
   }
 
@@ -788,6 +846,63 @@ function LecturerDashboardInner() {
     } finally {
       setExportingAll(false)
     }
+  }
+
+  function toggleSessionSelected(sessionId: number) {
+    setSelectedSessionIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(sessionId)) {
+        next.delete(sessionId)
+      } else {
+        next.add(sessionId)
+      }
+      return next
+    })
+  }
+
+  function toggleSelectAllSessions(rows: SessionResultRow[]) {
+    setSelectedSessionIds((prev) => {
+      const allSelected = rows.length > 0 && rows.every((row) => prev.has(row.session_id))
+      if (allSelected) return new Set()
+      return new Set(rows.map((row) => row.session_id))
+    })
+  }
+
+  function exportSelectedSessionsCsv(rows: SessionResultRow[]) {
+    const selectedRows = rows.filter((row) => selectedSessionIds.has(row.session_id))
+    if (selectedRows.length === 0) return
+    const header = [
+      "session_id",
+      "student_name",
+      "reg_number",
+      "course_code",
+      "exam_title",
+      "status",
+      "score",
+      "warning_count",
+      "risk_level",
+    ]
+    const csvRows = selectedRows.map((row) => [
+      row.session_id,
+      row.student_name,
+      row.registration_number,
+      row.course_code,
+      row.exam_title,
+      row.session_status,
+      row.score ?? "",
+      row.warning_count,
+      row.risk_level,
+    ])
+    const csv = [header, ...csvRows]
+      .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))
+      .join("\n")
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `selected_sessions_${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   async function openReport(sessionId: number) {
@@ -1367,11 +1482,15 @@ function LecturerDashboardInner() {
                   <th>Exam</th>
                   <th>Event</th>
                   <th>Warnings</th>
-                  <th className="pr-2">Decision</th>
+                  <th>Decision</th>
+                  <th className="pr-2">Action</th>
                 </tr>
               </thead>
               <tbody>
-                {liveAlerts.map((alert) => (
+                {liveAlerts.map((alert) => {
+                  const alertSession = sessionResults.find((row) => row.session_id === alert.session_id)
+                  const canTerminate = alertSession && ["active", "pending"].includes((alertSession.session_status || "").toLowerCase())
+                  return (
                   <tr key={alert.log_id} className="border-b last:border-b-0">
                     <td className="py-1.5 pl-2 whitespace-nowrap text-muted-foreground">
                       {alert.logged_at ? new Date(alert.logged_at).toLocaleTimeString() : "—"}
@@ -1380,7 +1499,7 @@ function LecturerDashboardInner() {
                     <td className="whitespace-nowrap">{alert.exam_title}</td>
                     <td className="capitalize">{alert.event_type.replace(/_/g, " ")}</td>
                     <td>{alert.warning_count}</td>
-                    <td className="pr-2">
+                    <td>
                       {alert.is_suspicious === null || alert.is_suspicious === undefined ? (
                         <div className="flex gap-1">
                           <button
@@ -1404,10 +1523,33 @@ function LecturerDashboardInner() {
                         </span>
                       )}
                     </td>
+                    <td className="pr-2">
+                      {canTerminate && alertSession ? (
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => openWarningModal(alertSession)}
+                            className="flex items-center gap-1 whitespace-nowrap rounded border border-amber-300 px-1.5 py-0.5 text-[11px] font-medium text-amber-700 hover:bg-amber-50"
+                          >
+                            <AlertTriangle className="h-3 w-3" />
+                            Warn
+                          </button>
+                          <button
+                            onClick={() => openTerminateModal(alertSession, alert.event_type)}
+                            className="flex items-center gap-1 whitespace-nowrap rounded border border-red-300 px-1.5 py-0.5 text-[11px] font-medium text-red-600 hover:bg-red-50"
+                          >
+                            <ShieldAlert className="h-3 w-3" />
+                            Terminate
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-[11px] text-muted-foreground">—</span>
+                      )}
+                    </td>
                   </tr>
-                ))}
+                  )
+                })}
                 {liveAlerts.length === 0 && (
-                  <tr><td colSpan={6} className="py-3 text-center text-muted-foreground">No suspicious activity reported yet.</td></tr>
+                  <tr><td colSpan={7} className="py-3 text-center text-muted-foreground">No suspicious activity reported yet.</td></tr>
                 )}
               </tbody>
             </table>
@@ -1434,11 +1576,26 @@ function LecturerDashboardInner() {
             >
               {exportingAll ? "Exporting..." : "Export All Sessions CSV"}
             </button>
+            <button
+              onClick={() => exportSelectedSessionsCsv(filteredSessionResults)}
+              disabled={selectedSessionIds.size === 0}
+              className="rounded-md border border-[#1a2d5a] px-4 py-2 text-sm font-semibold text-[#1a2d5a] transition hover:bg-[#1a2d5a]/5 disabled:opacity-60"
+            >
+              Export Selected Sessions CSV{selectedSessionIds.size > 0 ? ` (${selectedSessionIds.size})` : ""}
+            </button>
           </div>
           <div className="mt-4 overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-left">
+                  <th className="py-2 pr-2">
+                    <input
+                      type="checkbox"
+                      checked={filteredSessionResults.length > 0 && filteredSessionResults.every((row) => selectedSessionIds.has(row.session_id))}
+                      onChange={() => toggleSelectAllSessions(filteredSessionResults)}
+                      aria-label="Select all sessions"
+                    />
+                  </th>
                   <th className="py-2">Student</th>
                   <th>Reg Number</th>
                   <th>Course</th>
@@ -1454,6 +1611,14 @@ function LecturerDashboardInner() {
               <tbody>
                 {filteredSessionResults.map((row) => (
                   <tr key={row.session_id} className="border-b">
+                    <td className="py-2 pr-2">
+                      <input
+                        type="checkbox"
+                        checked={selectedSessionIds.has(row.session_id)}
+                        onChange={() => toggleSessionSelected(row.session_id)}
+                        aria-label={`Select session for ${row.student_name}`}
+                      />
+                    </td>
                     <td className="py-2">{row.student_name}</td>
                     <td>{row.registration_number}</td>
                     <td>{row.course_code}</td>
@@ -1473,20 +1638,29 @@ function LecturerDashboardInner() {
                     </td>
                     <td>
                       {["active", "pending"].includes((row.session_status || "").toLowerCase()) ? (
-                        <button
-                          onClick={() => openTerminateModal(row)}
-                          className="flex items-center gap-1 rounded border border-red-300 px-2 py-1 text-xs font-medium text-red-600 transition-colors hover:bg-red-50"
-                        >
-                          <ShieldAlert className="h-3.5 w-3.5" />
-                          Terminate
-                        </button>
+                        <div className="flex gap-1.5">
+                          <button
+                            onClick={() => openWarningModal(row)}
+                            className="flex items-center gap-1 rounded border border-amber-300 px-2 py-1 text-xs font-medium text-amber-700 transition-colors hover:bg-amber-50"
+                          >
+                            <AlertTriangle className="h-3.5 w-3.5" />
+                            Warn
+                          </button>
+                          <button
+                            onClick={() => openTerminateModal(row)}
+                            className="flex items-center gap-1 rounded border border-red-300 px-2 py-1 text-xs font-medium text-red-600 transition-colors hover:bg-red-50"
+                          >
+                            <ShieldAlert className="h-3.5 w-3.5" />
+                            Terminate
+                          </button>
+                        </div>
                       ) : (
                         <span className="text-xs text-muted-foreground">—</span>
                       )}
                     </td>
                   </tr>
                 ))}
-                {filteredSessionResults.length === 0 && <tr><td colSpan={10} className="py-3 text-slate-600">No session results for selected scope.</td></tr>}
+                {filteredSessionResults.length === 0 && <tr><td colSpan={11} className="py-3 text-slate-600">No session results for selected scope.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -1722,18 +1896,35 @@ function LecturerDashboardInner() {
                   <th className="py-2 pl-2">Time</th>
                   <th>Event</th>
                   <th>Detail</th>
-                  <th className="pr-2">Decision</th>
+                  <th>Decision</th>
+                  <th className="pr-2">Action</th>
                 </tr>
               </thead>
               <tbody>
-                {viewingReport.logs.map((log) => (
+                {viewingReport.logs.map((log) => {
+                  const reportSessionStatus = (viewingReport.session_status || "").toLowerCase()
+                  const canTerminate = ["active", "pending"].includes(reportSessionStatus)
+                  const reportSessionRow: SessionResultRow = {
+                    session_id: viewingReport.session_id,
+                    exam_id: viewingReport.exam.exam_id,
+                    student_name: viewingReport.student.full_name,
+                    registration_number: viewingReport.student.reg_number,
+                    student_email: viewingReport.student.email,
+                    exam_title: viewingReport.exam.title,
+                    course_code: viewingReport.exam.course_code,
+                    session_status: viewingReport.session_status || "active",
+                    score: viewingReport.score ?? null,
+                    warning_count: viewingReport.warning_count ?? 0,
+                    risk_level: viewingReport.risk_level,
+                  }
+                  return (
                   <tr key={log.log_id} className="border-b last:border-b-0">
                     <td className="py-1.5 pl-2 whitespace-nowrap text-muted-foreground">
                       {log.logged_at ? new Date(log.logged_at).toLocaleTimeString() : "—"}
                     </td>
                     <td className="whitespace-nowrap capitalize">{log.event_type.replace(/_/g, " ")}</td>
                     <td className="text-muted-foreground">{formatEventDetail(log)}</td>
-                    <td className="pr-2">
+                    <td>
                       {log.is_suspicious === null || log.is_suspicious === undefined ? (
                         <div className="flex gap-1">
                           <button
@@ -1757,10 +1948,33 @@ function LecturerDashboardInner() {
                         </span>
                       )}
                     </td>
+                    <td className="pr-2">
+                      {canTerminate ? (
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => openWarningModal(reportSessionRow)}
+                            className="flex items-center gap-1 whitespace-nowrap rounded border border-amber-300 px-1.5 py-0.5 text-[11px] font-medium text-amber-700 hover:bg-amber-50"
+                          >
+                            <AlertTriangle className="h-3 w-3" />
+                            Warn
+                          </button>
+                          <button
+                            onClick={() => openTerminateModal(reportSessionRow, log.event_type)}
+                            className="flex items-center gap-1 whitespace-nowrap rounded border border-red-300 px-1.5 py-0.5 text-[11px] font-medium text-red-600 hover:bg-red-50"
+                          >
+                            <ShieldAlert className="h-3 w-3" />
+                            Terminate
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-[11px] text-muted-foreground">—</span>
+                      )}
+                    </td>
                   </tr>
-                ))}
+                  )
+                })}
                 {viewingReport.logs.length === 0 && (
-                  <tr><td colSpan={4} className="py-3 text-center text-muted-foreground">No anomalies were logged during this session.</td></tr>
+                  <tr><td colSpan={5} className="py-3 text-center text-muted-foreground">No anomalies were logged during this session.</td></tr>
                 )}
               </tbody>
             </table>
@@ -1817,6 +2031,60 @@ function LecturerDashboardInner() {
               className="rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700 disabled:opacity-60"
             >
               {terminating ? "Terminating..." : "Terminate Session"}
+            </button>
+          </div>
+        </div>
+      </div>
+    ) : null}
+    {warningTargetSession ? (
+      <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+        <div className="w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-2xl">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h3 className="text-lg font-semibold text-foreground">Send Warning</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {warningTargetSession.student_name} ({warningTargetSession.registration_number}) &middot; {warningTargetSession.exam_title}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setWarningTargetSession(null)}
+              disabled={sendingWarning}
+              className="rounded-md border border-border p-1.5 text-muted-foreground transition hover:bg-accent hover:text-foreground"
+              aria-label="Close warning modal"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <p className="mt-4 text-sm text-muted-foreground">
+            This sends the message below to the student in real time and adds it to their warning count. Their exam session continues uninterrupted.
+          </p>
+          <label className="mt-4 grid gap-1.5 text-sm font-medium text-foreground">
+            Message shown to student
+            <textarea
+              value={warningMessage}
+              onChange={(e) => setWarningMessage(e.target.value)}
+              rows={3}
+              className="rounded-md border border-border bg-background p-2 text-sm text-foreground focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100"
+            />
+          </label>
+          {warningSendError ? <p className="mt-2 text-sm text-red-600">{warningSendError}</p> : null}
+          <div className="mt-4 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setWarningTargetSession(null)}
+              disabled={sendingWarning}
+              className="rounded-md border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition hover:bg-accent disabled:opacity-60"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => void confirmSendWarning()}
+              disabled={sendingWarning || !warningMessage.trim()}
+              className="rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-700 disabled:opacity-60"
+            >
+              {sendingWarning ? "Sending..." : "Send Warning"}
             </button>
           </div>
         </div>
