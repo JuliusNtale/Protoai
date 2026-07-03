@@ -49,8 +49,9 @@ export default function ExamPage() {
   const [current, setCurrent] = useState(0)
   const [answers, setAnswers] = useState<Record<number, number>>({})
   const [flagged, setFlagged] = useState<Set<number>>(new Set())
-  // 1h 45m = 6300 seconds — matches screenshot "01:42:33"
-  const [timeLeft, setTimeLeft] = useState(1 * 60 * 60 + 45 * 60)
+  // Placeholder until the real exam duration loads; see the /exams/:id fetch
+  // below, which sets this to the exam's actual duration_min * 60.
+  const [timeLeft, setTimeLeft] = useState(60 * 60)
   const [warnings, setWarnings] = useState(0)
   const [warningModal, setWarningModal] = useState<WarningLevel | null>(null)
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false)
@@ -229,7 +230,9 @@ export default function ExamPage() {
 
         if (!mounted) return
         setExamTitle(String(payload.exam.title ?? "Exam"))
-        setExamDurationLabel(`${Number(payload.exam.duration_min ?? 0)} mins`)
+        const durationMin = Number(payload.exam.duration_min ?? 60)
+        setExamDurationLabel(`${durationMin} mins`)
+        setTimeLeft(durationMin * 60)
         setExamDateLabel(
           payload.exam.scheduled_at
             ? new Date(payload.exam.scheduled_at).toLocaleDateString()
