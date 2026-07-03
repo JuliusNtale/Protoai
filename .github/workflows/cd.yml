@@ -73,15 +73,18 @@ jobs:
               i=0
               while [ "$i" -lt 30 ]; do
                 status="$(docker inspect "$container" --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}')"
-                [ "$status" = "healthy" ] && break
+                if [ "$status" = "healthy" ] || [ "$status" = "running" ]; then
+                  break
+                fi
                 i=$((i + 1))
                 sleep 2
               done
               status="$(docker inspect "$container" --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}')"
-              [ "$status" = "healthy" ] || {
+              if [ "$status" != "healthy" ] && [ "$status" != "running" ]; then
+                echo "Container $container failed health check with status: $status"
                 docker logs --tail 120 "$container"
                 exit 1
-              }
+              fi
             done
 
             curl -fsS https://proctoaibackend.neuraltale.com/health >/dev/null
