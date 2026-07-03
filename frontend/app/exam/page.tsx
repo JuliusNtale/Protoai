@@ -468,7 +468,7 @@ export default function ExamPage() {
             frame_base64: frameBase64,
             timestamp: new Date().toISOString(),
           })
-        }, 3000)
+        }, 2000)
       } catch {
         setSocketConnected(false)
       }
