@@ -6,7 +6,10 @@
       "Read(//c/SIDE/GIT/**)",
       "Bash(python -c \"import ast; ast.parse\\(open\\('app/reports/routes.py'\\).read\\(\\)\\)\")",
       "Bash(python -c \"import ast; ast.parse\\(open\\('c:/SIDE/GIT/ai-exam-proctoring-system/backend/app/reports/routes.py'\\).read\\(\\)\\)\")",
-      "Bash(python -c \"import ast; ast.parse\\(open\\('c:/SIDE/GIT/ai-exam-proctoring-system/backend/app/exams/routes.py'\\).read\\(\\)\\); ast.parse\\(open\\('c:/SIDE/GIT/ai-exam-proctoring-system/backend/app/reports/routes.py'\\).read\\(\\)\\)\")"
+      "Bash(python -c \"import ast; ast.parse\\(open\\('c:/SIDE/GIT/ai-exam-proctoring-system/backend/app/exams/routes.py'\\).read\\(\\)\\); ast.parse\\(open\\('c:/SIDE/GIT/ai-exam-proctoring-system/backend/app/reports/routes.py'\\).read\\(\\)\\)\")",
+      "Bash(python -m pytest tests/ -v)",
+      "Bash(python -m venv venv)",
+      "Bash(DATABASE_URL=\"sqlite:///$\\(pwd\\)/migration_check.db\" JWT_SECRET=test AI_SERVICE_TOKEN=test python -m alembic -c alembic.ini upgrade head)"
     ]
   }
 }

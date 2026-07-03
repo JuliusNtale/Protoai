@@ -17,6 +17,7 @@ os.environ["AI_SERVICE_TOKEN"] = "test-internal-token"
 
 from app import create_app  # noqa: E402
 from app.extensions import db  # noqa: E402
+from app.models import DegreeProgram  # noqa: E402
 
 
 @pytest.fixture()
@@ -25,6 +26,8 @@ def app():
     flask_app.config.update(TESTING=True)
     with flask_app.app_context():
         db.create_all()
+        db.session.add(DegreeProgram(name="BSc Computer Science"))
+        db.session.commit()
         yield flask_app
         db.session.remove()
         db.drop_all()
