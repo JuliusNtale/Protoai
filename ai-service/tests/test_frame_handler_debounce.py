@@ -9,6 +9,7 @@ import sockets.frame_handler as fh
 def _reset_state():
     fh._anomaly_states.clear()
     fh._warning_counts.clear()
+    fh._baseline_pose.clear()
 
 
 def test_base_type_strips_direction_qualifier():
@@ -66,3 +67,43 @@ def test_down_up_are_treated_as_away_above_confidence_floor():
     assert _is_away('Down', 0.9) is True
     assert _is_away('Up', 0.9) is True
     assert _is_away('Down', 0.1) is False
+
+
+def test_calibration_window_never_alerts_regardless_of_raw_pose():
+    """The first N frames calibrate the session's own neutral pose - even an
+    extreme raw pitch during calibration should not alert, since we don't
+    yet know if it's this session's normal resting position."""
+    _reset_state()
+    extreme_pose = {'yaw': 0.0, 'pitch': -43.0, 'roll': 0.0}
+    for _ in range(fh._HEAD_POSE_CALIBRATION_FRAMES):
+        alert, calibrating = fh._calibrated_head_alert('s3', extreme_pose)
+        assert alert is False
+        assert calibrating is True
+
+
+def test_returning_to_calibrated_baseline_does_not_alert():
+    """A session whose natural resting pitch is -43 degrees (real production
+    data) should NOT alert once calibrated and sitting normally, even though
+    that would fail the old fixed +/-20 degree threshold."""
+    _reset_state()
+    resting_pose = {'yaw': -2.0, 'pitch': -43.5, 'roll': -4.0}
+    for _ in range(fh._HEAD_POSE_CALIBRATION_FRAMES):
+        fh._calibrated_head_alert('s4', resting_pose)
+
+    alert, calibrating = fh._calibrated_head_alert('s4', {'yaw': -1.5, 'pitch': -44.0, 'roll': -3.5})
+    assert calibrating is False
+    assert alert is False
+
+
+def test_real_deviation_from_baseline_still_alerts():
+    """Once calibrated, a genuine large deviation from THIS session's
+    baseline must still fire, regardless of what the baseline itself is."""
+    _reset_state()
+    resting_pose = {'yaw': -2.0, 'pitch': -43.5, 'roll': -4.0}
+    for _ in range(fh._HEAD_POSE_CALIBRATION_FRAMES):
+        fh._calibrated_head_alert('s5', resting_pose)
+
+    # Real head turn: yaw jumps by ~56 degrees from baseline.
+    alert, calibrating = fh._calibrated_head_alert('s5', {'yaw': -58.0, 'pitch': -43.0, 'roll': -4.0})
+    assert calibrating is False
+    assert alert is True

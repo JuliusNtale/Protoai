@@ -7,7 +7,7 @@ from flask_socketio import SocketIO, emit
 
 from services.preprocessing import base64_to_numpy
 from services.gaze_estimator import estimate_gaze
-from services.head_pose import estimate_head_pose
+from services.head_pose import estimate_head_pose, _YAW_THRESHOLD, _PITCH_THRESHOLD
 from services.face_detector import count_faces
 
 _BACKEND_URL = os.getenv('BACKEND_URL', 'http://localhost:5000')
@@ -17,7 +17,19 @@ _AI_SERVICE_TOKEN = os.getenv('AI_SERVICE_TOKEN', '').strip()
 # Derick's DB is the authoritative store; this is a fast local cache.
 _warning_counts: dict = {}
 _anomaly_states: dict = {}
+_baseline_pose: dict = {}
 _lock = threading.Lock()
+
+# Number of frames at the start of a session used to calibrate that
+# student's own neutral head pose, before any head_turned alert can fire.
+# A fixed global yaw/pitch threshold doesn't work across different real
+# camera/seating setups — live production data showed resting pitch varying
+# from about -13 degrees to -43 degrees between two sessions with no real
+# head movement, purely from camera angle/placement. Comparing against each
+# session's own calibrated baseline instead (same idea as the environment/
+# camera check most real proctoring systems run before the timed test
+# starts) fixes that.
+_HEAD_POSE_CALIBRATION_FRAMES = int(os.getenv('HEAD_POSE_CALIBRATION_FRAMES', '5'))
 
 _ANOMALY_SECONDS = {
     'gaze_away': float(os.getenv('GAZE_AWAY_SECONDS', '5')),
@@ -47,6 +59,32 @@ _AWAY_DIRECTIONS = {'Down', 'Up'}
 def _base_type(anomaly):
     """Strip the ':direction' qualifier some anomaly keys carry internally."""
     return anomaly.split(':', 1)[0]
+
+
+def _calibrated_head_alert(session_id, pose):
+    """
+    Calibrate this session's neutral yaw/pitch from its first few frames,
+    then flag head_turned based on DEVIATION from that baseline rather than
+    an absolute global threshold. Returns (alert: bool, calibrating: bool).
+    """
+    with _lock:
+        state = _baseline_pose.setdefault(
+            session_id,
+            {'yaw_samples': [], 'pitch_samples': [], 'baseline_yaw': None, 'baseline_pitch': None},
+        )
+
+        if state['baseline_yaw'] is None:
+            state['yaw_samples'].append(pose['yaw'])
+            state['pitch_samples'].append(pose['pitch'])
+            if len(state['yaw_samples']) >= _HEAD_POSE_CALIBRATION_FRAMES:
+                state['baseline_yaw'] = sum(state['yaw_samples']) / len(state['yaw_samples'])
+                state['baseline_pitch'] = sum(state['pitch_samples']) / len(state['pitch_samples'])
+            return False, True
+
+        yaw_delta = pose['yaw'] - state['baseline_yaw']
+        pitch_delta = pose['pitch'] - state['baseline_pitch']
+        alert = abs(yaw_delta) > _YAW_THRESHOLD or abs(pitch_delta) > _PITCH_THRESHOLD
+        return alert, False
 
 
 def _confirmed_anomalies(session_id, current_anomalies):
@@ -130,12 +168,17 @@ def register_handlers(socketio: SocketIO):
             f"face_count={face_count[0]}",
             flush=True,
         )
+        head_alert, calibrating = (False, False)
+        if pose is not None:
+            head_alert, calibrating = _calibrated_head_alert(session_id, pose)
+
         print(
             f"[pose_debug] session={session_id} "
             f"yaw={pose.get('yaw') if pose else None} "
             f"pitch={pose.get('pitch') if pose else None} "
             f"roll={pose.get('roll') if pose else None} "
-            f"alert={pose.get('alert') if pose else None}",
+            f"raw_alert={pose.get('alert') if pose else None} "
+            f"calibrated_alert={head_alert} calibrating={calibrating}",
             flush=True,
         )
 
@@ -145,7 +188,7 @@ def register_handlers(socketio: SocketIO):
         elif gaze.get('direction') in _AWAY_DIRECTIONS and gaze.get('confidence', 0.0) >= _GAZE_CONFIDENCE_THRESHOLD:
             anomalies.append(f"gaze_away:{gaze['direction']}")
 
-        if pose is not None and pose.get('alert'):
+        if head_alert:
             anomalies.append('head_turned')
 
         if face_count[0] > 1:
