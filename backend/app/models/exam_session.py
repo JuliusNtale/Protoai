@@ -19,5 +19,7 @@ class ExamSession(db.Model):
     verification_details = db.Column(db.JSON)
     warning_count = db.Column(db.Integer, nullable=False, default=0)
     score = db.Column(db.Numeric(5, 2))
+    termination_reason = db.Column(db.String(255))
+    terminated_by = db.Column(db.Integer, db.ForeignKey("users.user_id"))
 
     __table_args__ = (db.UniqueConstraint("student_id", "exam_id", name="uq_exam_sessions_student_exam"),)
