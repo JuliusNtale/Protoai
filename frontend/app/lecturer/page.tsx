@@ -220,7 +220,6 @@ function LecturerDashboardInner() {
   const [assigningStudentId, setAssigningStudentId] = useState<number | null>(null)
   const [assignError, setAssignError] = useState("")
   const [sessionResults, setSessionResults] = useState<SessionResultRow[]>([])
-  const [exporting, setExporting] = useState(false)
   const [exportingAll, setExportingAll] = useState(false)
   const [selectedSessionIds, setSelectedSessionIds] = useState<Set<number>>(new Set())
   const [viewingReport, setViewingReport] = useState<ReportDetail | null>(null)
@@ -804,30 +803,6 @@ function LecturerDashboardInner() {
       setWarningTargetSession(null)
     } finally {
       setSendingWarning(false)
-    }
-  }
-
-  async function exportSelectedExamReport() {
-    if (!selectedExamId) return
-    setExporting(true)
-    try {
-      const res = await fetch(getApiPath(`/reports/export/${selectedExamId}`), {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (!res.ok) {
-        const payload = await res.json().catch(() => ({}))
-        setError(payload?.error?.message || "Failed to export report.")
-        return
-      }
-      const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement("a")
-      a.href = url
-      a.download = `exam_report_${selectedExamId}.csv`
-      a.click()
-      URL.revokeObjectURL(url)
-    } finally {
-      setExporting(false)
     }
   }
 
@@ -1569,16 +1544,9 @@ function LecturerDashboardInner() {
           {reportError ? <p className="mt-2 text-sm text-red-600">{reportError}</p> : null}
           <div className="mt-3 flex gap-2">
             <button
-              onClick={exportSelectedExamReport}
-              disabled={!selectedExamId || exporting}
-              className="rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#142145] disabled:opacity-60"
-            >
-              {exporting ? "Exporting..." : "Export Selected Exam CSV"}
-            </button>
-            <button
               onClick={exportAllReports}
               disabled={exportingAll}
-              className="rounded-md border border-[#1a2d5a] px-4 py-2 text-sm font-semibold text-[#1a2d5a] transition hover:bg-[#1a2d5a]/5 disabled:opacity-60"
+              className="rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#142145] disabled:opacity-60"
             >
               {exportingAll ? "Exporting..." : "Export All Sessions CSV"}
             </button>
