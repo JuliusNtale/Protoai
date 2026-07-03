@@ -31,6 +31,11 @@ type SessionTerminatedEvent = {
   reason?: string
 }
 
+type ManualWarningEvent = {
+  session_id?: number | string
+  message?: string
+}
+
 export default function ExamPage() {
   const router = useRouter()
   const examCaptureVideoRef = useRef<HTMLVideoElement>(null)
@@ -72,6 +77,7 @@ export default function ExamPage() {
   const [sessionLocked, setSessionLocked] = useState(false)
   const [accessChecked, setAccessChecked] = useState(false)
   const [terminatedReason, setTerminatedReason] = useState<string | null>(null)
+  const [manualWarning, setManualWarning] = useState<string | null>(null)
   const { devtoolsLikelyOpen } = useBrowserLockdown({
     onBlockedAction: message => setSecurityAlert(message),
   })
@@ -539,6 +545,15 @@ export default function ExamPage() {
           setTerminatedReason(event.reason || "Your session was terminated due to suspicious activity.")
         })
 
+        // A lecturer/admin watching this session's warning count can send a
+        // direct real-time warning (see /api/sessions/<id>/warn) without
+        // ending the exam - unlike session_terminated above, this never
+        // stops monitoring or blocks the student; it's purely informational.
+        socket.on("manual_warning", (event: ManualWarningEvent) => {
+          if (!event || Number(event.session_id) !== sessionId) return
+          setManualWarning(event.message || "Your invigilator has flagged unusual activity. Please stay focused on your exam.")
+        })
+
         interval = setInterval(() => {
           if (!examCaptureVideoRef.current || !frameCanvasRef.current || !socket) return
           const ctx = frameCanvasRef.current.getContext("2d")
@@ -995,6 +1010,25 @@ export default function ExamPage() {
               className="mt-5 w-full rounded bg-[#1a2d5a] py-2.5 text-sm font-semibold text-white hover:bg-[#243d73]"
             >
               Go to Dashboard
+            </button>
+          </div>
+        </div>
+      )}
+
+      {manualWarning && (
+        <div className="fixed inset-0 z-[65] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="w-full max-w-sm rounded-xl border border-amber-200 bg-white p-6 shadow-2xl">
+            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-amber-100">
+              <AlertTriangle className="h-6 w-6 text-amber-600" />
+            </div>
+            <h3 className="text-base font-bold text-gray-900">Message from Invigilator</h3>
+            <p className="mt-2 text-sm text-gray-600 leading-relaxed">{manualWarning}</p>
+            <button
+              type="button"
+              onClick={() => setManualWarning(null)}
+              className="mt-5 w-full rounded bg-[#1a2d5a] py-2.5 text-sm font-semibold text-white hover:bg-[#243d73]"
+            >
+              I Understand — Continue Exam
             </button>
           </div>
         </div>
