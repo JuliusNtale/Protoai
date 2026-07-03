@@ -29,6 +29,7 @@ type AnomalyResultEvent = {
 type SessionTerminatedEvent = {
   session_id?: number | string
   reason?: string
+  score?: number | string
 }
 
 type ManualWarningEvent = {
@@ -451,8 +452,36 @@ export default function ExamPage() {
     }
   }
 
+  // Best-effort autosave so a lecturer terminating this session mid-exam
+  // (see /api/sessions/<id>/terminate) has something to score - without
+  // this, in-progress answers only ever lived in the `answers` state above
+  // and were sent to the backend for the first time at final /submit.
+  async function autosaveAnswer(questionId: number, optIdx: number) {
+    if (!sessionId) return
+    const token = localStorage.getItem("token")
+    if (!token) return
+    try {
+      await fetch(getApiPath(`/sessions/${sessionId}/answer`), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          question_id: questionId,
+          selected_answer: String.fromCharCode(65 + optIdx),
+        }),
+      })
+    } catch {
+      // Ignore network errors; the final /submit payload built from local
+      // state is still authoritative for a normal (non-terminated) finish.
+    }
+  }
+
   function handleAnswer(optIdx: number) {
     setAnswers(a => ({ ...a, [current]: optIdx }))
+    const question = questions[current]
+    if (question) void autosaveAnswer(question.id, optIdx)
   }
 
   useEffect(() => {
@@ -543,6 +572,9 @@ export default function ExamPage() {
           if (!event || Number(event.session_id) !== sessionId) return
           stopMonitoring()
           setTerminatedReason(event.reason || "Your session was terminated due to suspicious activity.")
+          if (event.score !== undefined && event.score !== null) {
+            setExamScore(Number(event.score))
+          }
         })
 
         // A lecturer/admin watching this session's warning count can send a
@@ -1004,6 +1036,14 @@ export default function ExamPage() {
             </div>
             <h3 className="text-base font-bold text-gray-900">Session Terminated</h3>
             <p className="mt-2 text-sm text-gray-600 leading-relaxed">{terminatedReason}</p>
+            {examScore !== null && (
+              <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-center">
+                <p className="text-xs text-gray-500">Score for questions answered before termination</p>
+                <p className="text-2xl font-bold text-gray-700">
+                  {examScore} / {questions.reduce((sum, q) => sum + (q.marks || 0), 0)}
+                </p>
+              </div>
+            )}
             <button
               type="button"
               onClick={() => void goToDashboard()}

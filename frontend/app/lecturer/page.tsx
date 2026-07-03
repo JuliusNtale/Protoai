@@ -674,9 +674,13 @@ function LecturerDashboardInner() {
       }
     )
 
-    socket.on("session_terminated", (event: { session_id: number }) => {
+    socket.on("session_terminated", (event: { session_id: number; score?: number }) => {
       setSessionResults((prev) =>
-        prev.map((row) => (row.session_id === event.session_id ? { ...row, session_status: "terminated" } : row))
+        prev.map((row) =>
+          row.session_id === event.session_id
+            ? { ...row, session_status: "terminated", score: event.score ?? row.score }
+            : row
+        )
       )
     })
 
@@ -750,7 +754,9 @@ function LecturerDashboardInner() {
       }
       setSessionResults((prev) =>
         prev.map((row) =>
-          row.session_id === terminatingSession.session_id ? { ...row, session_status: "terminated" } : row
+          row.session_id === terminatingSession.session_id
+            ? { ...row, session_status: "terminated", score: payload.score ?? row.score }
+            : row
         )
       )
       setTerminatingSession(null)
