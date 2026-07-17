@@ -52,7 +52,7 @@ def test_sustained_same_direction_confirms_after_threshold(monkeypatch):
 
 
 def _is_away(direction, confidence):
-    return direction in fh._AWAY_DIRECTIONS and confidence >= fh._GAZE_CONFIDENCE_THRESHOLD
+    return fh._gaze_evidence({'direction': direction, 'confidence': confidence})['is_away']
 
 
 def test_low_confidence_reading_is_not_flagged_as_anomaly():
@@ -73,6 +73,12 @@ def test_all_four_directions_are_treated_as_away_above_confidence_floor():
     assert _is_away('Right', 0.9) is True
     assert _is_away('Down', 0.1) is False
     assert _is_away('Left', 0.1) is False
+
+
+def test_horizontal_gaze_uses_weaker_evidence_weight():
+    assert fh._gaze_evidence({'direction': 'Up', 'confidence': 0.45})['is_away'] is True
+    assert fh._gaze_evidence({'direction': 'Left', 'confidence': 0.45})['is_away'] is False
+    assert fh._gaze_evidence({'direction': 'Right', 'confidence': 0.45})['score'] < 0.45
 
 
 def test_calibration_window_never_alerts_regardless_of_raw_pose():

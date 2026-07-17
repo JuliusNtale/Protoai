@@ -66,6 +66,12 @@ _WARNING_COOLDOWN_SECONDS = float(os.getenv('WARNING_COOLDOWN_SECONDS', '5'))
 # inconclusive rather than "away" — see the 2026-07-02 warning-escalation
 # investigation.
 _GAZE_CONFIDENCE_THRESHOLD = float(os.getenv('GAZE_CONFIDENCE_THRESHOLD', '0.4'))
+_GAZE_DIRECTION_WEIGHTS = {
+    'Down': float(os.getenv('GAZE_WEIGHT_DOWN', '1.0')),
+    'Up': float(os.getenv('GAZE_WEIGHT_UP', '1.0')),
+    'Left': float(os.getenv('GAZE_WEIGHT_LEFT', '0.75')),
+    'Right': float(os.getenv('GAZE_WEIGHT_RIGHT', '0.75')),
+}
 
 # Directions that count as "looking away" for warning purposes. All four
 # non-Screen classes now escalate (policy decision 2026-07-03: previously
@@ -84,6 +90,20 @@ _AWAY_DIRECTIONS = {'Down', 'Up', 'Left', 'Right'}
 def _base_type(anomaly):
     """Strip the ':direction' qualifier some anomaly keys carry internally."""
     return anomaly.split(':', 1)[0]
+
+
+def _gaze_evidence(gaze):
+    direction = gaze.get('direction') if gaze else None
+    confidence = float(gaze.get('confidence', 0.0)) if gaze else 0.0
+    weight = _GAZE_DIRECTION_WEIGHTS.get(direction, 0.0)
+    score = confidence * weight
+    return {
+        'direction': direction,
+        'confidence': confidence,
+        'weight': weight,
+        'score': score,
+        'is_away': direction in _AWAY_DIRECTIONS and score >= _GAZE_CONFIDENCE_THRESHOLD,
+    }
 
 
 def _calibrated_head_alert(session_id, pose):
@@ -321,10 +341,11 @@ def register_handlers(socketio: SocketIO):
             identity_mismatch_confirmed, identity_confidence = _check_identity_mismatch(session_id, img_bgr)
 
         anomalies = []
+        gaze_evidence = _gaze_evidence(gaze)
         if not calibrating:
             if gaze is None or face_count[0] == 0:
                 anomalies.append('face_absent')
-            elif gaze.get('direction') in _AWAY_DIRECTIONS and gaze.get('confidence', 0.0) >= _GAZE_CONFIDENCE_THRESHOLD:
+            elif gaze_evidence['is_away']:
                 anomalies.append(f"gaze_away:{gaze['direction']}")
 
             if head_alert:
@@ -422,6 +443,11 @@ def register_handlers(socketio: SocketIO):
             'confirmed_anomalies': [_base_type(a) for a in confirmed_anomalies],
             'warning_count':  warning_count,
             'gaze_direction': gaze_direction,
+            'gaze_evidence': {
+                'confidence': round(gaze_evidence['confidence'], 4),
+                'weight': round(gaze_evidence['weight'], 4),
+                'score': round(gaze_evidence['score'], 4),
+            },
             'calibrating':    calibrating,
         })
 
