@@ -37,6 +37,20 @@ type ManualWarningEvent = {
   message?: string
 }
 
+const MIN_MONITORING_FRAME_INTERVAL_MS = 500
+const MAX_MONITORING_FRAME_INTERVAL_MS = 1000
+const DEFAULT_MONITORING_FRAME_INTERVAL_MS = 1000
+
+function getMonitoringFrameIntervalMs() {
+  const configuredInterval = Number(process.env.NEXT_PUBLIC_MONITORING_FRAME_INTERVAL_MS)
+  if (!Number.isFinite(configuredInterval)) return DEFAULT_MONITORING_FRAME_INTERVAL_MS
+
+  return Math.min(
+    MAX_MONITORING_FRAME_INTERVAL_MS,
+    Math.max(MIN_MONITORING_FRAME_INTERVAL_MS, configuredInterval),
+  )
+}
+
 export default function ExamPage() {
   const router = useRouter()
   const examCaptureVideoRef = useRef<HTMLVideoElement>(null)
@@ -598,7 +612,7 @@ export default function ExamPage() {
             frame_base64: frameBase64,
             timestamp: new Date().toISOString(),
           })
-        }, 2000)
+        }, getMonitoringFrameIntervalMs())
       } catch {
         setSocketConnected(false)
       }
