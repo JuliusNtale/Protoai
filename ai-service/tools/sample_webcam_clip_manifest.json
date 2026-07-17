@@ -1,0 +1,24 @@
+{
+  "clips": [
+    {
+      "path": "fixtures/webcam/example-screen-left-right.mp4",
+      "labels": [
+        {
+          "start_sec": 0.0,
+          "end_sec": 2.0,
+          "label": "Screen"
+        },
+        {
+          "start_sec": 2.0,
+          "end_sec": 4.0,
+          "label": "Left"
+        },
+        {
+          "start_sec": 4.0,
+          "end_sec": 6.0,
+          "label": "Right"
+        }
+      ]
+    }
+  ]
+}
