@@ -17,6 +17,7 @@ from sqlalchemy.exc import OperationalError, ProgrammingError
 
 from app.auth.routes import auth_bp
 from app.config import Config
+from app.devtools.routes import devtools_bp
 from app.exams.routes import exams_bp
 from app.extensions import db, jwt, migrate
 from app.images.routes import images_bp
@@ -51,6 +52,13 @@ def create_app() -> Flask:
     app.register_blueprint(reports_bp, url_prefix="/api/reports")
     app.register_blueprint(images_bp, url_prefix="/api/images")
     app.register_blueprint(search_bp, url_prefix="/api/search")
+
+    # Exam Lab dev-only bootstrap routes - only exist at all when explicitly
+    # enabled for local development (see Config.ENABLE_DEV_TOOLS). Never
+    # registered otherwise, so the routes 404 exactly as if the code weren't
+    # present.
+    if app.config.get("ENABLE_DEV_TOOLS"):
+        app.register_blueprint(devtools_bp, url_prefix="/api/devtools")
 
     @app.get("/health")
     def health_check():
