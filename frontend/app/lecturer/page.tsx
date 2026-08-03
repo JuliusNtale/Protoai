@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { AlertTriangle, BookOpen, Eye, EyeOff, KeyRound, LogOut, Plus, ShieldAlert, Users, X } from "lucide-react"
 import Link from "next/link"
 import { io } from "socket.io-client"
-import { getApiPath } from "@/lib/api-url"
+import { getApiPath, getSocketConnection } from "@/lib/api-url"
 import { cn } from "@/lib/utils"
 import { DashboardPanel, DashboardShell, MetricCard } from "@/components/dashboard-shell"
 import { StatusBadge } from "@/components/status-badge"
@@ -631,8 +631,8 @@ function LecturerDashboardInner() {
       return
     }
 
-    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || "http://localhost:8000"
-    const socket = io(wsUrl, { transports: ["websocket", "polling"] })
+    const { url: wsUrl, path: socketPath } = getSocketConnection()
+    const socket = io(wsUrl, { path: socketPath, transports: ["websocket", "polling"] })
 
     socket.on("connect", () => {
       setLiveAlertsConnected(true)
