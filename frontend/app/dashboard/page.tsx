@@ -501,7 +501,27 @@ function StudentDashboardInner() {
                     <td className="pr-3">
                       {(() => {
                         const session = sessionByExamId.get(exam.exam_id)
-                        const started = Boolean(session && session.session_status !== "completed" && session.session_status !== "locked")
+                        // A session is single-attempt only (student_id+exam_id is
+                        // unique server-side) - once it's reached a terminal state,
+                        // POST /sessions/start will just 409 "cannot be resumed", so
+                        // the button must stop inviting another click rather than
+                        // surface that as a confusing error after the fact.
+                        const isTerminal = session
+                          ? session.session_status === "completed" ||
+                            session.session_status === "terminated" ||
+                            session.session_status === "locked"
+                          : false
+                        const started = Boolean(session && !isTerminal)
+                        if (isTerminal) {
+                          return (
+                            <button
+                              disabled
+                              className="cursor-not-allowed rounded-md bg-muted px-3 py-1.5 text-xs font-semibold text-muted-foreground"
+                            >
+                              {session?.session_status === "terminated" ? "Terminated" : "Submitted"}
+                            </button>
+                          )
+                        }
                         return (
                       <button onClick={() => void startExam(exam.exam_id)} className="rounded-md bg-[#1a2d5a] px-3 py-1.5 text-xs font-semibold text-white">
                         {started ? "Start New Attempt" : "Start Exam"}
