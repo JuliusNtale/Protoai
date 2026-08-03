@@ -79,6 +79,17 @@ export default function ExamPage() {
   const [accessChecked, setAccessChecked] = useState(false)
   const [terminatedReason, setTerminatedReason] = useState<string | null>(null)
   const [manualWarning, setManualWarning] = useState<string | null>(null)
+  // Exam Lab (see /exam-lab) may launch this page in mock-monitoring mode to
+  // skip camera/AI-socket setup for fast local iteration on the exam UI
+  // itself. Gated on a build-time flag that is never set in production
+  // builds, so this is inert outside local dev regardless of localStorage
+  // contents - it never touches auth, session, or identity_verified checks,
+  // which stay fully server-enforced (see the access-check effect below).
+  const [mockMonitoring] = useState(() => {
+    if (typeof window === "undefined") return false
+    if (process.env.NEXT_PUBLIC_ENABLE_DEV_TOOLS !== "true") return false
+    return localStorage.getItem("exam_lab_mock_monitoring") === "true"
+  })
   const { devtoolsLikelyOpen } = useBrowserLockdown({
     onBlockedAction: message => setSecurityAlert(message),
   })
@@ -382,12 +393,22 @@ export default function ExamPage() {
   }, [])
 
   useEffect(() => {
+    if (mockMonitoring) return
     void startExamCamera()
 
     return () => {
       stopExamCameraStream()
     }
-  }, [])
+  }, [mockMonitoring])
+
+  // Mock monitoring never sets examCameraReady, so neither the socket
+  // effect below nor the calibration failsafe (both gated on
+  // examCameraReady) would ever fire - calibrate immediately instead so the
+  // exam timer isn't stuck waiting on a camera that will never start.
+  useEffect(() => {
+    if (!mockMonitoring || !sessionId) return
+    setMonitoringCalibrated(true)
+  }, [mockMonitoring, sessionId])
 
   async function submitSessionToServer() {
     if (!sessionId) return
@@ -679,8 +700,8 @@ export default function ExamPage() {
               type="button"
               className="hidden items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300 sm:flex"
             >
-              <span className={cn("h-1.5 w-1.5 rounded-full", socketConnected ? "bg-emerald-500" : "bg-amber-400")} />
-              {socketConnected ? "Monitoring" : "Connecting"}
+              <span className={cn("h-1.5 w-1.5 rounded-full", mockMonitoring ? "bg-sky-500" : socketConnected ? "bg-emerald-500" : "bg-amber-400")} />
+              {mockMonitoring ? "Mock" : socketConnected ? "Monitoring" : "Connecting"}
             </button>
             <button
               onClick={openSubmitConfirm}
@@ -909,7 +930,7 @@ export default function ExamPage() {
               />
             ) : (
               <p className="px-2 text-center text-[10px] font-medium text-zinc-300">
-                {examCameraError ?? "Starting camera..."}
+                {mockMonitoring ? "Mock monitoring active (Exam Lab) — camera disabled" : (examCameraError ?? "Starting camera...")}
               </p>
             )}
           </div>

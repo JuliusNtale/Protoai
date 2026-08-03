@@ -41,6 +41,10 @@ services:
       ADMIN_EMAIL: admin@udom.ac.tz
       AI_SERVICE_URL: http://ai-service:8000
       FLASK_ENV: development
+      # Enables the local-only Exam Lab bootstrap endpoints (app/devtools).
+      # Requires FLASK_ENV=development above too - see app/config.py. Set to
+      # "false" (or unset) to keep this dev-only surface off even locally.
+      ENABLE_DEV_TOOLS: ${ENABLE_DEV_TOOLS:-true}
     depends_on:
       postgres:
         condition: service_healthy
@@ -88,6 +92,11 @@ services:
     environment:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:5000}
       NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-ws://localhost:8000}
+      # Purely a UI hint for the exam page's mock-monitoring toggle (see
+      # frontend/app/exam/page.tsx). The actual Exam Lab endpoints are
+      # gated server-side by the backend's ENABLE_DEV_TOOLS, independent of
+      # this - see backend/app/config.py.
+      NEXT_PUBLIC_ENABLE_DEV_TOOLS: ${NEXT_PUBLIC_ENABLE_DEV_TOOLS:-true}
     depends_on:
       - backend
       - ai-service
