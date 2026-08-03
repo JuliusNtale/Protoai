@@ -108,12 +108,13 @@ interrupts the exam; it's logged for lecturer/admin review only.
 ## 9. Camera permission failure
 
 Launch with **Real Monitoring**, then deny the camera permission prompt.
-Known current behavior (pre-existing, not introduced by Exam Lab): the
-"Camera permission denied" message shows in the monitor panel, but since
-`monitoringCalibrated` only ever flips true via a camera-gated path, the exam
-timer will not start either. Use this scenario to verify the error message
-renders correctly; if you need the exam to remain usable without a camera,
-use **Mock Monitoring** instead.
+The "Camera permission denied" message shows in the monitor panel; the exam
+itself remains fully usable — answering, autosave, and manual submit never
+depended on camera state. The exam clock now starts within a bounded ~20s
+wait regardless of camera outcome (a calibration failsafe that used to
+incorrectly require `examCameraReady`, leaving the timer frozen forever for
+a denied/missing camera — fixed 2026-08-03). No AI proctoring analysis runs
+for that session, since the AI socket never connects without a camera.
 
 ## 10. AI events (real monitoring only)
 

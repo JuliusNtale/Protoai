@@ -366,15 +366,19 @@ export default function ExamPage() {
     void submitSessionToServer()
   }, [timeLeft, sessionLocked, sessionId])
 
-  // Safety net: if calibration never reports back (e.g. a camera/socket
-  // hiccup), don't block the student from their exam indefinitely — proceed
-  // anyway after a bounded wait. head_turned will just fall back to "still
-  // calibrating" (never alerts) for that session rather than blocking access.
+  // Safety net: if calibration never reports back, don't leave the exam
+  // clock frozen indefinitely - proceed anyway after a bounded wait.
+  // head_turned will just fall back to "still calibrating" (never alerts)
+  // for that session rather than blocking access. This used to also
+  // require examCameraReady, which meant a denied/missing camera left the
+  // timer frozen forever instead of just proctoring being skipped - the
+  // exam has to start on a bounded clock regardless of whether the camera
+  // ever comes up, not only when it does.
   useEffect(() => {
-    if (!examCameraReady || monitoringCalibrated) return
+    if (!sessionId || monitoringCalibrated) return
     const timeout = setTimeout(() => setMonitoringCalibrated(true), 20000)
     return () => clearTimeout(timeout)
-  }, [examCameraReady, monitoringCalibrated])
+  }, [sessionId, monitoringCalibrated])
 
   useEffect(() => {
     function handleFullscreenChange() {
@@ -401,10 +405,11 @@ export default function ExamPage() {
     }
   }, [mockMonitoring])
 
-  // Mock monitoring never sets examCameraReady, so neither the socket
-  // effect below nor the calibration failsafe (both gated on
-  // examCameraReady) would ever fire - calibrate immediately instead so the
-  // exam timer isn't stuck waiting on a camera that will never start.
+  // Mock monitoring never sets examCameraReady, so the socket effect below
+  // never runs either. The general calibration failsafe further down would
+  // still start the exam clock (it no longer depends on examCameraReady),
+  // but only after its full 20s bound - calibrate immediately here instead
+  // so local dev iteration isn't stuck waiting on that.
   useEffect(() => {
     if (!mockMonitoring || !sessionId) return
     setMonitoringCalibrated(true)
