@@ -24,6 +24,7 @@ def socket_client(monkeypatch):
     fh._anomaly_states.clear()
     fh._warning_counts.clear()
     fh._baseline_pose.clear()
+    fh._gaze_calibration.clear()
     fh._identity_check_state.clear()
     fh._session_student_id.clear()
     # Avoid real network calls to the backend for the identity re-check path;
@@ -65,17 +66,23 @@ def test_anomaly_tracking_resumes_once_calibration_is_done(monkeypatch, socket_c
     """Once calibration has actually finished, a genuinely sustained
     away-gaze reading should be tracked (and eventually confirmed) exactly
     as before this fix."""
-    monkeypatch.setattr(fh, 'estimate_gaze', lambda img: {'direction': 'Down', 'confidence': 0.95, 'model_available': True})
     monkeypatch.setattr(fh, 'estimate_head_pose', lambda img: {'yaw': -2.0, 'pitch': -10.0, 'roll': 0.0, 'alert': False})
     monkeypatch.setattr(fh, 'count_faces', lambda img: 1)
 
     frame_base64 = _dummy_frame_base64()
     session_id = 'post-calib-session'
 
+    # Report a neutral "Screen" gaze during calibration so gaze
+    # calibration (_calibrated_gaze) learns "Screen", not "Down", as this
+    # session's own resting direction - otherwise the "Down" reading below
+    # would get remapped back to "Screen" as calibrated neutral, masking
+    # the very anomaly this test checks for.
+    monkeypatch.setattr(fh, 'estimate_gaze', lambda img: {'direction': 'Screen', 'confidence': 0.95, 'model_available': True})
     for _ in range(fh._HEAD_POSE_CALIBRATION_FRAMES):
         socket_client.emit('webcam_frame', {'session_id': session_id, 'frame_base64': frame_base64})
         socket_client.get_received()
 
+    monkeypatch.setattr(fh, 'estimate_gaze', lambda img: {'direction': 'Down', 'confidence': 0.95, 'model_available': True})
     socket_client.emit('webcam_frame', {'session_id': session_id, 'frame_base64': frame_base64})
     payload = _get_anomaly_result(socket_client)
     assert payload['calibrating'] is False
