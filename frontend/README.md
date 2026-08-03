@@ -46,11 +46,16 @@ On the sign-up page, face registration uses real browser camera access:
 
 Make sure your browser has camera permission enabled for `http://localhost:3000`.
 
+## Monitoring Cadence
+
+Live exam monitoring emits webcam frames every 1000ms by default. Set
+`NEXT_PUBLIC_MONITORING_FRAME_INTERVAL_MS` to a value between `500` and `1000`
+to tune the cadence for local testing or deployment.
+
 ## Learn More
 
 To learn more, take a look at the following resources:
 
 - [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
 - [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
 
