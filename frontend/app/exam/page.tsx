@@ -7,7 +7,7 @@ import { io, type Socket } from "socket.io-client"
 import { cn } from "@/lib/utils"
 import { useBrowserLockdown } from "@/hooks/use-browser-lockdown"
 import { Calculator } from "@/components/calculator"
-import { getApiPath } from "@/lib/api-url"
+import { getApiPath, getSocketConnection } from "@/lib/api-url"
 import { ThemeToggle } from "@/components/theme-toggle"
 
 type LiveQuestion = {
@@ -583,8 +583,8 @@ export default function ExamPage() {
       try {
         if (cancelled) return
 
-        const wsUrl = process.env.NEXT_PUBLIC_WS_URL || "http://localhost:8000"
-        socket = io(wsUrl, { transports: ["websocket", "polling"] })
+        const { url: wsUrl, path: socketPath } = getSocketConnection()
+        socket = io(wsUrl, { path: socketPath, transports: ["websocket", "polling"] })
         socketRef.current = socket
 
         socket.on("connect", () => setSocketConnected(true))
