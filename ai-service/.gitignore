@@ -8,5 +8,9 @@ models/*.pt
 models/*.pkl
 models/embeddings/
 storage/
+fixtures/webcam/
+*.mp4
+*.mov
+*.avi
 *.log
 .pytest_cache/

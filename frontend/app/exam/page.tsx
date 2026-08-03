@@ -37,6 +37,20 @@ type ManualWarningEvent = {
   message?: string
 }
 
+const MIN_MONITORING_FRAME_INTERVAL_MS = 500
+const MAX_MONITORING_FRAME_INTERVAL_MS = 1000
+const DEFAULT_MONITORING_FRAME_INTERVAL_MS = 1000
+
+function getMonitoringFrameIntervalMs() {
+  const configuredInterval = Number(process.env.NEXT_PUBLIC_MONITORING_FRAME_INTERVAL_MS)
+  if (!Number.isFinite(configuredInterval)) return DEFAULT_MONITORING_FRAME_INTERVAL_MS
+
+  return Math.min(
+    MAX_MONITORING_FRAME_INTERVAL_MS,
+    Math.max(MIN_MONITORING_FRAME_INTERVAL_MS, configuredInterval),
+  )
+}
+
 export default function ExamPage() {
   const router = useRouter()
   const examCaptureVideoRef = useRef<HTMLVideoElement>(null)
@@ -79,6 +93,17 @@ export default function ExamPage() {
   const [accessChecked, setAccessChecked] = useState(false)
   const [terminatedReason, setTerminatedReason] = useState<string | null>(null)
   const [manualWarning, setManualWarning] = useState<string | null>(null)
+  // Exam Lab (see /exam-lab) may launch this page in mock-monitoring mode to
+  // skip camera/AI-socket setup for fast local iteration on the exam UI
+  // itself. Gated on a build-time flag that is never set in production
+  // builds, so this is inert outside local dev regardless of localStorage
+  // contents - it never touches auth, session, or identity_verified checks,
+  // which stay fully server-enforced (see the access-check effect below).
+  const [mockMonitoring] = useState(() => {
+    if (typeof window === "undefined") return false
+    if (process.env.NEXT_PUBLIC_ENABLE_DEV_TOOLS !== "true") return false
+    return localStorage.getItem("exam_lab_mock_monitoring") === "true"
+  })
   const { devtoolsLikelyOpen } = useBrowserLockdown({
     onBlockedAction: message => setSecurityAlert(message),
   })
@@ -355,15 +380,19 @@ export default function ExamPage() {
     void submitSessionToServer()
   }, [timeLeft, sessionLocked, sessionId])
 
-  // Safety net: if calibration never reports back (e.g. a camera/socket
-  // hiccup), don't block the student from their exam indefinitely — proceed
-  // anyway after a bounded wait. head_turned will just fall back to "still
-  // calibrating" (never alerts) for that session rather than blocking access.
+  // Safety net: if calibration never reports back, don't leave the exam
+  // clock frozen indefinitely - proceed anyway after a bounded wait.
+  // head_turned will just fall back to "still calibrating" (never alerts)
+  // for that session rather than blocking access. This used to also
+  // require examCameraReady, which meant a denied/missing camera left the
+  // timer frozen forever instead of just proctoring being skipped - the
+  // exam has to start on a bounded clock regardless of whether the camera
+  // ever comes up, not only when it does.
   useEffect(() => {
-    if (!examCameraReady || monitoringCalibrated) return
+    if (!sessionId || monitoringCalibrated) return
     const timeout = setTimeout(() => setMonitoringCalibrated(true), 20000)
     return () => clearTimeout(timeout)
-  }, [examCameraReady, monitoringCalibrated])
+  }, [sessionId, monitoringCalibrated])
 
   useEffect(() => {
     function handleFullscreenChange() {
@@ -382,12 +411,23 @@ export default function ExamPage() {
   }, [])
 
   useEffect(() => {
+    if (mockMonitoring) return
     void startExamCamera()
 
     return () => {
       stopExamCameraStream()
     }
-  }, [])
+  }, [mockMonitoring])
+
+  // Mock monitoring never sets examCameraReady, so the socket effect below
+  // never runs either. The general calibration failsafe further down would
+  // still start the exam clock (it no longer depends on examCameraReady),
+  // but only after its full 20s bound - calibrate immediately here instead
+  // so local dev iteration isn't stuck waiting on that.
+  useEffect(() => {
+    if (!mockMonitoring || !sessionId) return
+    setMonitoringCalibrated(true)
+  }, [mockMonitoring, sessionId])
 
   async function submitSessionToServer() {
     if (!sessionId) return
@@ -598,7 +638,7 @@ export default function ExamPage() {
             frame_base64: frameBase64,
             timestamp: new Date().toISOString(),
           })
-        }, 2000)
+        }, getMonitoringFrameIntervalMs())
       } catch {
         setSocketConnected(false)
       }
@@ -679,8 +719,8 @@ export default function ExamPage() {
               type="button"
               className="hidden items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300 sm:flex"
             >
-              <span className={cn("h-1.5 w-1.5 rounded-full", socketConnected ? "bg-emerald-500" : "bg-amber-400")} />
-              {socketConnected ? "Monitoring" : "Connecting"}
+              <span className={cn("h-1.5 w-1.5 rounded-full", mockMonitoring ? "bg-sky-500" : socketConnected ? "bg-emerald-500" : "bg-amber-400")} />
+              {mockMonitoring ? "Mock" : socketConnected ? "Monitoring" : "Connecting"}
             </button>
             <button
               onClick={openSubmitConfirm}
@@ -909,7 +949,7 @@ export default function ExamPage() {
               />
             ) : (
               <p className="px-2 text-center text-[10px] font-medium text-zinc-300">
-                {examCameraError ?? "Starting camera..."}
+                {mockMonitoring ? "Mock monitoring active (Exam Lab) — camera disabled" : (examCameraError ?? "Starting camera...")}
               </p>
             )}
           </div>

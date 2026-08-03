@@ -2,6 +2,7 @@ import threading
 import requests
 import os
 import time
+from collections import Counter
 
 from flask_socketio import SocketIO, emit, join_room
 
@@ -50,6 +51,7 @@ _ANOMALY_SECONDS = {
     'face_absent': float(os.getenv('FACE_ABSENT_SECONDS', os.getenv('GAZE_AWAY_SECONDS', '2'))),
     'multiple_faces': float(os.getenv('MULTIPLE_FACES_SECONDS', '2')),
 }
+_ANOMALY_MIN_OBSERVATIONS = int(os.getenv('ANOMALY_ROLLING_MIN_OBSERVATIONS', '2'))
 # Gap required between two CONFIRMED logs of the same continuously-sustained
 # anomaly. This is the real strictness bottleneck for a student who never
 # breaks the violation at all (e.g. stares away continuously): the 2s
@@ -66,6 +68,12 @@ _WARNING_COOLDOWN_SECONDS = float(os.getenv('WARNING_COOLDOWN_SECONDS', '5'))
 # inconclusive rather than "away" — see the 2026-07-02 warning-escalation
 # investigation.
 _GAZE_CONFIDENCE_THRESHOLD = float(os.getenv('GAZE_CONFIDENCE_THRESHOLD', '0.4'))
+_GAZE_DIRECTION_WEIGHTS = {
+    'Down': float(os.getenv('GAZE_WEIGHT_DOWN', '1.0')),
+    'Up': float(os.getenv('GAZE_WEIGHT_UP', '1.0')),
+    'Left': float(os.getenv('GAZE_WEIGHT_LEFT', '0.75')),
+    'Right': float(os.getenv('GAZE_WEIGHT_RIGHT', '0.75')),
+}
 
 # Directions that count as "looking away" for warning purposes. All four
 # non-Screen classes now escalate (policy decision 2026-07-03: previously
@@ -84,6 +92,20 @@ _AWAY_DIRECTIONS = {'Down', 'Up', 'Left', 'Right'}
 def _base_type(anomaly):
     """Strip the ':direction' qualifier some anomaly keys carry internally."""
     return anomaly.split(':', 1)[0]
+
+
+def _gaze_evidence(gaze):
+    direction = gaze.get('direction') if gaze else None
+    confidence = float(gaze.get('confidence', 0.0)) if gaze else 0.0
+    weight = _GAZE_DIRECTION_WEIGHTS.get(direction, 0.0)
+    score = confidence * weight
+    return {
+        'direction': direction,
+        'confidence': confidence,
+        'weight': weight,
+        'score': score,
+        'is_away': direction in _AWAY_DIRECTIONS and score >= _GAZE_CONFIDENCE_THRESHOLD,
+    }
 
 
 def _calibrated_head_alert(session_id, pose):
@@ -112,37 +134,54 @@ def _calibrated_head_alert(session_id, pose):
         return alert, False
 
 
-def _confirmed_anomalies(session_id, current_anomalies):
-    """Return anomalies that have persisted long enough to count as warnings.
+def _representative_anomaly(observations):
+    qualified = [anomaly for _, anomaly in observations if ':' in anomaly]
+    if not qualified:
+        return observations[-1][1]
+    return Counter(qualified).most_common(1)[0][0]
 
-    Anomaly keys may be direction-qualified (e.g. 'gaze_away:Right') so that
-    the required persistence must be the SAME specific direction the whole
-    time — flip-flopping between different wrong directions (a signature of
-    model noise, not real gaze deviation) resets the timer instead of
-    accumulating toward a warning.
+
+def _confirmed_anomalies(session_id, current_anomalies):
+    """Return anomalies with enough rolling-window evidence to count.
+
+    Gaze predictions can jitter between non-Screen directions even when the
+    underlying signal is consistently suspicious. Track recent evidence by
+    base anomaly type instead of requiring the exact same direction to remain
+    uninterrupted for the whole persistence window.
     """
     now = time.monotonic()
-    current = set(current_anomalies)
+    current = list(dict.fromkeys(current_anomalies))
 
     with _lock:
         session_state = _anomaly_states.setdefault(session_id, {})
 
-        for anomaly in list(session_state):
-            if anomaly not in current:
-                del session_state[anomaly]
+        for anomaly_type, state in list(session_state.items()):
+            required_seconds = _ANOMALY_SECONDS.get(anomaly_type, 3.0)
+            state['observations'] = [
+                observation
+                for observation in state['observations']
+                if now - observation[0] <= required_seconds
+            ]
+            if not state['observations'] and anomaly_type not in {_base_type(a) for a in current}:
+                del session_state[anomaly_type]
 
         confirmed = []
         for anomaly in current:
+            anomaly_type = _base_type(anomaly)
             state = session_state.setdefault(
-                anomaly,
-                {'started_at': now, 'last_logged_at': 0.0},
+                anomaly_type,
+                {'observations': [], 'last_logged_at': -_WARNING_COOLDOWN_SECONDS},
             )
-            required_seconds = _ANOMALY_SECONDS.get(_base_type(anomaly), 3.0)
-            persisted = now - state['started_at']
+            state['observations'].append((now, anomaly))
+
+            required_seconds = _ANOMALY_SECONDS.get(anomaly_type, 3.0)
+            observations = state['observations']
+            persisted = now - observations[0][0] if observations else 0.0
             cooled_down = now - state['last_logged_at']
-            if persisted >= required_seconds and cooled_down >= _WARNING_COOLDOWN_SECONDS:
+            enough_observations = len(observations) >= _ANOMALY_MIN_OBSERVATIONS
+            if persisted >= required_seconds and enough_observations and cooled_down >= _WARNING_COOLDOWN_SECONDS:
                 state['last_logged_at'] = now
-                confirmed.append(anomaly)
+                confirmed.append(_representative_anomaly(observations))
 
     return confirmed
 
@@ -321,10 +360,11 @@ def register_handlers(socketio: SocketIO):
             identity_mismatch_confirmed, identity_confidence = _check_identity_mismatch(session_id, img_bgr)
 
         anomalies = []
+        gaze_evidence = _gaze_evidence(gaze)
         if not calibrating:
             if gaze is None or face_count[0] == 0:
                 anomalies.append('face_absent')
-            elif gaze.get('direction') in _AWAY_DIRECTIONS and gaze.get('confidence', 0.0) >= _GAZE_CONFIDENCE_THRESHOLD:
+            elif gaze_evidence['is_away']:
                 anomalies.append(f"gaze_away:{gaze['direction']}")
 
             if head_alert:
@@ -422,6 +462,11 @@ def register_handlers(socketio: SocketIO):
             'confirmed_anomalies': [_base_type(a) for a in confirmed_anomalies],
             'warning_count':  warning_count,
             'gaze_direction': gaze_direction,
+            'gaze_evidence': {
+                'confidence': round(gaze_evidence['confidence'], 4),
+                'weight': round(gaze_evidence['weight'], 4),
+                'score': round(gaze_evidence['score'], 4),
+            },
             'calibrating':    calibrating,
         })
 

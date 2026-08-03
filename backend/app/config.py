@@ -15,3 +15,12 @@ class Config:
     BOOTSTRAP_ADMIN_EMAIL = os.getenv("BOOTSTRAP_ADMIN_EMAIL", "admin@udom.ac.tz")
     BOOTSTRAP_ADMIN_REG_NUMBER = os.getenv("BOOTSTRAP_ADMIN_REG_NUMBER", "ADM-BOOTSTRAP-001")
     BOOTSTRAP_ADMIN_PASSWORD = os.getenv("BOOTSTRAP_ADMIN_PASSWORD", "TempAdmin123!")
+
+    # Exam Lab dev-only bootstrap endpoints (app/devtools/routes.py). Requires
+    # BOTH flags so a stray ENABLE_DEV_TOOLS=true can't light this up outside
+    # local development - the blueprint is only registered at all when this
+    # is true (see create_app()).
+    ENABLE_DEV_TOOLS = (
+        os.getenv("ENABLE_DEV_TOOLS", "false").strip().lower() == "true"
+        and os.getenv("FLASK_ENV", "production").strip().lower() == "development"
+    )
