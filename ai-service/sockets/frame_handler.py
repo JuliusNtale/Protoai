@@ -21,6 +21,7 @@ _AI_SERVICE_TOKEN = os.getenv('AI_SERVICE_TOKEN', '').strip()
 _warning_counts: dict = {}
 _anomaly_states: dict = {}
 _baseline_pose: dict = {}
+_gaze_calibration: dict = {}
 _session_student_id: dict = {}
 _identity_check_state: dict = {}
 _lock = threading.Lock()
@@ -44,6 +45,7 @@ _IDENTITY_MISMATCH_CONFIRM_COUNT = int(os.getenv('IDENTITY_MISMATCH_CONFIRM_COUN
 # camera check most real proctoring systems run before the timed test
 # starts) fixes that.
 _HEAD_POSE_CALIBRATION_FRAMES = int(os.getenv('HEAD_POSE_CALIBRATION_FRAMES', '5'))
+_GAZE_CALIBRATION_FRAMES = int(os.getenv('GAZE_CALIBRATION_FRAMES', str(_HEAD_POSE_CALIBRATION_FRAMES)))
 
 _ANOMALY_SECONDS = {
     'gaze_away': float(os.getenv('GAZE_AWAY_SECONDS', '2')),
@@ -139,6 +141,41 @@ def _representative_anomaly(observations):
     if not qualified:
         return observations[-1][1]
     return Counter(qualified).most_common(1)[0][0]
+
+
+def _calibrated_gaze(session_id, gaze, calibrating):
+    """Use setup-time neutral gaze samples to correct session-specific bias."""
+    if gaze is None:
+        return None
+
+    direction = gaze.get('direction')
+    calibrated = dict(gaze)
+    calibrated.setdefault('raw_direction', direction)
+
+    with _lock:
+        state = _gaze_calibration.setdefault(
+            session_id,
+            {'samples': [], 'neutral_direction': None},
+        )
+
+        if state['neutral_direction'] is None and calibrating:
+            if direction:
+                state['samples'].append(direction)
+            if len(state['samples']) >= _GAZE_CALIBRATION_FRAMES:
+                state['neutral_direction'] = Counter(state['samples']).most_common(1)[0][0]
+            calibrated['calibrating'] = True
+            calibrated['neutral_direction'] = state['neutral_direction']
+            return calibrated
+
+        neutral_direction = state['neutral_direction']
+
+    if neutral_direction:
+        calibrated['neutral_direction'] = neutral_direction
+        if direction == neutral_direction:
+            calibrated['direction'] = 'Screen'
+            calibrated['calibrated_from'] = direction
+
+    return calibrated
 
 
 def _confirmed_anomalies(session_id, current_anomalies):
@@ -335,6 +372,8 @@ def register_handlers(socketio: SocketIO):
         head_alert, calibrating = (False, not already_calibrated)
         if pose is not None:
             head_alert, calibrating = _calibrated_head_alert(session_id, pose)
+
+        gaze = _calibrated_gaze(session_id, gaze, calibrating)
 
         print(
             f"[pose_debug] session={session_id} "
