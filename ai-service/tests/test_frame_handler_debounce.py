@@ -24,31 +24,51 @@ def test_base_type_strips_direction_qualifier():
     assert fh._base_type('head_turned') == 'head_turned'
 
 
-def test_direction_change_resets_persistence(monkeypatch):
-    """Flip-flopping between different wrong directions must not accumulate
-    toward a confirmed warning — only a SUSTAINED single direction should."""
+def test_direction_changes_accumulate_in_rolling_gaze_window(monkeypatch):
+    """Flip-flopping between wrong gaze directions is still suspicious when
+    the rolling gaze-away window stays populated long enough."""
     _reset_state()
     times = iter([0.0, 1.0, 2.0])
     monkeypatch.setattr(fh.time, 'monotonic', lambda: next(times))
 
     assert fh._confirmed_anomalies('s1', ['gaze_away:Right']) == []
     assert fh._confirmed_anomalies('s1', ['gaze_away:Down']) == []
-    # Direction changed, so at t=2.0 the 'Down' key is brand new (started_at=2.0);
-    # nowhere near the 5s gaze_away threshold yet.
-    assert fh._confirmed_anomalies('s1', ['gaze_away:Down']) == []
+    assert fh._confirmed_anomalies('s1', ['gaze_away:Down']) == ['gaze_away:Down']
 
 
 def test_sustained_same_direction_confirms_after_threshold(monkeypatch):
     _reset_state()
-    # Must clear both the persistence threshold (GAZE_AWAY_SECONDS, default 2s
-    # from started_at) AND the cooldown (WARNING_COOLDOWN_SECONDS, default 15s
-    # from last_logged_at, which starts at 0.0).
-    times = iter([0.0, 1.0, 16.0])
+    times = iter([0.0, 1.0, 2.0])
     monkeypatch.setattr(fh.time, 'monotonic', lambda: next(times))
 
     assert fh._confirmed_anomalies('s2', ['gaze_away:Right']) == []
     assert fh._confirmed_anomalies('s2', ['gaze_away:Right']) == []
     assert fh._confirmed_anomalies('s2', ['gaze_away:Right']) == ['gaze_away:Right']
+
+
+def test_rolling_window_recovers_after_anomaly_stops(monkeypatch):
+    _reset_state()
+    times = iter([0.0, 1.0, 4.1])
+    monkeypatch.setattr(fh.time, 'monotonic', lambda: next(times))
+
+    assert fh._confirmed_anomalies('s3', ['gaze_away:Right']) == []
+    assert fh._confirmed_anomalies('s3', []) == []
+    assert fh._confirmed_anomalies('s3', ['gaze_away:Right']) == []
+
+
+def test_confirmed_anomaly_respects_cooldown(monkeypatch):
+    _reset_state()
+    times = iter([0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0])
+    monkeypatch.setattr(fh.time, 'monotonic', lambda: next(times))
+
+    assert fh._confirmed_anomalies('s4', ['gaze_away:Right']) == []
+    assert fh._confirmed_anomalies('s4', ['gaze_away:Right']) == []
+    assert fh._confirmed_anomalies('s4', ['gaze_away:Right']) == ['gaze_away:Right']
+    assert fh._confirmed_anomalies('s4', ['gaze_away:Right']) == []
+    assert fh._confirmed_anomalies('s4', ['gaze_away:Right']) == []
+    assert fh._confirmed_anomalies('s4', ['gaze_away:Right']) == []
+    assert fh._confirmed_anomalies('s4', ['gaze_away:Right']) == []
+    assert fh._confirmed_anomalies('s4', ['gaze_away:Right']) == ['gaze_away:Right']
 
 
 def _is_away(direction, confidence):
