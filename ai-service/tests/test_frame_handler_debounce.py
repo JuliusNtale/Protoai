@@ -12,6 +12,7 @@ def _reset_state():
     fh._anomaly_states.clear()
     fh._warning_counts.clear()
     fh._baseline_pose.clear()
+    fh._gaze_calibration.clear()
 
 
 def _reset_identity_state():
@@ -139,6 +140,34 @@ def test_real_deviation_from_baseline_still_alerts():
     alert, calibrating = fh._calibrated_head_alert('s5', {'yaw': -58.0, 'pitch': -43.0, 'roll': -4.0})
     assert calibrating is False
     assert alert is True
+
+
+def test_gaze_calibration_maps_neutral_direction_to_screen():
+    _reset_state()
+    neutral = {'direction': 'Left', 'confidence': 0.8, 'model_available': True}
+
+    for _ in range(fh._GAZE_CALIBRATION_FRAMES):
+        calibrated = fh._calibrated_gaze('gaze1', neutral, calibrating=True)
+        assert calibrated['calibrating'] is True
+
+    calibrated = fh._calibrated_gaze('gaze1', neutral, calibrating=False)
+
+    assert calibrated['raw_direction'] == 'Left'
+    assert calibrated['neutral_direction'] == 'Left'
+    assert calibrated['calibrated_from'] == 'Left'
+    assert calibrated['direction'] == 'Screen'
+
+
+def test_gaze_calibration_keeps_non_neutral_direction():
+    _reset_state()
+    for _ in range(fh._GAZE_CALIBRATION_FRAMES):
+        fh._calibrated_gaze('gaze2', {'direction': 'Screen', 'confidence': 0.8}, calibrating=True)
+
+    calibrated = fh._calibrated_gaze('gaze2', {'direction': 'Up', 'confidence': 0.9}, calibrating=False)
+
+    assert calibrated['raw_direction'] == 'Up'
+    assert calibrated['neutral_direction'] == 'Screen'
+    assert calibrated['direction'] == 'Up'
 
 
 def test_resolve_student_id_caches_after_first_lookup(monkeypatch):
