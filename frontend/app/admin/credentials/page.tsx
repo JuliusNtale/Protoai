@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { LogOut } from "lucide-react"
 import { DashboardPanel, DashboardShell } from "@/components/dashboard-shell"
 import { readGeneratedCredentials } from "@/lib/generated-credentials"
+import { formatDateTimeEAT } from "@/lib/format-time"
 
 export default function AdminCredentialsPage() {
   const router = useRouter()
@@ -97,7 +98,7 @@ export default function AdminCredentialsPage() {
             <tbody>
               {rows.map((row, idx) => (
                 <tr key={`${row.login_id}-${idx}`} className="border-b last:border-b-0">
-                  <td className="py-2 pl-3">{new Date(row.created_at).toLocaleString()}</td>
+                  <td className="py-2 pl-3">{formatDateTimeEAT(row.created_at)}</td>
                   <td>{row.full_name}</td>
                   <td>{row.role}</td>
                   <td className="font-mono">{row.login_id}</td>

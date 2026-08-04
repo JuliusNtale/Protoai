@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { BookOpenCheck, ClipboardList, Eye, EyeOff, LogOut, UserCircle2 } from "lucide-react"
 import { getApiPath } from "@/lib/api-url"
+import { formatDateTimeEAT } from "@/lib/format-time"
 import { DashboardPanel, DashboardShell, MetricCard } from "@/components/dashboard-shell"
 import { StatusBadge } from "@/components/status-badge"
 
@@ -97,12 +98,7 @@ const FALLBACK_DEGREE_PROGRAM_OPTIONS = [
   "Diploma in Information and Communication Technology (Dip. ICT)",
 ]
 
-function formatDateTime(value?: string | null) {
-  if (!value) return "TBD"
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return "TBD"
-  return date.toLocaleString()
-}
+const formatDateTime = formatDateTimeEAT
 
 function StudentDashboardInner() {
   const router = useRouter()

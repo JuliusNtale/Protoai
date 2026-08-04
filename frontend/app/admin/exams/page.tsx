@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { ClipboardList, LogOut } from "lucide-react"
 import { getApiPath } from "@/lib/api-url"
+import { formatDateTimeEAT } from "@/lib/format-time"
 import { DashboardPanel, DashboardShell } from "@/components/dashboard-shell"
 import { StatusBadge } from "@/components/status-badge"
 
@@ -18,12 +19,7 @@ type ExamRow = {
   lecturer_name?: string | null
 }
 
-function formatDateTime(value?: string | null) {
-  if (!value) return "TBD"
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return "TBD"
-  return date.toLocaleString()
-}
+const formatDateTime = formatDateTimeEAT
 
 export default function AdminExamsPage() {
   const router = useRouter()
