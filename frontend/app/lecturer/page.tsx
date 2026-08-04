@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { AlertTriangle, BookOpen, Eye, EyeOff, KeyRound, LogOut, Plus, ShieldAlert, Users, X } from "lucide-react"
+import { AlertTriangle, Eye, EyeOff, KeyRound, LogOut, ShieldAlert, Users, X } from "lucide-react"
 import Link from "next/link"
 import { io } from "socket.io-client"
 import { getApiPath, getSocketConnection } from "@/lib/api-url"
@@ -100,6 +100,7 @@ type LiveAlert = {
   session_id: number
   log_id: number
   event_type: string
+  event_data: Record<string, unknown>
   warning_count: number
   logged_at: string | null
   student_name: string
@@ -149,6 +150,27 @@ function toggleProgramId(list: number[], id: number): number[] {
   return list.includes(id) ? list.filter((existing) => existing !== id) : [...list, id]
 }
 
+// Human-readable label for every BehavioralLog/live-alert event_type this
+// system produces (see backend/app/sessions/routes.py and
+// ai-service/sockets/frame_handler.py for the full set of literal values).
+// Falls back to a generic Title Case of the raw type for anything new that
+// isn't mapped yet, so an unrecognized type never renders blank.
+const EVENT_TYPE_LABELS: Record<string, string> = {
+  gaze_away: "Gaze Away Detected",
+  head_turned: "Head Turned Away",
+  face_absent: "Student Face Missing",
+  multiple_faces: "Multiple Faces Detected",
+  identity_mismatch: "Identity Mismatch Detected",
+  tab_switch: "Tab Switch Detected",
+  identity_verification: "Identity Verification",
+  lecturer_warning: "Lecturer Warning Sent",
+  session_terminated: "Session Terminated",
+}
+
+function formatEventLabel(eventType: string): string {
+  return EVENT_TYPE_LABELS[eventType] || eventType.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
 function formatEventDetail(entry: { event_type: string; event_data: Record<string, unknown> }): string {
   const data = entry.event_data || {}
   if (entry.event_type === "identity_verification") {
@@ -161,6 +183,21 @@ function formatEventDetail(entry: { event_type: string; event_data: Record<strin
     const parts: string[] = ["face did not match registered profile during exam"]
     if (typeof data.confidence_score === "number") parts.push(`confidence: ${data.confidence_score.toFixed(2)}`)
     return parts.join(", ")
+  }
+  if (entry.event_type === "multiple_faces") {
+    return typeof data.face_count === "number" ? `${data.face_count} faces detected in frame` : ""
+  }
+  if (entry.event_type === "tab_switch") {
+    const parts: string[] = []
+    if (data.reason === "visibility_hidden") parts.push("switched away from the exam tab")
+    else if (data.reason === "window_blur") parts.push("exam window lost focus")
+    return parts.join(", ")
+  }
+  if (entry.event_type === "lecturer_warning" && typeof data.message === "string") {
+    return `"${data.message}"`
+  }
+  if (entry.event_type === "session_terminated" && typeof data.reason === "string") {
+    return data.reason
   }
   const parts: string[] = []
   if (typeof data.gaze_direction === "string") parts.push(`gaze: ${data.gaze_direction}`)
@@ -246,6 +283,11 @@ function LecturerDashboardInner() {
   const [correctAnswer, setCorrectAnswer] = useState("")
   const [marks, setMarks] = useState("1")
   const [editingQuestionId, setEditingQuestionId] = useState<number | null>(null)
+  const [bulkUploadFile, setBulkUploadFile] = useState<File | null>(null)
+  const [bulkUploading, setBulkUploading] = useState(false)
+  const [bulkUploadMessage, setBulkUploadMessage] = useState("")
+  const [bulkUploadErrors, setBulkUploadErrors] = useState<string[]>([])
+  const bulkUploadInputRef = useRef<HTMLInputElement>(null)
   const [currentPassword, setCurrentPassword] = useState("")
   const [newPassword, setNewPassword] = useState("")
   const [showCurrentPassword, setShowCurrentPassword] = useState(false)
@@ -275,6 +317,13 @@ function LecturerDashboardInner() {
     setSelectedExamId(requestedExamId)
     void loadExamDetails(token, requestedExamId)
   }, [token, exams, searchParams, selectedExamId])
+
+  useEffect(() => {
+    setBulkUploadFile(null)
+    setBulkUploadMessage("")
+    setBulkUploadErrors([])
+    if (bulkUploadInputRef.current) bulkUploadInputRef.current.value = ""
+  }, [selectedExamId])
 
   async function load(activeToken: string) {
     setLoading(true)
@@ -549,6 +598,54 @@ function LecturerDashboardInner() {
     await loadExamDetails(token, selectedExamId)
   }
 
+  async function downloadQuestionTemplate() {
+    const res = await fetch(getApiPath("/exams/questions/template"), {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!res.ok) {
+      setError("Could not download the CSV template.")
+      return
+    }
+    const blob = await res.blob()
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.href = url
+    link.download = "question_upload_template.csv"
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.URL.revokeObjectURL(url)
+  }
+
+  async function uploadQuestionsCsv() {
+    if (!selectedExamId || !bulkUploadFile) return
+    setBulkUploading(true)
+    setBulkUploadMessage("")
+    setBulkUploadErrors([])
+    try {
+      const formData = new FormData()
+      formData.append("file", bulkUploadFile)
+      const res = await fetch(getApiPath(`/exams/${selectedExamId}/questions/bulk`), {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      })
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setError(payload?.error?.message || "Could not upload the CSV file.")
+        setBulkUploadErrors(payload?.row_errors || [])
+        return
+      }
+      setBulkUploadMessage(payload.message || "Questions uploaded.")
+      setBulkUploadErrors(payload.row_errors || [])
+      setBulkUploadFile(null)
+      if (bulkUploadInputRef.current) bulkUploadInputRef.current.value = ""
+      await loadExamDetails(token, selectedExamId)
+    } finally {
+      setBulkUploading(false)
+    }
+  }
+
   async function updateExamStatus(examId: number, status: string) {
     const res = await fetch(getApiPath(`/exams/${examId}/status`), {
       method: "PATCH",
@@ -644,7 +741,14 @@ function LecturerDashboardInner() {
 
     socket.on(
       "lecturer_alert",
-      (event: { session_id: number; log_id: number; event_type: string; warning_count: number; logged_at: string | null }) => {
+      (event: {
+        session_id: number
+        log_id: number
+        event_type: string
+        event_data?: Record<string, unknown> | null
+        warning_count: number
+        logged_at: string | null
+      }) => {
         setSessionResults((prev) =>
           prev.map((row) =>
             row.session_id === event.session_id
@@ -662,6 +766,7 @@ function LecturerDashboardInner() {
             session_id: event.session_id,
             log_id: event.log_id,
             event_type: event.event_type,
+            event_data: event.event_data || {},
             warning_count: event.warning_count,
             logged_at: event.logged_at,
             student_name: row?.student_name ?? `Session #${event.session_id}`,
@@ -726,8 +831,7 @@ function LecturerDashboardInner() {
   // activity".
   function defaultTerminationReason(eventType?: string): string {
     if (!eventType) return "Suspicious activity detected during your exam."
-    const label = eventType.replace(/_/g, " ")
-    return `Your exam session was terminated because the following was detected during monitoring: ${label}.`
+    return `Your exam session was terminated due to: ${formatEventLabel(eventType)}.`
   }
 
   function openTerminateModal(row: SessionResultRow, eventType?: string) {
@@ -933,6 +1037,52 @@ function LecturerDashboardInner() {
     )
   }
 
+  function renderBulkUploadPanel(targetTab: string, showPicker: boolean) {
+    return (
+      <div className="rounded-xl border border-dashed border-border p-4">
+        <p className="text-sm font-semibold text-foreground">Bulk upload questions via CSV</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Download the template below and fill it in without renaming or reordering the columns — this keeps
+          every lecturer&apos;s file in the same shape so uploads never fail on mismatched columns.
+        </p>
+        {showPicker && <div className="mt-3">{renderExamPicker(targetTab)}</div>}
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <button
+            onClick={downloadQuestionTemplate}
+            className="rounded-md border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition hover:bg-muted"
+          >
+            Download CSV Template
+          </button>
+          <input
+            ref={bulkUploadInputRef}
+            type="file"
+            accept=".csv"
+            onChange={e => setBulkUploadFile(e.target.files?.[0] || null)}
+            className="text-sm text-foreground file:mr-3 file:rounded-md file:border file:border-border file:bg-background file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-foreground"
+          />
+          <button
+            onClick={uploadQuestionsCsv}
+            disabled={!selectedExamId || !bulkUploadFile || bulkUploading}
+            className="rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#142145] disabled:opacity-60"
+          >
+            {bulkUploading ? "Uploading..." : "Upload CSV"}
+          </button>
+        </div>
+        {!selectedExamId && (
+          <p className="mt-2 text-xs text-muted-foreground">Select an exam above before uploading.</p>
+        )}
+        {bulkUploadMessage && <p className="mt-2 text-sm text-green-700">{bulkUploadMessage}</p>}
+        {bulkUploadErrors.length > 0 && (
+          <ul className="mt-2 list-inside list-disc text-xs text-amber-700">
+            {bulkUploadErrors.map((rowError, index) => (
+              <li key={index}>{rowError}</li>
+            ))}
+          </ul>
+        )}
+      </div>
+    )
+  }
+
   async function changePassword() {
     setPasswordMsg("")
     setForcePasswordMsg("")
@@ -1095,11 +1245,7 @@ function LecturerDashboardInner() {
 
         {tab === "exams" && (
           <>
-        <DashboardPanel title="Create Exam">
-          <div className="flex items-center gap-2">
-            <Plus className="h-5 w-5 text-blue-700" />
-            <h2 className="text-base font-semibold">Create Exam</h2>
-          </div>
+        <DashboardPanel title="Create Exam" subtitle="Set the title, schedule, and eligible degree programs, then add questions — publish it once you're ready for students to see it.">
           <div className="mt-4 grid gap-3 md:grid-cols-2">
             <input value={newTitle} onChange={e => setNewTitle(e.target.value)} placeholder="Exam title" className="rounded-md border border-border bg-background p-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100" />
             <input value={newCourseCode} onChange={e => setNewCourseCode(e.target.value)} placeholder="Course code" className="rounded-md border border-border bg-background p-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-[#1a2d5a] focus:outline-none focus:ring-2 focus:ring-blue-100" />
@@ -1139,11 +1285,11 @@ function LecturerDashboardInner() {
           <button onClick={createExam} className="mt-3 rounded-md bg-[#1a2d5a] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#142145]">Create Exam & Add Questions</button>
         </DashboardPanel>
 
-        <DashboardPanel title="My Exam List">
-          <div className="flex items-center gap-2">
-            <BookOpen className="h-5 w-5 text-blue-700" />
-            <h2 className="text-base font-semibold">My Exam List</h2>
-          </div>
+        <DashboardPanel title="Add Questions in Bulk" subtitle="Download the template, fill it in, and upload it — no need to add questions one at a time.">
+          {renderBulkUploadPanel("exams", true)}
+        </DashboardPanel>
+
+        <DashboardPanel title="My Exam List" subtitle="Review every exam you've created, update its status, or open it to manage questions and students — all from one table.">
           <div className="mt-4 overflow-x-auto rounded-xl border border-border">
             <table className="w-full text-sm">
               <thead>
@@ -1265,6 +1411,8 @@ function LecturerDashboardInner() {
               </span>
             )}
           </div>
+
+          <div className="mt-6">{renderBulkUploadPanel("questions", false)}</div>
 
           <div className="mt-4 overflow-x-auto">
             <table className="w-full text-sm">
@@ -1478,7 +1626,12 @@ function LecturerDashboardInner() {
                     </td>
                     <td className="whitespace-nowrap">{alert.student_name}</td>
                     <td className="whitespace-nowrap">{alert.exam_title}</td>
-                    <td className="capitalize">{alert.event_type.replace(/_/g, " ")}</td>
+                    <td>
+                      <span className="font-medium text-foreground">{formatEventLabel(alert.event_type)}</span>
+                      {formatEventDetail(alert) && (
+                        <span className="block text-[11px] text-muted-foreground">{formatEventDetail(alert)}</span>
+                      )}
+                    </td>
                     <td>{alert.warning_count}</td>
                     <td>
                       {alert.is_suspicious === null || alert.is_suspicious === undefined ? (
@@ -1896,7 +2049,7 @@ function LecturerDashboardInner() {
                     <td className="py-1.5 pl-2 whitespace-nowrap text-muted-foreground">
                       {log.logged_at ? new Date(log.logged_at).toLocaleTimeString() : "—"}
                     </td>
-                    <td className="whitespace-nowrap capitalize">{log.event_type.replace(/_/g, " ")}</td>
+                    <td className="whitespace-nowrap font-medium text-foreground">{formatEventLabel(log.event_type)}</td>
                     <td className="text-muted-foreground">{formatEventDetail(log)}</td>
                     <td>
                       {log.is_suspicious === null || log.is_suspicious === undefined ? (

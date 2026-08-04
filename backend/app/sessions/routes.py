@@ -340,6 +340,7 @@ def log_event():
             "session_id": session.session_id,
             "log_id": log_entry.log_id,
             "event_type": event_type,
+            "event_data": log_entry.event_data,
             "warning_count": session.warning_count,
             "logged_at": log_entry.logged_at.isoformat() if log_entry.logged_at else None,
         },

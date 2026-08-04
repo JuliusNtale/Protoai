@@ -1,6 +1,8 @@
+import csv
+import io
 from datetime import datetime
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, Response, jsonify, request
 from flask_jwt_extended import get_jwt, get_jwt_identity, jwt_required
 
 from app.extensions import db
@@ -17,6 +19,21 @@ from app.models import (
 )
 
 exams_bp = Blueprint("exams", __name__)
+
+# Single source of truth for the bulk-upload CSV shape so the downloadable
+# template and the parser can never drift apart into "different/corrupted
+# columns" per lecturer.
+QUESTION_CSV_COLUMNS = [
+    "question_text",
+    "question_type",
+    "option_a",
+    "option_b",
+    "option_c",
+    "option_d",
+    "correct_answer",
+    "marks",
+]
+QUESTION_CSV_REQUIRED_COLUMNS = {"question_text", "question_type", "correct_answer"}
 
 
 def _lecturer_profile_confirmed(user_id: int) -> bool:
@@ -98,6 +115,26 @@ def list_degree_programs():
     return jsonify(
         {"programs": [{"program_id": program.program_id, "name": program.name} for program in programs]}
     ), 200
+
+
+@exams_bp.get("/questions/template")
+@jwt_required()
+def download_question_csv_template():
+    role = get_jwt().get("role")
+    if role not in {"lecturer", "admin"}:
+        return jsonify({"error": {"message": "Forbidden"}}), 403
+
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(QUESTION_CSV_COLUMNS)
+    writer.writerow(["What is 2 + 2?", "mcq", "3", "4", "5", "6", "B", "1"])
+    writer.writerow(["The Earth orbits the Sun.", "true_false", "", "", "", "", "TRUE", "1"])
+
+    return Response(
+        buffer.getvalue().encode("utf-8-sig"),
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment; filename=question_upload_template.csv"},
+    )
 
 
 @exams_bp.post("")
@@ -347,6 +384,116 @@ def create_question(exam_id):
     db.session.add(question)
     db.session.commit()
     return jsonify({"question_id": question.question_id}), 201
+
+
+@exams_bp.post("/<int:exam_id>/questions/bulk")
+@jwt_required()
+def bulk_upload_questions(exam_id):
+    role = get_jwt().get("role")
+    user_id = int(get_jwt_identity())
+    if role not in {"lecturer", "admin"}:
+        return jsonify({"error": {"message": "Forbidden"}}), 403
+    if role == "lecturer" and not _lecturer_profile_confirmed(user_id):
+        return jsonify({"error": {"message": "Complete and confirm your lecturer profile before managing exams."}}), 403
+
+    exam = db.session.get(Exam, exam_id)
+    if not exam:
+        return jsonify({"error": {"message": "Exam not found"}}), 404
+    if role == "lecturer" and exam.lecturer_id != user_id:
+        return jsonify({"error": {"message": "Forbidden"}}), 403
+
+    upload = request.files.get("file")
+    if not upload or not upload.filename:
+        return jsonify({"error": {"message": "CSV file is required"}}), 400
+    if not upload.filename.lower().endswith(".csv"):
+        return jsonify({"error": {"message": "File must be a .csv — download and use the provided template"}}), 400
+
+    try:
+        raw_text = upload.read().decode("utf-8-sig")
+    except UnicodeDecodeError:
+        return jsonify({"error": {"message": "Could not read the file — save it as UTF-8 CSV and try again"}}), 400
+
+    reader = csv.DictReader(io.StringIO(raw_text))
+    header_columns = {(name or "").strip().lower() for name in (reader.fieldnames or [])}
+    missing_columns = QUESTION_CSV_REQUIRED_COLUMNS - header_columns
+    if missing_columns:
+        return jsonify(
+            {
+                "error": {
+                    "message": (
+                        "CSV is missing required column(s): "
+                        f"{', '.join(sorted(missing_columns))}. "
+                        "Download the template from this page and fill it in without changing the columns."
+                    )
+                }
+            }
+        ), 400
+
+    next_order = Question.query.filter_by(exam_id=exam.exam_id).count() + 1
+    to_create = []
+    row_errors = []
+
+    for row_number, row in enumerate(reader, start=2):  # row 1 is the header
+        normalized = {(key or "").strip().lower(): (value or "").strip() for key, value in row.items()}
+        if not any(normalized.values()):
+            continue  # skip blank trailing rows
+
+        question_text = normalized.get("question_text", "")
+        question_type = normalized.get("question_type", "").lower()
+        correct_answer = normalized.get("correct_answer", "").upper()
+        marks_raw = normalized.get("marks", "")
+
+        if not question_text:
+            row_errors.append(f"Row {row_number}: question_text is required")
+            continue
+        if question_type not in {"mcq", "true_false"}:
+            row_errors.append(f"Row {row_number}: question_type must be 'mcq' or 'true_false'")
+            continue
+        if not correct_answer:
+            row_errors.append(f"Row {row_number}: correct_answer is required")
+            continue
+        try:
+            row_marks = int(marks_raw) if marks_raw else 1
+        except ValueError:
+            row_errors.append(f"Row {row_number}: marks must be a whole number")
+            continue
+
+        to_create.append(
+            Question(
+                exam_id=exam.exam_id,
+                question_text=question_text,
+                question_type=question_type,
+                option_a=normalized.get("option_a") or None,
+                option_b=normalized.get("option_b") or None,
+                option_c=normalized.get("option_c") or None,
+                option_d=normalized.get("option_d") or None,
+                correct_answer=correct_answer,
+                marks=row_marks,
+                order_num=next_order,
+            )
+        )
+        next_order += 1
+
+    if not to_create:
+        return jsonify(
+            {
+                "error": {"message": "No valid questions found in the CSV"},
+                "row_errors": row_errors,
+            }
+        ), 400
+
+    db.session.add_all(to_create)
+    db.session.commit()
+
+    return jsonify(
+        {
+            "message": f"{len(to_create)} question(s) added"
+            + (f", {len(row_errors)} row(s) skipped" if row_errors else ""),
+            "created_count": len(to_create),
+            "skipped_count": len(row_errors),
+            "row_errors": row_errors,
+        }
+    ), 201
 
 
 @exams_bp.delete("/<int:exam_id>/questions/<int:question_id>")

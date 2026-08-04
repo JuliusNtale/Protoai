@@ -428,6 +428,16 @@ def register_handlers(socketio: SocketIO):
         headers = {'X-Internal-Token': _AI_SERVICE_TOKEN} if _AI_SERVICE_TOKEN else None
         for anomaly in confirmed_anomalies:
             event_type = _base_type(anomaly)
+            event_data = {
+                'gaze_direction': gaze.get('direction') if gaze else None,
+                'yaw':   pose.get('yaw')   if pose else None,
+                'pitch': pose.get('pitch') if pose else None,
+            }
+            if event_type == 'multiple_faces':
+                # gaze/pose above describe whichever single face the models
+                # locked onto - irrelevant noise for a multiple-faces alert.
+                # face_count is the only detail that's actually accurate here.
+                event_data = {'face_count': face_count[0]}
             try:
                 resp = requests.post(
                     f"{_BACKEND_URL}/api/sessions/log",
@@ -435,11 +445,7 @@ def register_handlers(socketio: SocketIO):
                     json={
                         'session_id': session_id,
                         'event_type': event_type,
-                        'event_data': {
-                            'gaze_direction': gaze.get('direction') if gaze else None,
-                            'yaw':   pose.get('yaw')   if pose else None,
-                            'pitch': pose.get('pitch') if pose else None,
-                        },
+                        'event_data': event_data,
                     },
                     timeout=2,
                 )
