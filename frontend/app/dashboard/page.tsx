@@ -48,10 +48,34 @@ type MyReportRow = {
   exam_title: string
   course_code: string
   score?: number | null
+  total_marks: number
   warning_count: number
   risk_level: string
   total_anomalies: number
+  gaze_away_count: number
+  head_turned_count: number
+  tab_switch_count: number
+  face_absent_count: number
+  multiple_faces_count: number
+  identity_mismatch_count: number
   session_status: string
+}
+
+const ANOMALY_TYPE_LABELS: { key: keyof MyReportRow; label: string }[] = [
+  { key: "gaze_away_count", label: "Gaze" },
+  { key: "head_turned_count", label: "Head Turn" },
+  { key: "face_absent_count", label: "Face Missing" },
+  { key: "multiple_faces_count", label: "Multiple Faces" },
+  { key: "tab_switch_count", label: "Tab Switch" },
+  { key: "identity_mismatch_count", label: "Identity Mismatch" },
+]
+
+function formatAnomalyBreakdown(row: MyReportRow): string {
+  const parts = ANOMALY_TYPE_LABELS
+    .map(({ key, label }) => ({ label, count: row[key] as number }))
+    .filter((entry) => entry.count > 0)
+    .map((entry) => `${entry.label} ×${entry.count}`)
+  return parts.length > 0 ? parts.join(", ") : "None"
 }
 
 const FALLBACK_DEGREE_PROGRAM_OPTIONS = [
@@ -233,14 +257,13 @@ function StudentDashboardInner() {
       return
     }
     if (res.status === 409) {
-      const backendMessage = String(payload?.error?.message || "").toLowerCase()
+      // Only reachable via a race (double-click, two open tabs) since the
+      // button itself is now disabled/hidden whenever a session already
+      // exists - see the Action column below. Refresh so it reflects
+      // whatever the backend just did (e.g. auto-submitting an incomplete
+      // session) instead of leaving a stale "Start Exam" button showing.
       localStorage.removeItem("session_id")
       localStorage.removeItem("exam_id")
-      if (backendMessage.includes("already has an active exam session")) {
-        setError("No active exam session found. Previous attempts are auto-submitted and cannot be resumed. Start a new assigned exam.")
-        await load(token)
-        return
-      }
       await load(token)
     }
     setError(payload?.error?.message || "Could not start exam.")
@@ -419,6 +442,7 @@ function StudentDashboardInner() {
       appName="ProctorAI Student"
       title={STUDENT_TAB_TITLES[tab] || "Dashboard"}
       subtitle={`${me?.full_name || "-"} | ${me?.registration_number || "-"} | ${me?.department || "Course not set"}`}
+      requireCamera
       sidebarItems={[
         { label: "Dashboard", href: "/dashboard", active: tab === "dashboard" },
         { label: "Exams", href: "/dashboard?tab=exams", active: tab === "exams" },
@@ -501,10 +525,41 @@ function StudentDashboardInner() {
                     <td className="pr-3">
                       {(() => {
                         const session = sessionByExamId.get(exam.exam_id)
-                        const started = Boolean(session && session.session_status !== "completed" && session.session_status !== "locked")
+                        // A session is single-attempt only - POST /sessions/start
+                        // 409s the instant ANY session row exists for this
+                        // student+exam, regardless of status (see
+                        // backend/app/sessions/routes.py::start_session). For an
+                        // "active" session that was started but never finished,
+                        // that 409 only happens AFTER the backend auto-submits the
+                        // incomplete session as final - so a button inviting "Start
+                        // New Attempt" here doesn't just fail, it silently locks in
+                        // whatever the student had answered. Any existing session
+                        // must therefore always render as a disabled, informational
+                        // state rather than an actionable start button.
+                        if (session) {
+                          const label =
+                            session.session_status === "terminated"
+                              ? "Terminated"
+                              : session.session_status === "completed" || session.session_status === "locked"
+                                ? "Submitted"
+                                : "Incomplete"
+                          const title =
+                            label === "Incomplete"
+                              ? "This exam was started but never completed. Only one attempt is allowed, so it can't be restarted — contact your lecturer if you believe this is an error."
+                              : undefined
+                          return (
+                            <button
+                              disabled
+                              title={title}
+                              className="cursor-not-allowed rounded-md bg-muted px-3 py-1.5 text-xs font-semibold text-muted-foreground"
+                            >
+                              {label}
+                            </button>
+                          )
+                        }
                         return (
                       <button onClick={() => void startExam(exam.exam_id)} className="rounded-md bg-[#1a2d5a] px-3 py-1.5 text-xs font-semibold text-white">
-                        {started ? "Start New Attempt" : "Start Exam"}
+                        Start Exam
                       </button>
                         )
                       })()}
@@ -519,7 +574,7 @@ function StudentDashboardInner() {
       ) : null}
 
       {tab === "sessions" ? (
-        <DashboardPanel title="Sessions & Reports">
+        <DashboardPanel title="Sessions & Reports" subtitle="Warnings is the total flagged count (including any lecturer-sent warning); Anomalies breaks down what was actually detected.">
           <div className="overflow-x-auto rounded-xl border border-border">
             <table className="w-full text-sm">
               <thead>
@@ -539,10 +594,10 @@ function StudentDashboardInner() {
                     <td className="py-2 pl-3">{r.exam_title}</td>
                     <td>{r.course_code}</td>
                     <td><StatusBadge value={r.session_status} /></td>
-                    <td>{r.score ?? "-"}</td>
+                    <td>{r.score != null ? `${r.score}/${r.total_marks}` : "-"}</td>
                     <td>{r.warning_count}</td>
                     <td><StatusBadge value={r.risk_level} /></td>
-                    <td>{r.total_anomalies}</td>
+                    <td className="max-w-[220px] text-xs text-muted-foreground">{formatAnomalyBreakdown(r)}</td>
                   </tr>
                 ))}
                 {reports.length === 0 ? <tr><td colSpan={7} className="py-3 pl-3 text-muted-foreground">No sessions yet.</td></tr> : null}

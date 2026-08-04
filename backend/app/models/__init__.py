@@ -6,6 +6,7 @@ from app.models.exam import Exam, exam_programs
 from app.models.exam_session import ExamSession
 from app.models.exam_student_assignment import ExamStudentAssignment
 from app.models.facial_image import FacialImage
+from app.models.login_attempt import LoginAttempt
 from app.models.question import Question
 from app.models.report import Report
 from app.models.session_answer import SessionAnswer
@@ -25,4 +26,5 @@ __all__ = [
     "BehavioralLog",
     "Report",
     "SessionAnswer",
+    "LoginAttempt",
 ]
