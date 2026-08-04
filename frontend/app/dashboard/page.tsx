@@ -442,6 +442,7 @@ function StudentDashboardInner() {
       appName="ProctorAI Student"
       title={STUDENT_TAB_TITLES[tab] || "Dashboard"}
       subtitle={`${me?.full_name || "-"} | ${me?.registration_number || "-"} | ${me?.department || "Course not set"}`}
+      requireCamera
       sidebarItems={[
         { label: "Dashboard", href: "/dashboard", active: tab === "dashboard" },
         { label: "Exams", href: "/dashboard?tab=exams", active: tab === "exams" },

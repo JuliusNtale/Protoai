@@ -24,6 +24,10 @@ type DashboardShellProps = {
   avatarImageUrl?: string | null
   isExiting?: boolean
   exitMessage?: string
+  // Only students ever go through camera-based identity verification/live
+  // monitoring - lecturers and admins should never be asked for camera
+  // access, so this defaults to false and only the student dashboard opts in.
+  requireCamera?: boolean
   children: ReactNode
 }
 
@@ -45,6 +49,7 @@ export function DashboardShell({
   avatarImageUrl,
   isExiting = false,
   exitMessage = "Signing out...",
+  requireCamera = false,
   children,
 }: DashboardShellProps) {
   const router = useRouter()
@@ -160,13 +165,14 @@ export function DashboardShell({
   }, [router, isExiting, idleWarningOpen])
 
   useEffect(() => {
+    if (!requireCamera) return
     const token = typeof window !== "undefined" ? localStorage.getItem("token") : null
     if (!token) return
     if (!window.isSecureContext) return
     if (!navigator.mediaDevices?.getUserMedia) return
     if (sessionStorage.getItem("camera_permission_prompted") === "1") return
     setCameraPromptOpen(true)
-  }, [])
+  }, [requireCamera])
 
   async function requestCameraPermission() {
     setCameraPromptError("")
