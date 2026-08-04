@@ -35,6 +35,18 @@ _lock = threading.Lock()
 _IDENTITY_RECHECK_SECONDS = float(os.getenv('IDENTITY_RECHECK_SECONDS', '8'))
 _IDENTITY_MISMATCH_CONFIRM_COUNT = int(os.getenv('IDENTITY_MISMATCH_CONFIRM_COUNT', '2'))
 
+# FaceNet embeddings are known to degrade badly under pose variation and on
+# partial/low-confidence face detections - comparing an off-angle or
+# partially-occluded frame against the frontal registered baseline produces
+# a genuinely lower similarity score that has nothing to do with identity.
+# Confirmed in production: looking away or having the head turned was
+# consistently misreported to lecturers as "Identity Mismatch Detected"
+# instead of the actual gaze_away/head_turned anomaly, since this check ran
+# regardless of pose and its confirmation cycle is faster in practice than
+# gaze/head's own persistence window. min face-detection confidence required
+# before trusting a crop enough to run identity comparison on it at all.
+_IDENTITY_CHECK_MIN_FACE_CONFIDENCE = float(os.getenv('IDENTITY_CHECK_MIN_FACE_CONFIDENCE', '0.8'))
+
 # Number of frames at the start of a session used to calibrate that
 # student's own neutral head pose, before any head_turned alert can fire.
 # A fixed global yaw/pitch threshold doesn't work across different real
@@ -280,8 +292,8 @@ def _check_identity_mismatch(session_id, img_bgr):
     if student_id is None:
         return False, None
 
-    face_crop, _ = detect_and_crop_face(img_bgr)
-    if face_crop is None:
+    face_crop, face_confidence = detect_and_crop_face(img_bgr)
+    if face_crop is None or face_confidence < _IDENTITY_CHECK_MIN_FACE_CONFIDENCE:
         return False, None
 
     try:
@@ -393,13 +405,21 @@ def register_handlers(socketio: SocketIO):
         # student adjusting their seat or glancing away while the camera is
         # still calibrating could rack up persistence toward a warning that
         # then fires the moment "Setting Up Monitoring" disappears.
+        gaze_evidence = _gaze_evidence(gaze)
+
+        # A turned head or an away gaze both put the face at an angle FaceNet
+        # wasn't trained to compare reliably against a frontal baseline -
+        # skip the identity check on those frames entirely so a pose-related
+        # anomaly gets attributed to gaze_away/head_turned instead of
+        # masquerading as a (false) identity mismatch. See
+        # _IDENTITY_CHECK_MIN_FACE_CONFIDENCE above for the same fix applied
+        # to partial/occluded face detections.
         identity_mismatch_confirmed = False
         identity_confidence = None
-        if not calibrating and face_count[0] == 1:
+        if not calibrating and face_count[0] == 1 and not head_alert and not gaze_evidence['is_away']:
             identity_mismatch_confirmed, identity_confidence = _check_identity_mismatch(session_id, img_bgr)
 
         anomalies = []
-        gaze_evidence = _gaze_evidence(gaze)
         if not calibrating:
             if gaze is None or face_count[0] == 0:
                 anomalies.append('face_absent')
