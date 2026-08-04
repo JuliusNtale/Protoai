@@ -233,14 +233,13 @@ function StudentDashboardInner() {
       return
     }
     if (res.status === 409) {
-      const backendMessage = String(payload?.error?.message || "").toLowerCase()
+      // Only reachable via a race (double-click, two open tabs) since the
+      // button itself is now disabled/hidden whenever a session already
+      // exists - see the Action column below. Refresh so it reflects
+      // whatever the backend just did (e.g. auto-submitting an incomplete
+      // session) instead of leaving a stale "Start Exam" button showing.
       localStorage.removeItem("session_id")
       localStorage.removeItem("exam_id")
-      if (backendMessage.includes("already has an active exam session")) {
-        setError("No active exam session found. Previous attempts are auto-submitted and cannot be resumed. Start a new assigned exam.")
-        await load(token)
-        return
-      }
       await load(token)
     }
     setError(payload?.error?.message || "Could not start exam.")
@@ -501,30 +500,41 @@ function StudentDashboardInner() {
                     <td className="pr-3">
                       {(() => {
                         const session = sessionByExamId.get(exam.exam_id)
-                        // A session is single-attempt only (student_id+exam_id is
-                        // unique server-side) - once it's reached a terminal state,
-                        // POST /sessions/start will just 409 "cannot be resumed", so
-                        // the button must stop inviting another click rather than
-                        // surface that as a confusing error after the fact.
-                        const isTerminal = session
-                          ? session.session_status === "completed" ||
-                            session.session_status === "terminated" ||
-                            session.session_status === "locked"
-                          : false
-                        const started = Boolean(session && !isTerminal)
-                        if (isTerminal) {
+                        // A session is single-attempt only - POST /sessions/start
+                        // 409s the instant ANY session row exists for this
+                        // student+exam, regardless of status (see
+                        // backend/app/sessions/routes.py::start_session). For an
+                        // "active" session that was started but never finished,
+                        // that 409 only happens AFTER the backend auto-submits the
+                        // incomplete session as final - so a button inviting "Start
+                        // New Attempt" here doesn't just fail, it silently locks in
+                        // whatever the student had answered. Any existing session
+                        // must therefore always render as a disabled, informational
+                        // state rather than an actionable start button.
+                        if (session) {
+                          const label =
+                            session.session_status === "terminated"
+                              ? "Terminated"
+                              : session.session_status === "completed" || session.session_status === "locked"
+                                ? "Submitted"
+                                : "Incomplete"
+                          const title =
+                            label === "Incomplete"
+                              ? "This exam was started but never completed. Only one attempt is allowed, so it can't be restarted — contact your lecturer if you believe this is an error."
+                              : undefined
                           return (
                             <button
                               disabled
+                              title={title}
                               className="cursor-not-allowed rounded-md bg-muted px-3 py-1.5 text-xs font-semibold text-muted-foreground"
                             >
-                              {session?.session_status === "terminated" ? "Terminated" : "Submitted"}
+                              {label}
                             </button>
                           )
                         }
                         return (
                       <button onClick={() => void startExam(exam.exam_id)} className="rounded-md bg-[#1a2d5a] px-3 py-1.5 text-xs font-semibold text-white">
-                        {started ? "Start New Attempt" : "Start Exam"}
+                        Start Exam
                       </button>
                         )
                       })()}
