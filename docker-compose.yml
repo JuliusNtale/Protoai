@@ -1,25 +1,4 @@
 services:
-  postgres:
-    image: postgres:15
-    environment:
-      POSTGRES_DB: proctoring_db
-      POSTGRES_USER: proctoring_user
-      POSTGRES_PASSWORD: proctoring_pass
-    ports:
-      - "15432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U proctoring_user -d proctoring_db"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "5"
-
   backend:
     build: ./backend
     image: ${DOCKERHUB_USERNAME:-local}/proctoring-backend:${IMAGE_TAG:-latest}
@@ -30,7 +9,16 @@ services:
       - ./backend/.env
     environment:
       PYTHONPATH: /app
-      DATABASE_URL: postgresql://proctoring_user:proctoring_pass@postgres:5432/proctoring_db
+      # Points at proctorai-prod-mirror-db, a standalone (non-compose)
+      # postgres:15 container on the host restored from a production dump -
+      # the only local Postgres this project uses. host.docker.internal
+      # resolves the host loopback from inside this container, matching the
+      # container's published port (15433:5432). Start it manually if it's
+      # not already running:
+      #   docker run -d --name proctorai-prod-mirror-db \
+      #     -e POSTGRES_DB=mirror_db -e POSTGRES_USER=mirror_user \
+      #     -e POSTGRES_PASSWORD=mirror_password -p 15433:5432 postgres:15
+      DATABASE_URL: postgresql://mirror_user:mirror_password@host.docker.internal:15433/mirror_db
       JWT_SECRET: change-this-in-production-256-bit-secret
       JWT_EXPIRY_HOURS: "8"
       AI_SERVICE_TOKEN: ${AI_SERVICE_TOKEN:-dev-internal-secret-change-in-prod}
@@ -45,11 +33,12 @@ services:
       # Requires FLASK_ENV=development above too - see app/config.py. Set to
       # "false" (or unset) to keep this dev-only surface off even locally.
       ENABLE_DEV_TOOLS: ${ENABLE_DEV_TOOLS:-true}
-    depends_on:
-      postgres:
-        condition: service_healthy
     volumes:
       - ./storage:/app/storage
+      # Bind-mounts live source over the image's built-in copy so run.py's
+      # debug reloader (see backend/run.py) picks up edits instantly - no
+      # more `docker-compose build backend` after every change.
+      - ./backend:/app
     logging:
       driver: "json-file"
       options:
@@ -78,7 +67,14 @@ services:
       WARNING_COOLDOWN_SECONDS: ${WARNING_COOLDOWN_SECONDS:-5}
       FLASK_ENV: development
     volumes:
-      - ./ai-service/models:/app/models
+      # Bind-mounts live source (including models/, gitignored and excluded
+      # from the image build via .dockerignore) so edits are picked up
+      # instantly. `python app.py` (this service's command) hits the
+      # `debug=True` branch in app.py's __main__ block since FLASK_ENV is
+      # development, and flask-socketio's run() supports the Werkzeug
+      # reloader under eventlet explicitly - restarting the process (and
+      # reloading the ONNX models) automatically on any file change.
+      - ./ai-service:/app
     logging:
       driver: "json-file"
       options:
@@ -105,6 +101,3 @@ services:
       options:
         max-size: "10m"
         max-file: "5"
-
-volumes:
-  postgres_data:
