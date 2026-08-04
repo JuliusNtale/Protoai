@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils"
 import { useBrowserLockdown } from "@/hooks/use-browser-lockdown"
 import { Calculator } from "@/components/calculator"
 import { getApiPath, getSocketConnection } from "@/lib/api-url"
+import { formatDateEAT } from "@/lib/format-time"
 import { ThemeToggle } from "@/components/theme-toggle"
 
 type LiveQuestion = {
@@ -307,7 +308,7 @@ export default function ExamPage() {
         setTimeLeft(durationMin * 60)
         setExamDateLabel(
           payload.exam.scheduled_at
-            ? new Date(payload.exam.scheduled_at).toLocaleDateString()
+            ? formatDateEAT(payload.exam.scheduled_at)
             : "Scheduled session"
         )
         setQuestions(mapped)

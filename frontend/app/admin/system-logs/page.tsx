@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { LogOut } from "lucide-react"
 import { getApiPath } from "@/lib/api-url"
+import { formatDateTimeEATCompact } from "@/lib/format-time"
 import { DashboardPanel, DashboardShell } from "@/components/dashboard-shell"
 import { StatusBadge } from "@/components/status-badge"
 
@@ -33,16 +34,7 @@ type SessionRow = {
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50]
 
-function formatDateTime(value?: string | null) {
-  if (!value) return "-"
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return "-"
-  const day = String(date.getDate()).padStart(2, "0")
-  const month = String(date.getMonth() + 1).padStart(2, "0")
-  const year = date.getFullYear()
-  const time = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })
-  return `${day}/${month}/${year} | ${time}`
-}
+const formatDateTime = formatDateTimeEATCompact
 
 function humanizeAction(action: string) {
   const clean = (action || "unknown").replace(/[._]+/g, " ").trim()

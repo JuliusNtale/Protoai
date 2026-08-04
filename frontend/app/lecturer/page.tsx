@@ -7,6 +7,7 @@ import Link from "next/link"
 import { io } from "socket.io-client"
 import { getApiPath, getSocketConnection } from "@/lib/api-url"
 import { cn } from "@/lib/utils"
+import { formatDateTimeEAT, formatTimeEAT } from "@/lib/format-time"
 import { DashboardPanel, DashboardShell, MetricCard } from "@/components/dashboard-shell"
 import { StatusBadge } from "@/components/status-badge"
 
@@ -135,12 +136,7 @@ const LECTURER_DEPARTMENT_OPTIONS = [
   "IST - Information System Technology",
 ]
 
-function formatDateTime(value?: string | null) {
-  if (!value) return "TBD"
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return "TBD"
-  return date.toLocaleString()
-}
+const formatDateTime = formatDateTimeEAT
 
 function formatDateTimeInput(value?: string | null) {
   if (!value) return ""
@@ -1617,12 +1613,12 @@ function LecturerDashboardInner() {
             <table className="w-full text-xs">
               <thead className="sticky top-0 bg-muted/60">
                 <tr className="border-b text-left">
-                  <th className="py-2 pl-2">Time</th>
-                  <th>Student</th>
-                  <th>Exam</th>
-                  <th>Event</th>
-                  <th>Warnings</th>
-                  <th>Decision</th>
+                  <th className="py-2 pl-2 pr-3">Time</th>
+                  <th className="pr-3">Student</th>
+                  <th className="pr-3">Exam</th>
+                  <th className="w-1/4 pr-3">Event</th>
+                  <th className="pr-3">Warnings</th>
+                  <th className="pr-3">Decision</th>
                   <th className="pr-2">Action</th>
                 </tr>
               </thead>
@@ -1632,19 +1628,19 @@ function LecturerDashboardInner() {
                   const canTerminate = alertSession && ["active", "pending"].includes((alertSession.session_status || "").toLowerCase())
                   return (
                   <tr key={alert.log_id} className="border-b last:border-b-0">
-                    <td className="py-1.5 pl-2 whitespace-nowrap text-muted-foreground">
-                      {alert.logged_at ? new Date(alert.logged_at).toLocaleTimeString() : "—"}
+                    <td className="py-1.5 pl-2 pr-3 whitespace-nowrap text-muted-foreground">
+                      {formatTimeEAT(alert.logged_at)}
                     </td>
-                    <td className="whitespace-nowrap">{alert.student_name}</td>
-                    <td className="whitespace-nowrap">{alert.exam_title}</td>
-                    <td>
+                    <td className="whitespace-nowrap py-1.5 pr-3">{alert.student_name}</td>
+                    <td className="whitespace-nowrap py-1.5 pr-3">{alert.exam_title}</td>
+                    <td className="py-1.5 pr-3">
                       <span className="font-medium text-foreground">{formatEventLabel(alert.event_type)}</span>
                       {formatEventDetail(alert) && (
-                        <span className="block text-[11px] text-muted-foreground">{formatEventDetail(alert)}</span>
+                        <span className="mt-0.5 block text-[11px] leading-relaxed text-muted-foreground">{formatEventDetail(alert)}</span>
                       )}
                     </td>
-                    <td>{alert.warning_count}</td>
-                    <td>
+                    <td className="py-1.5 pr-3">{alert.warning_count}</td>
+                    <td className="py-1.5 pr-3">
                       {alert.is_suspicious === null || alert.is_suspicious === undefined ? (
                         <div className="flex gap-1">
                           <button
@@ -1668,7 +1664,7 @@ function LecturerDashboardInner() {
                         </span>
                       )}
                     </td>
-                    <td className="pr-2">
+                    <td className="py-1.5 pr-2">
                       {canTerminate && alertSession ? (
                         <div className="flex gap-1">
                           <button
@@ -2034,10 +2030,10 @@ function LecturerDashboardInner() {
             <table className="w-full text-xs">
               <thead className="sticky top-0 bg-muted/60">
                 <tr className="border-b text-left">
-                  <th className="py-2 pl-2">Time</th>
-                  <th>Event</th>
-                  <th>Detail</th>
-                  <th>Decision</th>
+                  <th className="py-2 pl-2 pr-3">Time</th>
+                  <th className="pr-3">Event</th>
+                  <th className="w-2/5 pr-3">Detail</th>
+                  <th className="pr-3">Decision</th>
                   <th className="pr-2">Action</th>
                 </tr>
               </thead>
@@ -2061,12 +2057,12 @@ function LecturerDashboardInner() {
                   }
                   return (
                   <tr key={log.log_id} className="border-b last:border-b-0">
-                    <td className="py-1.5 pl-2 whitespace-nowrap text-muted-foreground">
-                      {log.logged_at ? new Date(log.logged_at).toLocaleTimeString() : "—"}
+                    <td className="py-1.5 pl-2 pr-3 whitespace-nowrap text-muted-foreground">
+                      {formatTimeEAT(log.logged_at)}
                     </td>
-                    <td className="whitespace-nowrap font-medium text-foreground">{formatEventLabel(log.event_type)}</td>
-                    <td className="text-muted-foreground">{formatEventDetail(log)}</td>
-                    <td>
+                    <td className="whitespace-nowrap py-1.5 pr-3 font-medium text-foreground">{formatEventLabel(log.event_type)}</td>
+                    <td className="py-1.5 pr-3 leading-relaxed text-muted-foreground">{formatEventDetail(log)}</td>
+                    <td className="py-1.5 pr-3">
                       {log.is_suspicious === null || log.is_suspicious === undefined ? (
                         <div className="flex gap-1">
                           <button
@@ -2090,7 +2086,7 @@ function LecturerDashboardInner() {
                         </span>
                       )}
                     </td>
-                    <td className="pr-2">
+                    <td className="py-1.5 pr-2">
                       {canTerminate ? (
                         <div className="flex gap-1">
                           <button
