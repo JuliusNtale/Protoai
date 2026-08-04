@@ -57,6 +57,50 @@ def test_rolling_window_recovers_after_anomaly_stops(monkeypatch):
     assert fh._confirmed_anomalies('s3', ['gaze_away:Right']) == []
 
 
+def test_sustained_anomaly_confirms_under_realistic_frame_jitter(monkeypatch):
+    """BUG (fixed 2026-08-04): _confirmed_anomalies used to prune each
+    anomaly_type's observations down to `required_seconds` on EVERY call,
+    including while the anomaly was still actively happening - which
+    constantly discarded the oldest evidence right before `persisted` was
+    checked against that same `required_seconds`, so confirmation was only
+    possible on an exact timing coincidence. The other tests in this file
+    mock time.monotonic() with idealized, exact-integer timestamps (0.0,
+    1.0, 2.0...) that happen to land precisely on that boundary and so
+    passed despite the bug - confirmed live in production (15s of
+    continuous head_turned, 25s of continuous face_absent, neither ever
+    confirming once). Real frame arrival is never that exact, so this uses
+    slightly-more-than-a-second gaps (matching observed production frame
+    spacing) to make sure a sustained anomaly still confirms under
+    realistic conditions, not just idealized mock timing."""
+    _reset_state()
+    # 1.01s-ish gaps, not exactly 1.0 - this is what actually broke it.
+    times = iter([0.0, 1.012, 2.019, 3.031, 4.038])
+    monkeypatch.setattr(fh.time, 'monotonic', lambda: next(times))
+
+    assert fh._confirmed_anomalies('jitter1', ['head_turned']) == []
+    assert fh._confirmed_anomalies('jitter1', ['head_turned']) == []
+    assert fh._confirmed_anomalies('jitter1', ['head_turned']) == ['head_turned']
+    assert fh._confirmed_anomalies('jitter1', ['head_turned']) == []
+    assert fh._confirmed_anomalies('jitter1', ['head_turned']) == []
+
+
+def test_long_sustained_anomaly_reconfirms_on_cooldown_under_jitter(monkeypatch):
+    """A student who never stops the violation (e.g. permanently turned
+    away) must keep re-triggering roughly every WARNING_COOLDOWN_SECONDS,
+    not just once at the start and then silently forever after - this is
+    the exact 15-second-sustained scenario observed live in production."""
+    _reset_state()
+    # ~1.01s apart for 15 "frames", matching real production frame spacing.
+    times = iter([round(i * 1.01, 3) for i in range(15)])
+    monkeypatch.setattr(fh.time, 'monotonic', lambda: next(times))
+
+    results = [fh._confirmed_anomalies('jitter2', ['face_absent']) for _ in range(15)]
+    confirmations = [r for r in results if r]
+
+    assert len(confirmations) >= 2  # at least the initial confirm plus one cooldown re-fire
+    assert all(r == ['face_absent'] for r in confirmations)
+
+
 def test_confirmed_anomaly_respects_cooldown(monkeypatch):
     _reset_state()
     times = iter([0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0])

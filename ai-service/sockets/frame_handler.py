@@ -197,21 +197,35 @@ def _confirmed_anomalies(session_id, current_anomalies):
     underlying signal is consistently suspicious. Track recent evidence by
     base anomaly type instead of requiring the exact same direction to remain
     uninterrupted for the whole persistence window.
+
+    BUG FIXED (2026-08-04): this used to prune each anomaly_type's
+    observations down to `required_seconds` on EVERY call, including while
+    the anomaly was still actively happening every frame. That constantly
+    discarded the oldest evidence right before `persisted` (measured from
+    the oldest SURVIVING observation) was checked against that same
+    `required_seconds` - so persisted could only reach the threshold if two
+    consecutive frames landed on an exact timing coincidence, which never
+    happens with real frame arrival jitter (confirmed with a live
+    production log: 15s of continuous head_turned and 25s of continuous
+    face_absent, both never confirming once). The existing unit tests for
+    this function didn't catch it because they mock time.monotonic() with
+    idealized, exact-integer timestamps that happen to land precisely on
+    the pruning boundary - see test_frame_handler_debounce.py.
+
+    Fix: only drop an anomaly_type's tracking when it's genuinely absent
+    this frame (a real stop, not a rolling-window artifact), so
+    `observations[0]` stays the true start of the current streak and
+    `persisted` correctly measures its full duration.
     """
     now = time.monotonic()
     current = list(dict.fromkeys(current_anomalies))
+    current_types = {_base_type(a) for a in current}
 
     with _lock:
         session_state = _anomaly_states.setdefault(session_id, {})
 
-        for anomaly_type, state in list(session_state.items()):
-            required_seconds = _ANOMALY_SECONDS.get(anomaly_type, 3.0)
-            state['observations'] = [
-                observation
-                for observation in state['observations']
-                if now - observation[0] <= required_seconds
-            ]
-            if not state['observations'] and anomaly_type not in {_base_type(a) for a in current}:
+        for anomaly_type in list(session_state.keys()):
+            if anomaly_type not in current_types:
                 del session_state[anomaly_type]
 
         confirmed = []
@@ -225,7 +239,7 @@ def _confirmed_anomalies(session_id, current_anomalies):
 
             required_seconds = _ANOMALY_SECONDS.get(anomaly_type, 3.0)
             observations = state['observations']
-            persisted = now - observations[0][0] if observations else 0.0
+            persisted = now - observations[0][0]
             cooled_down = now - state['last_logged_at']
             enough_observations = len(observations) >= _ANOMALY_MIN_OBSERVATIONS
             if persisted >= required_seconds and enough_observations and cooled_down >= _WARNING_COOLDOWN_SECONDS:
