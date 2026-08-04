@@ -13,12 +13,10 @@ from sqlalchemy import or_
 
 from app.extensions import db
 from app.audit import log_audit
-from app.models import FacialImage, User
+from app.models import FacialImage, LoginAttempt, User
 
 auth_bp = Blueprint("auth", __name__)
 
-# Lightweight in-process brute-force guard.
-_LOGIN_ATTEMPTS = {}
 _MAX_FAILED_ATTEMPTS = 5
 _LOCKOUT_MINUTES = 10
 
@@ -106,30 +104,39 @@ def _ip_from_request() -> str:
 
 def _is_locked_out(login_id: str, ip: str) -> tuple[bool, int]:
     key = _attempt_key(login_id, ip)
-    entry = _LOGIN_ATTEMPTS.get(key)
-    if not entry:
+    entry = db.session.get(LoginAttempt, key)
+    if not entry or not entry.lockout_until:
         return False, 0
-    lockout_until = entry.get("lockout_until")
-    if lockout_until and datetime.utcnow() < lockout_until:
-        remaining = int((lockout_until - datetime.utcnow()).total_seconds())
+    now = datetime.utcnow()
+    if now < entry.lockout_until:
+        remaining = int((entry.lockout_until - now).total_seconds())
         return True, max(1, remaining)
-    if lockout_until and datetime.utcnow() >= lockout_until:
-        _LOGIN_ATTEMPTS.pop(key, None)
+    # Lockout has expired - clear it here rather than letting it sit forever,
+    # since nothing else sweeps stale rows out of this table.
+    db.session.delete(entry)
+    db.session.commit()
     return False, 0
 
 
 def _register_failed_attempt(login_id: str, ip: str) -> None:
     key = _attempt_key(login_id, ip)
-    entry = _LOGIN_ATTEMPTS.get(key) or {"count": 0, "lockout_until": None, "last_attempt": None}
-    entry["count"] += 1
-    entry["last_attempt"] = datetime.utcnow()
-    if entry["count"] >= _MAX_FAILED_ATTEMPTS:
-        entry["lockout_until"] = datetime.utcnow() + timedelta(minutes=_LOCKOUT_MINUTES)
-    _LOGIN_ATTEMPTS[key] = entry
+    entry = db.session.get(LoginAttempt, key)
+    if not entry:
+        entry = LoginAttempt(attempt_key=key, failed_count=0)
+        db.session.add(entry)
+    entry.failed_count += 1
+    entry.last_attempt_at = datetime.utcnow()
+    if entry.failed_count >= _MAX_FAILED_ATTEMPTS:
+        entry.lockout_until = datetime.utcnow() + timedelta(minutes=_LOCKOUT_MINUTES)
+    # Caller (login()) commits alongside its audit-log write.
 
 
 def _clear_attempts(login_id: str, ip: str) -> None:
-    _LOGIN_ATTEMPTS.pop(_attempt_key(login_id, ip), None)
+    key = _attempt_key(login_id, ip)
+    entry = db.session.get(LoginAttempt, key)
+    if entry:
+        db.session.delete(entry)
+    # Caller (login()) commits alongside its audit-log write.
 
 
 @auth_bp.post("/register")
