@@ -482,7 +482,11 @@ export default function ExamPage() {
         body: JSON.stringify({
           session_id: sessionId,
           event_type: "tab_switch",
-          metadata: { reason, source: "browser_lockdown", timestamp: new Date().toISOString() },
+          // Field name must be event_data - POST /api/sessions/log reads
+          // exactly that key (see backend/app/sessions/routes.py::log_event)
+          // and silently drops anything else, which this used to send as
+          // "metadata" instead, losing the reason for every tab-switch log.
+          event_data: { reason, source: "browser_lockdown", timestamp: new Date().toISOString() },
         }),
       })
     } catch {
